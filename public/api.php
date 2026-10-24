@@ -253,6 +253,24 @@ switch ($action) {
         $artist       = trim($_GET['artist'] ?? ($input['artist'] ?? ''));
         $forceRefresh = !empty($_GET['refresh']) || !empty($input['refresh']);
 
+        // Ground in authoritative catalogue record if song exists
+        if ($songId > 0) {
+            $pdo = get_db_connection();
+            $stmt = $pdo->prepare("SELECT `title`, `artist` FROM `songs` WHERE `song_id` = :id LIMIT 1");
+            $stmt->execute([':id' => $songId]);
+            $songRow = $stmt->fetch();
+            if ($songRow) {
+                // Ensure current authoritative catalogue title is used (prevents stale frontend button attributes)
+                $title = trim($songRow['title']);
+                $dbArtist = trim($songRow['artist'] ?? '');
+                if (!empty($dbArtist) && $dbArtist !== 'Unknown Artist') {
+                    $artist = $dbArtist;
+                } elseif (empty($artist) || $artist === 'Unknown Artist') {
+                    $artist = '';
+                }
+            }
+        }
+
         if ($songId <= 0 || empty($title)) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Song ID and Title are required.']);

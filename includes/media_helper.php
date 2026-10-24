@@ -51,10 +51,14 @@ function clean_track_title_for_lyrics(string $title): string {
         return '';
     }
 
-    // 1. Remove bracketed / parenthesized video/audio tags:
-    // e.g. [Official Video], (Official Music Video), [Official Audio], (Visualizer), [MV], (Audio), [HD], (4K), [Lyrics]
-    $junkTagPattern = '/\s*[\[\(](?:official\s*(?:video|audio|music\s*video|lyric\s*video|track)|video|audio|mv|visualizer|hd|4k|4k\s*60fps|topic|lyrics)[\]\)]/iu';
+    // 1. Remove bracketed / parenthesized video/audio and upload/quality tags:
+    // e.g. [Official Video], (Official Music Video), [Official Audio], (Visualizer), [MV], (Audio), [HD], (4K), [4K Upgrade], [1080p HD], [Lyrics]
+    $junkTagPattern = '/\s*[\[\(](?:official\s*(?:(?:4k|hd|uhd|1080p)\s*)?(?:music\s*video|lyric\s*video|video|audio|track|visualizer|clip|stream)|music\s*video|lyric\s*video|video|audio|mv|visualizer|clip\s*officiel|topic|lyrics|(?:4k|hd|uhd|1080p|720p|hq|ultra\s*hd)(?:\s*(?:upgrade|upscale|restored|restoration|remaster(?:ed)?|60fps|hd|video|audio|clip))?|(?:ai\s*)?(?:upgrade|upscale|restored|restoration)|60fps)[\]\)]/iu';
     $t = preg_replace($junkTagPattern, '', $t);
+
+    // 1b. Remove video/quality junk after hyphens: e.g. - Official Video, - 4K Upgrade
+    $hyphenJunkPattern = '/\s*-\s*(?:(?:official\s*)?(?:music\s*video|lyric\s*video|video|audio|visualizer)|4k(?:\s*upgrade)?|hd(?:\s*upgrade)?)$/iu';
+    $t = preg_replace($hyphenJunkPattern, '', $t);
 
     // 2. Remove remaster / edition tags in brackets/parentheses or after hyphens:
     // e.g. (Remastered 2011), [2021 Remaster], (Remastered), - Remastered 2011, (Anniversary Edition), (Deluxe Edition), (4K Remaster)
@@ -70,8 +74,8 @@ function clean_track_title_for_lyrics(string $title): string {
     $featEndPattern = '/\s+(?:feat\.?|ft\.?)\s+.+$/iu';
     $t = preg_replace($featEndPattern, '', $t);
 
-    // 4. Normalize spaces and trim punctuation
-    $t = preg_replace('/\s+/', ' ', $t);
+    // 4. Normalize spaces and trim punctuation (preserve genuine version parenthesis like Live/Acoustic)
+    $t = preg_replace('/\s+/u', ' ', $t);
     $t = trim($t, " \t\n\r\0\x0B-–—");
 
     return $t !== '' ? $t : $title;
@@ -467,6 +471,11 @@ function update_song_media_embed_status(int $songId, string $embedStatus): array
  * Helper to make HTTP requests with proper User-Agent identification & timeouts
  */
 function http_get_json(string $url, int $timeoutSeconds = 5): array {
+    // If a mock handler is registered (for automated testing without external API dependence)
+    if (isset($GLOBALS['__mock_http_get_json']) && is_callable($GLOBALS['__mock_http_get_json'])) {
+        return call_user_func($GLOBALS['__mock_http_get_json'], $url, $timeoutSeconds);
+    }
+
     $userAgent = 'AFM2-MusicJournal/1.0 (https://github.com/afm2-app; contact: personal-audition-journal)';
     
     $opts = [
@@ -512,12 +521,14 @@ function http_get_json(string $url, int $timeoutSeconds = 5): array {
     }
 
     $decoded = json_decode($response, true);
+    $isJsonValid = (json_last_error() === JSON_ERROR_NONE && is_array($decoded));
 
     return [
-        'success'     => ($statusCode >= 200 && $statusCode < 300),
+        'success'     => ($statusCode >= 200 && $statusCode < 300 && $isJsonValid),
         'status_code' => $statusCode,
         'retry_after' => $retryAfter,
-        'data'        => $decoded,
+        'data'        => $isJsonValid ? $decoded : null,
+        'error'       => (!$isJsonValid && $statusCode >= 200) ? 'Malformed JSON response from lyrics service.' : null,
         'raw_body'    => $response
     ];
 }
@@ -540,77 +551,122 @@ function fetch_lrclib_lyrics(
     int $songId, 
     string $title, 
     string $artist, 
-    bool $forceRefresh = false
+    bool $forceRefresh = false,
+    ?float $targetDuration = null
 ): array {
     $pdo = get_db_connection();
 
+    // Normalize input metadata
+    $normTitle = trim(preg_replace('/\s+/u', ' ', $title));
+    $tempTitle = $normTitle;
+    $normArtist = clean_artist_for_lyrics($artist, $tempTitle);
+    if ($tempTitle !== $normTitle && !empty($tempTitle)) {
+        $normTitle = $tempTitle;
+    }
+    $cleanTitle = clean_track_title_for_lyrics($normTitle);
+    $cleanArtist = clean_artist_for_lyrics($normArtist, $cleanTitle);
+
+    // If targetDuration was not explicitly supplied, check if confirmed media exists
+    if ($targetDuration === null && $songId > 0) {
+        $savedMedia = get_song_media($songId);
+        if ($savedMedia && !empty($savedMedia['duration'])) {
+            $targetDuration = (float)$savedMedia['duration'];
+        }
+    }
+
     // 1. Check database reference / cache unless forceRefresh
-    if (!$forceRefresh) {
+    if (!$forceRefresh && $songId > 0) {
         $saved = get_saved_song_lyrics($songId);
         if ($saved) {
-            // If already matched or marked instrumental
+            $cachedTrack = trim($saved['track_name'] ?? '');
+            $cachedArtist = trim($saved['artist_name'] ?? '');
+            if ($cachedArtist === 'Unknown Artist') {
+                $cachedArtist = '';
+            }
+
+            // Verify if cached metadata matches current requested song title & artist
             if ($saved['status'] === 'matched' || $saved['status'] === 'instrumental') {
-                return [
-                    'success'     => true,
-                    'cached'      => true,
-                    'status'      => $saved['status'],
-                    'lrclib_id'   => $saved['lrclib_id'],
-                    'track_name'  => $saved['track_name'],
-                    'artist_name' => $saved['artist_name'],
-                    'album_name'  => $saved['album_name'],
-                    'duration'    => $saved['duration'],
-                    'instrumental'=> (bool)$saved['instrumental'],
-                    'has_synced'  => (bool)$saved['has_synced'],
-                    'plain_lyrics'=> $saved['cached_lyrics_plain'],
-                    'synced_lyrics'=> $saved['cached_lyrics_synced'],
-                    'source_url'  => $saved['source_url'] ?: 'https://lrclib.net'
-                ];
-            } elseif ($saved['status'] === 'not_found') {
-                // If checked recently (within last 4 hours), don't spam LRCLIB
-                $cacheTime = strtotime($saved['updated_at'] ?? $saved['cached_at']);
-                if (time() - $cacheTime < 14400) {
+                $trackMatches = (
+                    strcasecmp($cachedTrack, $normTitle) === 0 || 
+                    strcasecmp($cachedTrack, $cleanTitle) === 0 || 
+                    stripos($normTitle, $cachedTrack) !== false || 
+                    stripos($cachedTrack, $cleanTitle) !== false
+                );
+                $artistMatches = (
+                    empty($normArtist) || 
+                    empty($cachedArtist) || 
+                    strcasecmp($cachedArtist, $normArtist) === 0 || 
+                    strcasecmp($cachedArtist, $cleanArtist) === 0 || 
+                    stripos($normArtist, $cachedArtist) !== false ||
+                    stripos($cachedArtist, $normArtist) !== false
+                );
+
+                if ($trackMatches && $artistMatches) {
                     return [
-                        'success'    => false,
-                        'cached'     => true,
-                        'status'     => 'not_found',
-                        'message'    => 'No lyrics found on LRCLIB for this song.',
-                        'search_url' => 'https://www.google.com/search?q=' . urlencode("{$title} {$artist} lyrics")
+                        'success'     => true,
+                        'cached'      => true,
+                        'status'      => $saved['status'],
+                        'lrclib_id'   => $saved['lrclib_id'],
+                        'track_name'  => $saved['track_name'],
+                        'artist_name' => $saved['artist_name'],
+                        'album_name'  => $saved['album_name'],
+                        'duration'    => $saved['duration'],
+                        'instrumental'=> (bool)$saved['instrumental'],
+                        'has_synced'  => (bool)$saved['has_synced'],
+                        'plain_lyrics'=> $saved['cached_lyrics_plain'],
+                        'synced_lyrics'=> $saved['cached_lyrics_synced'],
+                        'source_url'  => $saved['source_url'] ?: 'https://lrclib.net'
                     ];
+                } else {
+                    // Stale cache from a previous title/artist: clear and proceed fresh
+                    clear_song_lyrics_ref($songId);
+                }
+            } elseif ($saved['status'] === 'not_found') {
+                // Only honor negative cache if it was for the exact same track & artist
+                $cachedMatchesCurrent = (
+                    (strcasecmp($cachedTrack, $normTitle) === 0 || strcasecmp($cachedTrack, $cleanTitle) === 0) &&
+                    (empty($normArtist) || strcasecmp($cachedArtist, $normArtist) === 0 || strcasecmp($cachedArtist, $cleanArtist) === 0)
+                );
+
+                if ($cachedMatchesCurrent) {
+                    $cacheTime = strtotime($saved['updated_at'] ?? $saved['cached_at']);
+                    // Negative cache TTL: 3600 seconds (1 hour) instead of 4 hours
+                    if (time() - $cacheTime < 3600) {
+                        return [
+                            'success'    => false,
+                            'cached'     => true,
+                            'status'     => 'not_found',
+                            'message'    => 'No lyrics found on LRCLIB for this song.',
+                            'search_url' => 'https://www.google.com/search?q=' . urlencode("{$normTitle} {$normArtist} lyrics")
+                        ];
+                    }
+                } else {
+                    // Stale negative cache from before renaming: clear and proceed fresh
+                    clear_song_lyrics_ref($songId);
                 }
             }
         }
     }
 
-    // Clean metadata for optimal query hit rate
-    $cleanTitle = clean_track_title_for_lyrics($title);
-    $cleanArtist = clean_artist_for_lyrics($artist, $cleanTitle);
-
-    // If targetDuration was not explicitly supplied, check if confirmed media exists
-    if ($targetDuration === null) {
-        $savedMedia = get_song_media($songId);
-        // If song row has duration (if stored), or null
-        $targetDuration = null;
+    // 2. Query LRCLIB /api/get
+    // Step 2a: Try exact normalized title and artist first (preserves genuine version information)
+    $exactParams = ['track_name' => $normTitle];
+    if (!empty($normArtist)) {
+        $exactParams['artist_name'] = $normArtist;
     }
-
-    // 2. Query LRCLIB /api/get for exact track & artist match using cleaned metadata
-    $params = ['track_name' => $cleanTitle];
-    if (!empty($cleanArtist)) {
-        $params['artist_name'] = $cleanArtist;
-    }
-
-    $getUrl = 'https://lrclib.net/api/get?' . http_build_query($params);
+    $getUrl = 'https://lrclib.net/api/get?' . http_build_query($exactParams);
     $res = http_get_json($getUrl, 5);
 
-    // If cleaned query returned 404 and cleanTitle is different from original, try original title
-    if (!$res['success'] && $res['status_code'] === 404 && $cleanTitle !== $title) {
-        $origParams = ['track_name' => $title];
+    // Step 2b: If exact lookup returned 404, try cleaned title (upload/quality suffixes removed)
+    if (!$res['success'] && $res['status_code'] === 404 && $cleanTitle !== '' && strcasecmp($cleanTitle, $normTitle) !== 0) {
+        $cleanParams = ['track_name' => $cleanTitle];
         if (!empty($cleanArtist)) {
-            $origParams['artist_name'] = $cleanArtist;
+            $cleanParams['artist_name'] = $cleanArtist;
         }
-        $origUrl = 'https://lrclib.net/api/get?' . http_build_query($origParams);
-        $origRes = http_get_json($origUrl, 5);
-        if ($origRes['success']) {
-            $res = $origRes;
+        $cleanUrl = 'https://lrclib.net/api/get?' . http_build_query($cleanParams);
+        $cleanRes = http_get_json($cleanUrl, 5);
+        if ($cleanRes['success']) {
+            $res = $cleanRes;
         }
     }
 
@@ -623,20 +679,22 @@ function fetch_lrclib_lyrics(
         $hasSynced = !empty($synced);
         $status = $isInstrumental ? 'instrumental' : 'matched';
 
-        // Cache on-demand reference
-        save_song_lyrics_ref($songId, [
-            'lrclib_id'            => $d['id'] ?? null,
-            'track_name'           => $d['trackName'] ?? $cleanTitle,
-            'artist_name'          => $d['artistName'] ?? $cleanArtist,
-            'album_name'           => $d['albumName'] ?? null,
-            'duration'             => $d['duration'] ?? null,
-            'instrumental'         => $isInstrumental ? 1 : 0,
-            'has_synced'           => $hasSynced ? 1 : 0,
-            'source_url'           => 'https://lrclib.net',
-            'cached_lyrics_plain'  => $plain,
-            'cached_lyrics_synced' => $synced,
-            'status'               => $status
-        ]);
+        // Cache on-demand reference if valid song ID
+        if ($songId > 0) {
+            save_song_lyrics_ref($songId, [
+                'lrclib_id'            => $d['id'] ?? null,
+                'track_name'           => $d['trackName'] ?? $cleanTitle,
+                'artist_name'          => $d['artistName'] ?? $cleanArtist,
+                'album_name'           => $d['albumName'] ?? null,
+                'duration'             => $d['duration'] ?? null,
+                'instrumental'         => $isInstrumental ? 1 : 0,
+                'has_synced'           => $hasSynced ? 1 : 0,
+                'source_url'           => 'https://lrclib.net',
+                'cached_lyrics_plain'  => $plain,
+                'cached_lyrics_synced' => $synced,
+                'status'               => $status
+            ]);
+        }
 
         return [
             'success'      => true,
@@ -656,7 +714,7 @@ function fetch_lrclib_lyrics(
         ];
     }
 
-    // Handle Rate Limiting (429) & Server Overloaded (503)
+    // Handle Rate Limiting (429) & Server Overloaded (503) — do NOT cache failure
     if ($res['status_code'] === 429) {
         return [
             'success'     => false,
@@ -676,24 +734,104 @@ function fetch_lrclib_lyrics(
         ];
     }
 
-    // 3. Fallback: If exact match was not found, search candidates and rank them with Echo Music duration tolerances
-    $searchRes = search_lrclib_candidates($cleanTitle, $cleanArtist, $targetDuration);
-    if (!empty($searchRes['candidates'])) {
+    // Handle network / DNS / connection failure — do NOT cache failure
+    if ($res['status_code'] === 0) {
         return [
-            'success'    => true,
-            'match_type' => 'candidates',
-            'status'     => 'ambiguous',
-            'candidates' => $searchRes['candidates'],
-            'top_candidate_id' => $searchRes['candidates'][0]['id'] ?? null,
-            'message'    => 'Multiple lyric recordings found. Choose your preferred version below.'
+            'success'    => false,
+            'status'     => 'network_error',
+            'message'    => $res['error'] ?? 'Could not connect to LRCLIB lyrics service.',
+            'search_url' => 'https://www.google.com/search?q=' . urlencode("{$cleanTitle} {$cleanArtist} lyrics")
         ];
     }
 
-    // If neither get nor search found anything, record not_found status
-    save_song_lyrics_ref($songId, [
-        'status'     => 'not_found',
-        'source_url' => 'https://lrclib.net'
-    ]);
+    // 3. Fallback: Search candidates via /api/search
+    $searchRes = search_lrclib_candidates($cleanTitle !== '' ? $cleanTitle : $normTitle, $cleanArtist, $targetDuration);
+    if (!empty($searchRes['candidates'])) {
+        $top = $searchRes['candidates'][0];
+        // If the top candidate is an unambiguous strong match for both title & artist
+        if (
+            count($searchRes['candidates']) === 1 || 
+            ($top['match_score'] >= 75 && 
+             strcasecmp($top['track_name'], $cleanTitle) === 0 && 
+             (empty($cleanArtist) || strcasecmp($top['artist_name'], $cleanArtist) === 0))
+        ) {
+            $isInstrumental = !empty($top['instrumental']);
+            $plain = $top['plain_lyrics'] ?? null;
+            $synced = $top['synced_lyrics'] ?? null;
+            $hasSynced = !empty($synced);
+            $status = $isInstrumental ? 'instrumental' : 'matched';
+
+            if ($songId > 0) {
+                save_song_lyrics_ref($songId, [
+                    'lrclib_id'            => $top['id'],
+                    'track_name'           => $top['track_name'],
+                    'artist_name'          => $top['artist_name'],
+                    'album_name'           => $top['album_name'],
+                    'duration'             => $top['duration'],
+                    'instrumental'         => $isInstrumental ? 1 : 0,
+                    'has_synced'           => $hasSynced ? 1 : 0,
+                    'source_url'           => 'https://lrclib.net',
+                    'cached_lyrics_plain'  => $plain,
+                    'cached_lyrics_synced' => $synced,
+                    'status'               => $status
+                ]);
+            }
+
+            return [
+                'success'      => true,
+                'cached'       => false,
+                'match_type'   => 'search_match',
+                'status'       => $status,
+                'lrclib_id'    => $top['id'],
+                'track_name'   => $top['track_name'],
+                'artist_name'  => $top['artist_name'],
+                'album_name'   => $top['album_name'],
+                'duration'     => $top['duration'],
+                'instrumental' => $isInstrumental,
+                'has_synced'   => $hasSynced,
+                'plain_lyrics' => $plain,
+                'synced_lyrics'=> $synced,
+                'source_url'   => 'https://lrclib.net'
+            ];
+        }
+
+        return [
+            'success'          => true,
+            'match_type'       => 'candidates',
+            'status'           => 'ambiguous',
+            'candidates'       => $searchRes['candidates'],
+            'top_candidate_id' => $searchRes['candidates'][0]['id'] ?? null,
+            'message'          => 'Multiple lyric recordings found. Choose your preferred version below.'
+        ];
+    }
+
+    // If search had an API error (e.g. 503 or 429), report it without caching negative lookup
+    if (!$searchRes['success'] && ($searchRes['status_code'] ?? 0) === 503) {
+        return [
+            'success'    => false,
+            'status'     => 'overloaded',
+            'message'    => 'Lyrics service (LRCLIB) is currently busy. You can retry in a moment.',
+            'search_url' => 'https://www.google.com/search?q=' . urlencode("{$cleanTitle} {$cleanArtist} lyrics")
+        ];
+    }
+    if (!$searchRes['success'] && ($searchRes['status_code'] ?? 0) === 429) {
+        return [
+            'success'    => false,
+            'status'     => 'rate_limited',
+            'message'    => 'LRCLIB rate limit reached. Please wait a moment before retrying.',
+            'search_url' => 'https://www.google.com/search?q=' . urlencode("{$cleanTitle} {$cleanArtist} lyrics")
+        ];
+    }
+
+    // If neither /api/get nor /api/search found matching lyrics, record not_found with current metadata
+    if ($songId > 0) {
+        save_song_lyrics_ref($songId, [
+            'track_name'  => $normTitle,
+            'artist_name' => $normArtist,
+            'status'      => 'not_found',
+            'source_url'  => 'https://lrclib.net'
+        ]);
+    }
 
     return [
         'success'    => false,
@@ -718,37 +856,88 @@ function score_and_rank_lrclib_candidates(
         return [];
     }
 
-    foreach ($candidates as &$c) {
+    $filtered = [];
+
+    // Identify genuine version intent in requested title
+    $isLiveRequested = (bool)preg_match('/\b(live)\b/iu', $cleanTitle);
+    $isAcousticRequested = (bool)preg_match('/\b(acoustic)\b/iu', $cleanTitle);
+    $isRemixRequested = (bool)preg_match('/\b(remix|mix)\b/iu', $cleanTitle);
+
+    foreach ($candidates as $c) {
         $score = 0;
-
-        // 1. Preference for synced lyrics (Echo Music prioritizes synced)
-        if (!empty($c['has_synced'])) {
-            $score += 35;
-        } elseif (!empty($c['has_plain'])) {
-            $score += 15;
-        }
-
-        // 2. Exact or substring title match
         $candTitle = trim($c['track_name'] ?? '');
+        $candArtist = trim($c['artist_name'] ?? '');
+
+        // 1. Title match (must have title relevance)
+        $titleScore = 0;
         if ($candTitle !== '' && $cleanTitle !== '') {
             if (strcasecmp($candTitle, $cleanTitle) === 0) {
-                $score += 30;
+                $titleScore = 35;
             } elseif (stripos($candTitle, $cleanTitle) !== false || stripos($cleanTitle, $candTitle) !== false) {
-                $score += 15;
+                $titleScore = 20;
             }
         }
 
-        // 3. Artist match
-        $candArtist = trim($c['artist_name'] ?? '');
-        if ($candArtist !== '' && $cleanArtist !== '') {
-            if (strcasecmp($candArtist, $cleanArtist) === 0) {
-                $score += 25;
-            } elseif (stripos($candArtist, $cleanArtist) !== false || stripos($cleanArtist, $candArtist) !== false) {
-                $score += 12;
+        // If title does not match even as a substring, discard completely unrelated tracks
+        if ($titleScore === 0) {
+            continue;
+        }
+        $score += $titleScore;
+
+        // 2. Artist match & unrelated artist rejection
+        if ($cleanArtist !== '') {
+            $artistScore = 0;
+            if ($candArtist !== '') {
+                if (strcasecmp($candArtist, $cleanArtist) === 0) {
+                    $artistScore = 30;
+                } elseif (stripos($candArtist, $cleanArtist) !== false || stripos($cleanArtist, $candArtist) !== false) {
+                    $artistScore = 15;
+                }
+            }
+            if ($artistScore === 0) {
+                // Completely mismatched artist -> discard unrelated track
+                continue;
+            }
+            $score += $artistScore;
+        }
+
+        // 3. Genuine version protection (Live, Acoustic, Remix)
+        $candIsLive = (bool)preg_match('/\b(live)\b/iu', $candTitle . ' ' . ($c['album_name'] ?? ''));
+        $candIsAcoustic = (bool)preg_match('/\b(acoustic)\b/iu', $candTitle . ' ' . ($c['album_name'] ?? ''));
+        $candIsRemix = (bool)preg_match('/\b(remix|mix)\b/iu', $candTitle . ' ' . ($c['album_name'] ?? ''));
+
+        if ($isLiveRequested) {
+            $score += $candIsLive ? 25 : -20;
+        } else {
+            if ($candIsLive) {
+                $score -= 15; // User wanted studio version, penalize live recordings
             }
         }
 
-        // 4. Duration delta scoring (inspired by Echo's bestMatchingFor ±2s & ±5s)
+        if ($isAcousticRequested) {
+            $score += $candIsAcoustic ? 25 : -20;
+        } else {
+            if ($candIsAcoustic) {
+                $score -= 15;
+            }
+        }
+
+        if ($isRemixRequested) {
+            $score += $candIsRemix ? 25 : -20;
+        } else {
+            if ($candIsRemix) {
+                $score -= 15;
+            }
+        }
+
+        // 4. Synced lyrics preference (Echo Music prioritizes synced)
+        if (!empty($c['has_synced'])) {
+            $score += 20;
+        } elseif (!empty($c['has_plain'])) {
+            $score += 10;
+        }
+
+        // 5. Duration delta scoring (Echo Music's ±2s and ±5s heuristics)
         if ($targetDuration !== null && $targetDuration > 0 && !empty($c['duration'])) {
             $delta = abs((float)$c['duration'] - $targetDuration);
             $c['duration_delta'] = round($delta, 1);
@@ -759,18 +948,18 @@ function score_and_rank_lrclib_candidates(
             } elseif ($delta <= 10.0) {
                 $score += 10;
             } elseif ($delta > 30.0) {
-                $score -= 20; // Unlikely to be the same version/cut
+                $score -= 20; // Distant version penalty
             }
         } else {
             $c['duration_delta'] = null;
         }
 
         $c['match_score'] = $score;
+        $filtered[] = $c;
     }
-    unset($c);
 
     // Sort descending by match_score
-    usort($candidates, function ($a, $b) {
+    usort($filtered, function ($a, $b) {
         if ($b['match_score'] === $a['match_score']) {
             if (!empty($b['has_synced']) !== !empty($a['has_synced'])) {
                 return !empty($b['has_synced']) ? 1 : -1;
@@ -780,7 +969,7 @@ function score_and_rank_lrclib_candidates(
         return ($b['match_score'] > $a['match_score']) ? 1 : -1;
     });
 
-    return $candidates;
+    return $filtered;
 }
 
 /**
@@ -809,14 +998,20 @@ function search_lrclib_candidates(string $title, string $artist, ?float $targetD
                 'duration'     => isset($c['duration']) ? (float)$c['duration'] : null,
                 'instrumental' => !empty($c['instrumental']),
                 'has_synced'   => !empty($c['syncedLyrics']),
-                'has_plain'    => !empty($c['plainLyrics'])
+                'has_plain'    => !empty($c['plainLyrics']),
+                'plain_lyrics' => $c['plainLyrics'] ?? null,
+                'synced_lyrics'=> $c['syncedLyrics'] ?? null
             ];
         }
         $ranked = score_and_rank_lrclib_candidates($candidates, $cleanTitle, $cleanArtist, $targetDuration);
         return ['success' => true, 'candidates' => $ranked];
     }
 
-    return ['success' => false, 'candidates' => []];
+    return [
+        'success'     => false, 
+        'status_code' => $res['status_code'] ?? 0,
+        'candidates'  => []
+    ];
 }
 
 /**

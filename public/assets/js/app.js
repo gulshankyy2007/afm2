@@ -1439,12 +1439,16 @@ function initAuditionMediaAndLyrics() {
             e.preventDefault();
             const view = tabBtn.dataset.view;
             const box = panel.querySelector('.lyrics-box');
+            const data = cardLyricsCache.get(songId);
+
+            if (view === 'synced' && (!data || !data.synced_lyrics)) {
+                return;
+            }
+
             box.querySelectorAll('.lyrics-tab[data-view]').forEach(t => t.classList.remove('active'));
             tabBtn.classList.add('active');
 
             const body = box.querySelector('.lyrics-body');
-            const data = cardLyricsCache.get(songId);
-
             if (data) {
                 renderLyricsContent(body, data, view);
             }
@@ -1679,13 +1683,12 @@ function renderLyricsHeader(box, data) {
     // Enable/disable synced tab
     const syncedTab = box.querySelector('.lyrics-tab[data-view="synced"]');
     if (syncedTab) {
-        if (!data.synced_lyrics) {
-            syncedTab.style.opacity = '0.5';
-            syncedTab.title = 'Timed lyrics not available for this recording';
-        } else {
-            syncedTab.style.opacity = '1';
-            syncedTab.title = 'View timestamped lyrics';
-        }
+        const hasSynced = Boolean(data.synced_lyrics && data.synced_lyrics.trim().length > 0);
+        syncedTab.disabled = !hasSynced;
+        syncedTab.classList.toggle('disabled', !hasSynced);
+        syncedTab.style.opacity = hasSynced ? '1' : '0.4';
+        syncedTab.style.cursor = hasSynced ? 'pointer' : 'not-allowed';
+        syncedTab.title = hasSynced ? 'View timestamped lyrics' : 'Timed lyrics not available for this recording';
     }
 }
 
@@ -1724,7 +1727,12 @@ function renderLyricsContent(body, data, view = 'plain') {
 
     // Default: Plain lyrics
     body.className = 'lyrics-body plain';
-    body.textContent = data.plain_lyrics || data.synced_lyrics || 'No plain lyrics text available.';
+    let plainText = data.plain_lyrics;
+    if (!plainText && data.synced_lyrics) {
+        // Cleanly strip timestamp brackets [mm:ss.xx] so plain text view is readable
+        plainText = data.synced_lyrics.replace(/^\[\d{2}:\d{2}(?:\.\d+)?\]\s*/gm, '');
+    }
+    body.textContent = plainText || 'No plain lyrics text available.';
 }
 
 /**
@@ -1821,11 +1829,13 @@ function initGlobalQuickLyricsModal() {
     const dismissBtn = document.getElementById('btnDismissGlobalLyrics');
 
     let currentLyricsData = null;
+    let currentSongId = 0;
 
     function closeModal() {
         modal.classList.remove('active');
         modal.style.display = 'none';
         currentLyricsData = null;
+        currentSongId = 0;
     }
 
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
@@ -1837,7 +1847,7 @@ function initGlobalQuickLyricsModal() {
     if (plainTab) {
         plainTab.addEventListener('click', () => {
             plainTab.classList.add('active');
-            syncedTab.classList.remove('active');
+            if (syncedTab) syncedTab.classList.remove('active');
             if (currentLyricsData) {
                 renderLyricsContent(bodyEl, currentLyricsData, 'plain');
             }
@@ -1846,13 +1856,67 @@ function initGlobalQuickLyricsModal() {
 
     if (syncedTab) {
         syncedTab.addEventListener('click', () => {
-            syncedTab.classList.add('active');
-            plainTab.classList.remove('active');
-            if (currentLyricsData) {
-                renderLyricsContent(bodyEl, currentLyricsData, 'synced');
+            if (syncedTab.disabled || !currentLyricsData || !currentLyricsData.synced_lyrics) {
+                return;
             }
+            syncedTab.classList.add('active');
+            if (plainTab) plainTab.classList.remove('active');
+            renderLyricsContent(bodyEl, currentLyricsData, 'synced');
         });
     }
+
+    // Candidate selection inside quick lyrics modal
+    bodyEl.addEventListener('click', async (e) => {
+        const candItem = e.target.closest('.candidate-item');
+        if (!candItem) return;
+
+        e.preventDefault();
+        const lrclibId = parseInt(candItem.dataset.lrclibId, 10);
+        if (!lrclibId || !currentSongId) return;
+
+        bodyEl.innerHTML = `
+            <div class="lyrics-state-msg">
+                <span class="lyrics-spinner"></span>
+                <span>Loading selected recording lyrics...</span>
+            </div>
+        `;
+
+        try {
+            const res = await fetch('api.php?action=select_lyrics_candidate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({ song_id: currentSongId, lrclib_id: lrclibId })
+            });
+
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.error || 'Failed to retrieve candidate.', 'danger');
+                return;
+            }
+
+            currentLyricsData = data;
+            cardLyricsCache.set(currentSongId, data);
+
+            renderLyricsContent(bodyEl, data, 'plain');
+            if (plainTab) plainTab.classList.add('active');
+            if (syncedTab) {
+                syncedTab.classList.remove('active');
+                const hasSynced = Boolean(data.synced_lyrics && data.synced_lyrics.trim().length > 0);
+                syncedTab.disabled = !hasSynced;
+                syncedTab.classList.toggle('disabled', !hasSynced);
+                syncedTab.style.opacity = hasSynced ? '1' : '0.4';
+                syncedTab.style.cursor = hasSynced ? 'pointer' : 'not-allowed';
+                syncedTab.title = hasSynced ? 'View timestamped lyrics' : 'No timestamped lyrics available';
+            }
+            showToast('Lyrics candidate selected & saved!', 'success');
+        } catch (err) {
+            console.error('Candidate selection error:', err);
+            bodyEl.innerHTML = `<div class="lyrics-state-msg">Error loading candidate lyrics.</div>`;
+        }
+    });
 
     document.addEventListener('click', async (e) => {
         const btn = e.target.closest('.btn-lyrics-quick-view, .btn-quick-lyrics, .btn-shelf-lyrics');
@@ -1862,6 +1926,7 @@ function initGlobalQuickLyricsModal() {
         const songId = parseInt(btn.dataset.songId, 10);
         const title = btn.dataset.songTitle || 'Song';
         const artist = btn.dataset.songArtist || '';
+        currentSongId = songId;
 
         titleEl.textContent = title;
         artistEl.textContent = artist;
@@ -1872,7 +1937,14 @@ function initGlobalQuickLyricsModal() {
         if (ytmLink) ytmLink.href = `https://music.youtube.com/search?q=${q}`;
 
         if (plainTab) plainTab.classList.add('active');
-        if (syncedTab) syncedTab.classList.remove('active');
+        if (syncedTab) {
+            syncedTab.classList.remove('active');
+            syncedTab.disabled = true;
+            syncedTab.classList.add('disabled');
+            syncedTab.style.opacity = '0.4';
+            syncedTab.style.cursor = 'not-allowed';
+            syncedTab.title = 'Checking timestamped lyrics...';
+        }
 
         bodyEl.className = 'lyrics-body plain';
         bodyEl.innerHTML = `
@@ -1891,19 +1963,29 @@ function initGlobalQuickLyricsModal() {
             currentLyricsData = data;
 
             if (data.success && (data.plain_lyrics || data.synced_lyrics || data.instrumental)) {
+                cardLyricsCache.set(songId, data);
                 renderLyricsContent(bodyEl, data, 'plain');
                 if (syncedTab) {
-                    if (!data.synced_lyrics) {
-                        syncedTab.style.opacity = '0.5';
-                        syncedTab.title = 'No timestamped lyrics available';
-                    } else {
-                        syncedTab.style.opacity = '1';
-                    }
+                    const hasSynced = Boolean(data.synced_lyrics && data.synced_lyrics.trim().length > 0);
+                    syncedTab.disabled = !hasSynced;
+                    syncedTab.classList.toggle('disabled', !hasSynced);
+                    syncedTab.style.opacity = hasSynced ? '1' : '0.4';
+                    syncedTab.style.cursor = hasSynced ? 'pointer' : 'not-allowed';
+                    syncedTab.title = hasSynced ? 'View timestamped lyrics' : 'No timestamped lyrics available';
+                }
+            } else if (data.match_type === 'candidates' && Array.isArray(data.candidates) && data.candidates.length > 0) {
+                renderCandidatesList(bodyEl, songId, data.candidates);
+                if (syncedTab) {
+                    syncedTab.disabled = true;
+                    syncedTab.classList.add('disabled');
+                    syncedTab.style.opacity = '0.4';
+                    syncedTab.style.cursor = 'not-allowed';
+                    syncedTab.title = 'Select a lyrics recording below';
                 }
             } else if (data.status === 'overloaded' || data.status === 'rate_limited') {
                 bodyEl.innerHTML = `
                     <div class="lyrics-state-msg">
-                        <span>⏳ Lyrics service is busy. Please try again in a moment.</span>
+                        <span>⏳ ${escapeHtml(data.message || 'Lyrics service is busy. Please try again in a moment.')}</span>
                     </div>
                 `;
             } else {
@@ -2774,6 +2856,9 @@ function initSongManagement() {
                 showToast(data.message || `Song #${songId} updated successfully!`, 'success');
                 editModal.classList.remove('active');
 
+                // Invalidate lyrics cache for this updated song
+                cardLyricsCache.delete(songId);
+
                 // Update row in DOM
                 const row = document.querySelector(`tr[data-song-id="${songId}"]`);
                 if (row) {
@@ -2798,6 +2883,14 @@ function initSongManagement() {
                         editBtn.setAttribute('data-song-artist', artist);
                         if (video) editBtn.setAttribute('data-song-video', video);
                     }
+
+                    // Update all lyrics trigger buttons in the row with fresh metadata
+                    row.querySelectorAll('.btn-lyrics-quick-view, .btn-quick-lyrics, .btn-shelf-lyrics').forEach(btn => {
+                        btn.setAttribute('data-song-title', title);
+                        btn.setAttribute('data-song-artist', artist || '');
+                        btn.dataset.songTitle = title;
+                        btn.dataset.songArtist = artist || '';
+                    });
                 } else {
                     window.location.reload();
                 }

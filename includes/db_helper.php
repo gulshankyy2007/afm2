@@ -477,6 +477,12 @@ function create_catalogue_song(
             update_song_discovery_status($existingId, $discoveryStatus);
         }
 
+        // Clear any previous failed lyrics lookup cache so user can fetch fresh
+        $savedLyrics = get_saved_song_lyrics($existingId);
+        if ($savedLyrics && $savedLyrics['status'] === 'not_found') {
+            clear_song_lyrics_ref($existingId);
+        }
+
         $artistDisplay = !empty($existing['artist']) ? $existing['artist'] : 'Unknown Artist';
         return [
             'success'          => true,
@@ -613,6 +619,11 @@ function update_catalogue_song(
             ':artist' => $artist,
             ':id'     => $songId
         ]);
+
+        // Invalidate cached lyrics and negative lookup if title or artist was changed
+        if ($song['title'] !== $title || $song['artist'] !== $artist) {
+            clear_song_lyrics_ref($songId);
+        }
 
         // If YouTube link/id provided, update or create media
         if (!empty($youtubeUrlOrId)) {
