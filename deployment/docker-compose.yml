@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.4
+    container_name: afm2_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-afm_db}
+      MYSQL_USER: ${DB_USER:-afm_user}
+      MYSQL_PASSWORD: ${DB_PASS:-afm_password_123}
+    volumes:
+      - afm2_db_data:/var/lib/mysql
+      - ./afm2_full_backup.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: afm2_web
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-afm_db}
+      DB_USER: ${DB_USER:-afm_user}
+      DB_PASS: ${DB_PASS:-afm_password_123}
+      APP_ENV: ${APP_ENV:-production}
+      APP_SECRET: ${APP_SECRET:-afm2_production_secret_key_change_me_2026}
+
+volumes:
+  afm2_db_data:

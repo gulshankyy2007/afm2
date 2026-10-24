@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /assets/
+Disallow: /api.php
+Disallow: /setup.php
+Disallow: /import.php
+Disallow: /duplicates.php
+Disallow: /config/
+Disallow: /includes/

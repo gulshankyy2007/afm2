@@ -1,0 +1,56 @@
+# ==============================================================================
+# AFM#2 — Git Ignore Policy (Security & Data Leak Prevention)
+# ==============================================================================
+
+# Environment files containing live or local secrets
+.env
+.env.*
+!.env.example
+
+# Credentials, generated password notes, and private keys
+config/*readme*.txt
+config/rotated_credentials_readme.txt
+*credential*
+*password*
+*.key
+*.pem
+
+# Database dumps, raw SQL scripts, and schema migrations with live data
+*.sql
+AFM2_import.sql
+deployment/*.sql
+deployment/afm2_full_backup.sql
+
+# Production data CSVs and review spreadsheets
+*.csv
+AFM2_songs_import.csv
+AFM2_duplicate_review.csv
+My YouTube Library.csv
+My YouTube Music Library.csv
+
+# Compressed deployment and archive bundles
+*.tar.gz
+*.zip
+*.bak
+afm2-deploy.tar.gz
+afm2-infinityfree.zip
+
+# Backup directories
+backups/
+
+# Scratchpad, temporary debugging artifacts, and logs
+scratch/
+*.log
+bin/*.log
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Vercel CLI deployment metadata
+.vercel/
+
+# Node / vendor dependencies if any
+node_modules/
+vendor/

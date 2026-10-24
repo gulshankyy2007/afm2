@@ -1,0 +1,46 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.9.0",
+      "maxDuration": 15
+    }
+  },
+  "routes": [
+    {
+      "src": "^/(config|includes|migrations|tests|deployment|bin|scratch|backups)($|/.*)",
+      "status": 404
+    },
+    {
+      "src": "^/.*\\.(env|sql|csv|json|md|sh|tar\\.gz|zip|bak)$",
+      "status": 404
+    },
+    {
+      "src": "^/assets/(.*)$",
+      "dest": "/public/assets/$1",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "src": "^/(favicon.*|apple-touch-icon.*|robots.txt)$",
+      "dest": "/public/$1",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/api/index.php",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      }
+    }
+  ]
+}

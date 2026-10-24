@@ -1,0 +1,41 @@
+# ==============================================================================
+# AFM#2 — Vercel Deployment Ignore Rules
+# Excludes internal files, database dumps, backups, and dev tooling from deployment
+# ==============================================================================
+
+# Environment files and credentials (secrets must be configured via Vercel Project Settings)
+.env
+.env.*
+!.env.example
+config/*readme*.txt
+config/rotated_credentials_readme.txt
+*credentials*
+*password*
+*.key
+*.pem
+
+# Raw database dumps, SQL scripts, and archives
+*.sql
+*.csv
+backups/
+deployment/*.sql
+*.tar.gz
+*.zip
+*.bak
+afm2-deploy.tar.gz
+afm2-infinityfree.zip
+
+# Testing suite and scratchpad files
+tests/
+scratch/
+bin/
+deployment/
+
+# Version control and documentation
+.git/
+.gitignore
+README.md
+
+# OS metadata
+.DS_Store
+Thumbs.db
