@@ -351,7 +351,7 @@ function applyConfirmedMediaToPanel(panel, m) {
     // Update Player Container with strict origin and enablejsapi=1
     const playerContainer = panel.querySelector('.player-container');
     if (playerContainer) {
-        const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(m.video_id)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0`;
+        const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(m.video_id)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0&playsinline=1`;
         playerContainer.innerHTML = `
             <div class="player-wrapper">
                 <iframe 
@@ -373,6 +373,9 @@ function applyConfirmedMediaToPanel(panel, m) {
                         </a>
                         <a href="https://music.youtube.com/watch?v=${encodeURIComponent(m.video_id)}" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube Music">
                             YT Music ↗
+                        </a>
+                        <a href="https://www.youtube.com/watch?v=${encodeURIComponent(m.video_id)}" target="_blank" rel="noopener noreferrer" class="link-external link-bg-play" title="Open directly in YouTube for background audio playback on mobile browsers like Brave">
+                            🎧 Background Play ↗
                         </a>
                     </div>
                     <div class="player-footer-right">
@@ -1365,7 +1368,7 @@ function initAuditionMediaAndLyrics() {
 
                 panel.dataset.embedStatus = 'allowed';
                 const vId = panel.dataset.videoId;
-                const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vId)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0`;
+                const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vId)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0&playsinline=1`;
 
                 playerContainer.innerHTML = `
                     <div class="player-wrapper">
@@ -1388,6 +1391,9 @@ function initAuditionMediaAndLyrics() {
                                 </a>
                                 <a href="https://music.youtube.com/watch?v=${encodeURIComponent(vId)}" target="_blank" rel="noopener noreferrer" class="link-external">
                                     YT Music ↗
+                                </a>
+                                <a href="https://www.youtube.com/watch?v=${encodeURIComponent(vId)}" target="_blank" rel="noopener noreferrer" class="link-external link-bg-play" title="Open directly in YouTube for background audio playback on mobile browsers like Brave">
+                                    🎧 Background Play ↗
                                 </a>
                             </div>
                             <div class="player-footer-right">

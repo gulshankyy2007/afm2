@@ -285,6 +285,6 @@
         </div>
     </footer>
 
-    <script src="assets/js/app.js?v=3.1"></script>
+    <script src="assets/js/app.js?v=3.2"></script>
 </body>
 </html>
