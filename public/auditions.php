@@ -503,9 +503,6 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                                     <a href="https://music.youtube.com/watch?v=<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube Music">
                                                         YT Music ↗
                                                     </a>
-                                                    <a href="https://www.youtube.com/watch?v=<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external link-bg-play" title="Open directly in YouTube for background audio playback on mobile browsers like Brave">
-                                                        🎧 Background Play ↗
-                                                    </a>
                                                 </div>
                                                 <div class="player-footer-right">
                                                     <button type="button" class="btn-xs btn-secondary btn-edit-media" title="Change recording version or select different link">

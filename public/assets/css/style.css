@@ -4232,16 +4232,6 @@ html[data-theme="oceanic"] .toast .toast-msg {
     background: rgba(255, 255, 255, 0.05);
 }
 
-.link-external.link-bg-play {
-    color: var(--accent);
-    font-weight: 500;
-}
-
-.link-external.link-bg-play:hover {
-    color: #ffffff;
-    background: var(--accent-light);
-}
-
 /* Audio & Lyrics Drawer */
 .audition-drawer {
     display: grid;
