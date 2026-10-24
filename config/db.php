@@ -33,39 +33,6 @@ function get_db_connection(): PDO {
         PDO::ATTR_EMULATE_PREPARES   => false,
     ];
 
-    // Environment-driven SSL / TLS configuration for cloud database connections
-    $dbSsl = filter_var(env('DB_SSL', false), FILTER_VALIDATE_BOOLEAN);
-    if ($dbSsl) {
-        $sslCa = trim((string)env('DB_SSL_CA', ''));
-        if ($sslCa !== '') {
-            // Explicitly user-configured CA path: enforce strictly without silent fallback
-            $options[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
-        } else {
-            // Auto-discover standard OS and cloud runtime CA certificate bundles
-            $systemCaBundles = [
-                '/etc/ssl/certs/ca-certificates.crt', // Debian / Ubuntu / AWS Lambda (Vercel)
-                '/etc/pki/tls/certs/ca-bundle.crt',   // RHEL / CentOS / Amazon Linux
-                '/etc/ssl/ca-bundle.pem',              // OpenSUSE
-                '/etc/ssl/cert.pem',                   // Alpine / macOS
-            ];
-            foreach ($systemCaBundles as $bundle) {
-                if (file_exists($bundle)) {
-                    $options[PDO::MYSQL_ATTR_SSL_CA] = $bundle;
-                    break;
-                }
-            }
-        }
-
-        // Maintain strict certificate verification by default
-        $verifyCert = filter_var(env('DB_SSL_VERIFY_SERVER_CERT', true), FILTER_VALIDATE_BOOLEAN);
-        $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = $verifyCert;
-
-        $sslCipher = trim((string)env('DB_SSL_CIPHER', ''));
-        if ($sslCipher !== '') {
-            $options[PDO::MYSQL_ATTR_SSL_CIPHER] = $sslCipher;
-        }
-    }
-
     try {
         $pdo = new PDO($dsn, $user, $pass, $options);
         $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");

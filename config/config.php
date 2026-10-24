@@ -48,7 +48,6 @@ function env(string $key, $default = null) {
 // App Constants
 define('APP_ENV', env('APP_ENV', 'development'));
 define('APP_SECRET', env('APP_SECRET', 'afm2_default_secret_key_change_me'));
-define('SESSION_DRIVER', strtolower((string)env('SESSION_DRIVER', 'native')));
 define('DB_HOST', env('DB_HOST', '127.0.0.1'));
 define('DB_PORT', (int)env('DB_PORT', 3306));
 define('DB_NAME', env('DB_NAME', 'afm_db'));
@@ -70,8 +69,7 @@ if (APP_ENV === 'development') {
 // Configure secure session parameters before starting session
 if (session_status() === PHP_SESSION_NONE) {
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-               (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) ||
-               (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+               (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
     
     session_name('AFM2_SESSID');
     session_set_cookie_params([
@@ -84,13 +82,6 @@ if (session_status() === PHP_SESSION_NONE) {
     ]);
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
-
-    // Register database session handler if opt-in driver is configured
-    if (SESSION_DRIVER === 'database' || SESSION_DRIVER === 'db') {
-        ini_set('session.lazy_write', '0');
-        require_once dirname(__DIR__) . '/includes/session_handler.php';
-        init_session_handler();
-    }
 }
 
 /**

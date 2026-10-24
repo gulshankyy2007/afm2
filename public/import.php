@@ -24,7 +24,7 @@ if (isset($_GET['step']) && $_GET['step'] === 'reset') {
     if (!empty($_SESSION['csv_import_file']) && file_exists($_SESSION['csv_import_file'])) {
         @unlink($_SESSION['csv_import_file']);
     }
-    unset($_SESSION['csv_import_file'], $_SESSION['csv_raw_content'], $_SESSION['csv_import_data'], $_SESSION['import_token']);
+    unset($_SESSION['csv_import_file'], $_SESSION['csv_import_data'], $_SESSION['import_token']);
     header('Location: import.php');
     exit;
 }
@@ -66,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Validate file extension
                 if (!in_array($ext, ['csv', 'txt'], true)) {
                     $error = 'Only .csv or .txt files are supported for catalogue import.';
-                } elseif ($file['size'] > 4 * 1024 * 1024) {
-                    $error = 'File exceeds maximum allowed upload size of 4 MB.';
+                } elseif ($file['size'] > 5 * 1024 * 1024) {
+                    $error = 'File exceeds maximum allowed upload size of 5 MB.';
                 } else {
                     $tmpDest = sys_get_temp_dir() . '/afm2_import_' . preg_replace('/[^a-zA-Z0-9]/', '', session_id()) . '_' . time() . '.csv';
                     if (!move_uploaded_file($file['tmp_name'], $tmpDest)) {
@@ -79,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $error = $analysis['error'];
                         } else {
                             $_SESSION['csv_import_file'] = $tmpDest;
-                            $_SESSION['csv_raw_content'] = function_exists('gzencode') ? gzencode((string)file_get_contents($tmpDest), 6) : file_get_contents($tmpDest);
                             $_SESSION['csv_import_data'] = $analysis;
                             $_SESSION['import_token'] = bin2hex(random_bytes(16));
                             $currentStep = 'review';
@@ -94,22 +93,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // -------------------------------------------------------------
         elseif ($postAction === 'remap_columns' && !empty($_SESSION['csv_import_file'])) {
             $tmpPath = $_SESSION['csv_import_file'];
-            if (!file_exists($tmpPath)) {
-                // If running in a multi-instance serverless environment (e.g. Vercel),
-                // reconstruct the temporary file on the active container from the session payload
-                if (!empty($_SESSION['csv_raw_content'])) {
-                    $raw = $_SESSION['csv_raw_content'];
-                    $content = (str_starts_with($raw, "\x1f\x8b") && function_exists('gzdecode')) ? @gzdecode($raw) : $raw;
-                    if ($content !== false && $content !== '') {
-                        $reconstructedPath = sys_get_temp_dir() . '/afm2_import_' . preg_replace('/[^a-zA-Z0-9]/', '', session_id()) . '_' . time() . '.csv';
-                        if (file_put_contents($reconstructedPath, $content) !== false) {
-                            $tmpPath = $reconstructedPath;
-                            $_SESSION['csv_import_file'] = $reconstructedPath;
-                        }
-                    }
-                }
-            }
-
             if (!file_exists($tmpPath)) {
                 $error = 'Staged CSV session expired. Please re-upload your file.';
                 $currentStep = 'upload';
@@ -214,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!empty($_SESSION['csv_import_file']) && file_exists($_SESSION['csv_import_file'])) {
                         @unlink($_SESSION['csv_import_file']);
                     }
-                    unset($_SESSION['csv_import_file'], $_SESSION['csv_raw_content'], $_SESSION['csv_import_data']);
+                    unset($_SESSION['csv_import_file'], $_SESSION['csv_import_data']);
 
                     header('Location: import.php?step=results');
                     exit;
