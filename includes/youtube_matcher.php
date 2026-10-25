@@ -548,6 +548,7 @@ class YouTubeMatcher {
                 ':is_selected'         => 0
             ]);
         }
+        self::clear_matching_stats_cache();
     }
 
     /**
@@ -657,6 +658,8 @@ class YouTubeMatcher {
                     ':img'   => $thumbUrl
                 ]);
             } catch (\Throwable $e) {}
+
+            self::clear_matching_stats_cache();
 
             return [
                 'selected'  => true,
@@ -775,6 +778,7 @@ class YouTubeMatcher {
             ");
             $thumbUrl = "https://img.youtube.com/vi/{$cleanVid}/hqdefault.jpg";
             $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            self::clear_matching_stats_cache();
         } catch (\Throwable $e) {}
 
         return [
@@ -863,6 +867,7 @@ class YouTubeMatcher {
             ");
             $thumbUrl = $meta['thumbnail_url'] ?? "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
             $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            self::clear_matching_stats_cache();
         } catch (\Throwable $e) {}
 
         return [
@@ -887,6 +892,8 @@ class YouTubeMatcher {
         try {
             $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` = :id AND `source` = 'confirmed'")->execute([':id' => $songId]);
         } catch (\Throwable $e) {}
+
+        self::clear_matching_stats_cache();
 
         return ['success' => true, 'message' => 'Recording selection cleared.'];
     }
@@ -1180,15 +1187,35 @@ class YouTubeMatcher {
                 `completed_at` = NULL,
                 `updated_at` = NOW()
         ");
+        self::clear_matching_stats_cache();
+    }
+
+    /**
+     * Request-scoped cache container for catalogue matching statistics.
+     */
+    private static ?array $matchingStatsCache = null;
+
+    /**
+     * Clear request-scoped matching stats cache.
+     */
+    public static function clear_matching_stats_cache(): void {
+        self::$matchingStatsCache = null;
     }
 
     /**
      * Catalogue-wide matching stats across songs, candidates, and media.
+     * Memoized per-request to avoid redundant full-scan aggregations across controllers and templates.
      */
-    public static function get_matching_stats(): array {
+    public static function get_matching_stats(bool $forceRefresh = false): array {
+        if (self::$matchingStatsCache !== null && !$forceRefresh) {
+            return self::$matchingStatsCache;
+        }
+
         $pdo = get_db_connection();
 
-        $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        $totalSongs = function_exists('get_catalogue_song_count')
+            ? (get_catalogue_song_count($forceRefresh) ?? (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn())
+            : (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
         
         $mediaCounts = $pdo->query("
             SELECT 
@@ -1219,7 +1246,7 @@ class YouTubeMatcher {
         $reviewNeeded = (int)($candCounts['review_needed_count'] ?? 0);
         $lowUnresolved = (int)($candCounts['low_unresolved_count'] ?? 0);
 
-        return [
+        self::$matchingStatsCache = [
             'total_songs'      => $totalSongs,
             'matched_total'    => $matchedTotal,
             'unmatched_total'  => $unmatchedTotal,
@@ -1229,6 +1256,8 @@ class YouTubeMatcher {
             'low_unresolved'   => $lowUnresolved,
             'blocked_count'    => $blockedCount
         ];
+
+        return self::$matchingStatsCache;
     }
 
     /**
@@ -1326,6 +1355,7 @@ class YouTubeMatcher {
         if ($page > $totalPages) $page = $totalPages;
         $offset = ($page - 1) * $perPage;
 
+        // Decoupled pagination query: selects only the page items without expensive correlated subqueries
         $dataSql = "
             SELECT 
                 s.`song_id`,
@@ -1343,14 +1373,7 @@ class YouTubeMatcher {
                 sm.`is_manual`,
                 sm.`embed_status`,
                 sa.`thumbnail_url` AS artwork_thumbnail_url,
-                sa.`image_url` AS artwork_image_url,
-                (SELECT COUNT(*) FROM `song_youtube_candidates` c WHERE c.`song_id` = s.`song_id`) AS candidate_count,
-                (SELECT c2.`confidence` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_confidence,
-                (SELECT c2.`score_total` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_score,
-                (SELECT c2.`video_id` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_video_id,
-                (SELECT c2.`title` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_title,
-                (SELECT c2.`channel_title` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_channel,
-                (SELECT c2.`thumbnail_url` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_thumb
+                sa.`image_url` AS artwork_image_url
             FROM `songs` s
             LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
             LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
@@ -1361,6 +1384,81 @@ class YouTubeMatcher {
         $dataStmt = $pdo->prepare($dataSql);
         $dataStmt->execute($bindings);
         $items = $dataStmt->fetchAll();
+
+        // Batch hydrate candidate counts and top candidate info for the current page
+        if (!empty($items)) {
+            $songIds = array_map('intval', array_column($items, 'song_id'));
+            $placeholders = implode(',', array_fill(0, count($songIds), '?'));
+
+            $candMap = [];
+            try {
+                // High-performance window function: single query resolves both counts and top candidates
+                $winSql = "
+                    SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url, cand_count
+                    FROM (
+                        SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url,
+                               ROW_NUMBER() OVER (PARTITION BY song_id ORDER BY score_total DESC, video_id ASC) AS rn,
+                               COUNT(*) OVER (PARTITION BY song_id) AS cand_count
+                        FROM song_youtube_candidates
+                        WHERE song_id IN ({$placeholders})
+                    ) ranked
+                    WHERE rn = 1
+                ";
+                $winStmt = $pdo->prepare($winSql);
+                $winStmt->execute($songIds);
+                while ($cRow = $winStmt->fetch()) {
+                    $candMap[(int)$cRow['song_id']] = $cRow;
+                }
+            } catch (\Throwable $e) {
+                // Engine fallback for database environments without window function support
+                try {
+                    $cntSql = "SELECT song_id, COUNT(*) AS cnt FROM song_youtube_candidates WHERE song_id IN ({$placeholders}) GROUP BY song_id";
+                    $cStmt = $pdo->prepare($cntSql);
+                    $cStmt->execute($songIds);
+                    $counts = $cStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+                    $topSql = "SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url 
+                               FROM song_youtube_candidates WHERE song_id = ? ORDER BY score_total DESC, video_id ASC LIMIT 1";
+                    $topStmt = $pdo->prepare($topSql);
+                    foreach ($songIds as $sid) {
+                        if (!empty($counts[$sid])) {
+                            $topStmt->execute([$sid]);
+                            $top = $topStmt->fetch();
+                            if ($top) {
+                                $top['cand_count'] = (int)$counts[$sid];
+                                $candMap[$sid] = $top;
+                            }
+                        }
+                    }
+                } catch (\Throwable $e2) {
+                    error_log("AFM2 Candidate Hydration Fallback Error: " . $e2->getMessage());
+                }
+            }
+
+            // Hydrate items array with candidate metrics matching expected schema
+            foreach ($items as &$item) {
+                $sId = (int)$item['song_id'];
+                if (isset($candMap[$sId])) {
+                    $c = $candMap[$sId];
+                    $item['candidate_count']     = (int)$c['cand_count'];
+                    $item['top_cand_confidence'] = $c['confidence'];
+                    $item['top_cand_score']      = $c['score_total'];
+                    $item['top_cand_video_id']   = $c['video_id'];
+                    $item['top_cand_title']      = $c['title'];
+                    $item['top_cand_channel']    = $c['channel_title'];
+                    $item['top_cand_thumb']      = $c['thumbnail_url'];
+                } else {
+                    $item['candidate_count']     = 0;
+                    $item['top_cand_confidence'] = null;
+                    $item['top_cand_score']      = null;
+                    $item['top_cand_video_id']   = null;
+                    $item['top_cand_title']      = null;
+                    $item['top_cand_channel']    = null;
+                    $item['top_cand_thumb']      = null;
+                }
+            }
+            unset($item);
+        }
 
         return [
             'items'       => $items,
