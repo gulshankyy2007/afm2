@@ -62,6 +62,10 @@ function get_catalogue_song_count(bool $forceRefresh = false): ?int {
         return $count;
     } catch (\Throwable $e) {
         error_log("AFM2 Catalogue Song Count Error: " . $e->getMessage());
+        $cache['song_count'] = null;
+        if ($forceRefresh) {
+            $cache['stats'] = null;
+        }
         return null;
     }
 }

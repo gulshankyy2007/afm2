@@ -10,6 +10,15 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 
+$pdo = get_db_connection();
+
+// Fail-safe shutdown function to ensure any open transaction is rolled back on unexpected exit or failure
+register_shutdown_function(function() use ($pdo) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+});
+
 function assert_phase2a(bool $condition, string $description): void {
     if ($condition) {
         echo "  ✔ PASS: {$description}\n";
@@ -22,8 +31,6 @@ function assert_phase2a(bool $condition, string $description): void {
 echo "\n======================================================================\n";
 echo " AFM#2 — PHASE 2A STATS DEDUPLICATION, CACHE & FALLBACK TESTS\n";
 echo "======================================================================\n\n";
-
-$pdo = get_db_connection();
 
 // ---------------------------------------------------------------------
 // 1. Initial State & Unified Cache Container
@@ -120,7 +127,7 @@ clear_dashboard_stats_cache();
 $baseCount = get_catalogue_song_count();
 assert_phase2a(is_int($baseCount) && $baseCount >= 2400, "Base catalogue count obtained ({$baseCount})");
 
-// Transaction isolation ensures zero pollution of local database
+// Transaction isolation with catch + finally ensures 100% rollback guarantee
 $pdo->beginTransaction();
 try {
     $pdo->exec("
@@ -141,9 +148,15 @@ try {
     $clearedAndReloadedCount = get_catalogue_song_count();
     assert_phase2a($clearedAndReloadedCount === $baseCount + 1, "After clear_dashboard_stats_cache(), fresh call returns updated count ({$clearedAndReloadedCount})");
 
+} catch (\Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    throw $e;
 } finally {
-    // Strictly rollback to restore clean database state
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 }
 
 // Confirm rollback and reset cache
@@ -155,7 +168,7 @@ assert_phase2a($restoredCount === $baseCount, "Rollback cleanly restored origina
 // 6. Database Failure Handling & No Fabricated Numeric Count
 // ---------------------------------------------------------------------
 echo "\n6. Database Failure Handling & Honest Fallbacks\n";
-// Test get_catalogue_song_count() and footer when DB connection fails
+// Test get_catalogue_song_count() and footer in an isolated child process
 $testFailureCode = <<<'PHP'
 <?php
 define('AFM_APP', true);
@@ -183,13 +196,18 @@ echo json_encode([
 ]);
 PHP;
 
-$tmpFailFile = sys_get_temp_dir() . '/afm_test_db_failure.php';
-file_put_contents($tmpFailFile, $testFailureCode);
-$failOutputJson = shell_exec("php {$tmpFailFile} 2>/dev/null");
-unlink($tmpFailFile);
+$tmpFailFile = sys_get_temp_dir() . '/afm_test_db_failure_' . uniqid() . '.php';
+try {
+    file_put_contents($tmpFailFile, $testFailureCode);
+    $failOutputJson = shell_exec("php " . escapeshellarg($tmpFailFile) . " 2>/dev/null");
+} finally {
+    if (file_exists($tmpFailFile)) {
+        unlink($tmpFailFile);
+    }
+}
 
 $failData = json_decode($failOutputJson ?? '', true);
-assert_phase2a(is_array($failData), "Simulation of database failure executed");
+assert_phase2a(is_array($failData), "Simulation of database failure executed in isolated process");
 assert_phase2a($failData['count_result'] === null, "get_catalogue_song_count() returns NULL on database failure (never fabricated int)");
 assert_phase2a($failData['footer_has_2461'] === false, "Footer output contains ZERO fabricated numbers ('2461' or '2,461') on failure");
 assert_phase2a($failData['footer_has_2475'] === false, "Footer output contains ZERO fabricated numbers ('2475' or '2,475') on failure");
@@ -198,9 +216,67 @@ assert_phase2a($failData['dot_live_rendered'] === true, "Footer preserves styled
 assert_phase2a($failData['exception_leaked'] === false, "Zero database exception details leaked to visitor");
 
 // ---------------------------------------------------------------------
-// 7. Existing Footer Output Verification When Valid Count Available
+// 7. Forced-Refresh Failure Behavior & Stale Cache Invalidation
 // ---------------------------------------------------------------------
-echo "\n7. Existing Footer Presentation with Valid Count\n";
+echo "\n7. Forced-Refresh Failure Behavior & Cache Invalidation\n";
+// Test scenario where valid count is cached, forced refresh fails, and subsequent call is made without forceRefresh
+$testRefreshFailureCode = <<<'PHP'
+<?php
+define('AFM_APP', true);
+require_once '/mnt/data/GY/Music/AFM#2/config/config.php';
+require_once '/mnt/data/GY/Music/AFM#2/config/db.php';
+require_once '/mnt/data/GY/Music/AFM#2/includes/db_helper.php';
+
+$pdo = get_db_connection();
+// Step 1: Cache valid stats and song count
+$stats = get_dashboard_stats();
+$c1 = get_catalogue_song_count();
+
+// Step 2: Sabotage the connection thread to simulate sudden mid-request database drop
+$threadId = (int)$pdo->query("SELECT CONNECTION_ID()")->fetchColumn();
+try {
+    $pdo->query("KILL {$threadId}");
+} catch (\Throwable $e) {}
+
+// Step 3: Call get_catalogue_song_count(true) to force refresh
+$refreshResult = get_catalogue_song_count(true);
+
+// Step 4: Call get_catalogue_song_count() again WITHOUT force refresh
+$subsequentResult = get_catalogue_song_count();
+
+$cache = &get_dashboard_stats_cache_ref();
+
+echo json_encode([
+    'initial_cached_count' => $c1,
+    'refresh_result'       => $refreshResult,
+    'subsequent_result'    => $subsequentResult,
+    'cache_song_count'     => $cache['song_count'],
+    'cache_stats'          => $cache['stats']
+]);
+PHP;
+
+$tmpRefreshFailFile = sys_get_temp_dir() . '/afm_test_refresh_fail_' . uniqid() . '.php';
+try {
+    file_put_contents($tmpRefreshFailFile, $testRefreshFailureCode);
+    $refreshFailJson = shell_exec("php " . escapeshellarg($tmpRefreshFailFile) . " 2>/dev/null");
+} finally {
+    if (file_exists($tmpRefreshFailFile)) {
+        unlink($tmpRefreshFailFile);
+    }
+}
+
+$refreshData = json_decode($refreshFailJson ?? '', true);
+assert_phase2a(is_array($refreshData), "Forced-refresh failure test executed in isolated process");
+assert_phase2a($refreshData['initial_cached_count'] === 2411, "Pre-condition: initial cached count was valid (2411)");
+assert_phase2a($refreshData['refresh_result'] === null, "Failed forced refresh returns NULL (never fabricated count)");
+assert_phase2a($refreshData['subsequent_result'] === null, "Subsequent call without force refresh returns NULL (stale count was invalidated)");
+assert_phase2a($refreshData['cache_song_count'] === null, "Cache['song_count'] is confirmed NULL after failed forced refresh");
+assert_phase2a($refreshData['cache_stats'] === null, "Cache['stats'] is confirmed NULL after failed forced refresh");
+
+// ---------------------------------------------------------------------
+// 8. Existing Footer Presentation with Valid Count
+// ---------------------------------------------------------------------
+echo "\n8. Existing Footer Presentation with Valid Count\n";
 // Case A: Footer rendered when $stats is already present (e.g. index.php, library.php)
 clear_dashboard_stats_cache();
 $stats = get_dashboard_stats();
@@ -226,11 +302,14 @@ assert_phase2a(strpos($footerHtmlWithoutStats, number_format($validCount) . ' So
 assert_phase2a(strpos($footerHtmlWithoutStats, 'dot-live') !== false, "Footer renders live status indicator");
 
 // ---------------------------------------------------------------------
-// 8. Baseline Catalogue Invariant Safeguard
+// 9. Baseline Catalogue Invariant Safeguard
 // ---------------------------------------------------------------------
-echo "\n8. Catalogue Invariant Safeguard\n";
+echo "\n9. Catalogue Invariant Safeguard\n";
 $finalSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
 assert_phase2a($finalSongCount === 2411, "MANDATORY INVARIANT: Active catalogue songs remain strictly intact (count: {$finalSongCount} === 2411)");
+
+$nullArtistCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `artist` IS NULL")->fetchColumn();
+assert_phase2a($nullArtistCount === 3, "MANDATORY INVARIANT: Authentic NULL artist records preserved intact (count: {$nullArtistCount} === 3)");
 
 echo "\n======================================================================\n";
 echo " ALL PHASE 2A TESTS PASSED SUCCESSFULLY! (100% PASS RATE)\n";
