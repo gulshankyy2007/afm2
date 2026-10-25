@@ -1,6 +1,6 @@
 <?php
 /**
- * AFM#2 - Phase 2A Regression Test Suite: Dashboard Stats Deduplication & Footer Optimization
+ * AFM#2 - Phase 2A Regression Test Suite: Dashboard Stats Deduplication, Cache Consistency & Honest Fallbacks
  */
 
 declare(strict_types=1);
@@ -20,76 +20,217 @@ function assert_phase2a(bool $condition, string $description): void {
 }
 
 echo "\n======================================================================\n";
-echo " AFM#2 — PHASE 2A STATS DEDUPLICATION & FOOTER OPTIMIZATION TESTS\n";
+echo " AFM#2 — PHASE 2A STATS DEDUPLICATION, CACHE & FALLBACK TESTS\n";
 echo "======================================================================\n\n";
 
-// 1. Initial State
-echo "1. Cache State & Helpers\n";
-clear_dashboard_stats_cache();
-assert_phase2a(get_cached_dashboard_stats() === null, "Cache is initially empty after clear");
-
-// 2. Request-Level Memoization
-echo "\n2. Request-Level Memoization\n";
 $pdo = get_db_connection();
 
-$questionsBefore = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+// ---------------------------------------------------------------------
+// 1. Initial State & Unified Cache Container
+// ---------------------------------------------------------------------
+echo "1. Initial State & Unified Cache Lifecycle\n";
+clear_dashboard_stats_cache();
+$cacheRef = &get_dashboard_stats_cache_ref();
+assert_phase2a($cacheRef['stats'] === null, "Initial cache['stats'] is null after clear");
+assert_phase2a($cacheRef['song_count'] === null, "Initial cache['song_count'] is null after clear");
+assert_phase2a(get_cached_dashboard_stats() === null, "get_cached_dashboard_stats() returns null when empty");
+
+// ---------------------------------------------------------------------
+// 2. Request-Level Memoization of get_dashboard_stats()
+// ---------------------------------------------------------------------
+echo "\n2. get_dashboard_stats() Memoization\n";
+$q0 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
 $stats1 = get_dashboard_stats();
-$questionsAfter1 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$queriesRunFirstTime = $questionsAfter1 - $questionsBefore - 1; // subtract SHOW STATUS query
+$q1 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$firstRunQueries = $q1 - $q0 - 1;
 
 assert_phase2a(is_array($stats1), "get_dashboard_stats() returns array");
 assert_phase2a(isset($stats1['total_songs']) && $stats1['total_songs'] >= 2400, "total_songs is populated ({$stats1['total_songs']})");
-assert_phase2a($queriesRunFirstTime >= 8, "First call executes database queries (queries: {$queriesRunFirstTime})");
+assert_phase2a($firstRunQueries >= 8, "First call executes database queries (queries: {$firstRunQueries})");
 
-// Second call in same request
-$questionsBefore2 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+// Second call within same request
+$q2 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
 $stats2 = get_dashboard_stats();
-$questionsAfter2 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$queriesRunSecondTime = $questionsAfter2 - $questionsBefore2 - 1;
+$q3 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$secondRunQueries = $q3 - $q2 - 1;
 
-assert_phase2a($queriesRunSecondTime === 0, "Second call within same request executes ZERO database queries");
+assert_phase2a($secondRunQueries === 0, "Second call within same request executes ZERO queries");
 assert_phase2a($stats1 === $stats2, "Second call returns identical memoized data structure");
 assert_phase2a(get_cached_dashboard_stats() !== null, "get_cached_dashboard_stats() reflects populated cache");
 
-// 3. Force-Refresh Parameter
-echo "\n3. Force-Refresh Parameter\n";
-$questionsBefore3 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$stats3 = get_dashboard_stats(true);
-$questionsAfter3 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$queriesRunForce = $questionsAfter3 - $questionsBefore3 - 1;
+// ---------------------------------------------------------------------
+// 3. Cache Reuse: Cached Count Reused When Appropriate
+// ---------------------------------------------------------------------
+echo "\n3. Cached Count Reuse\n";
+// Since get_dashboard_stats() was called, cache['song_count'] is already populated
+$q4 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$countFromStats = get_catalogue_song_count();
+$q5 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$countQueries = $q5 - $q4 - 1;
 
-assert_phase2a($queriesRunForce >= 8, "get_dashboard_stats(true) bypasses cache and re-queries database (queries: {$queriesRunForce})");
+assert_phase2a($countQueries === 0, "get_catalogue_song_count() reuses existing cached stats with ZERO queries");
+assert_phase2a($countFromStats === $stats1['total_songs'], "Count matches dashboard stats total_songs ({$countFromStats})");
 
-// 4. Lightweight Catalogue Song Count Helper
-echo "\n4. Lightweight Song Count Helper\n";
+// Direct get_catalogue_song_count() caching test from clean state
 clear_dashboard_stats_cache();
-$questionsBeforeCount = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$count = get_catalogue_song_count(true);
-$questionsAfterCount = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
-$queriesRunCount = $questionsAfterCount - $questionsBeforeCount - 1;
+$q6 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$directCount1 = get_catalogue_song_count();
+$q7 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$directRunQueries1 = $q7 - $q6 - 1;
 
-assert_phase2a($count >= 2400, "get_catalogue_song_count() returns correct catalogue count ({$count})");
-assert_phase2a($queriesRunCount === 1, "get_catalogue_song_count() runs strictly 1 lightweight query (queries: {$queriesRunCount})");
+assert_phase2a($directRunQueries1 === 1, "Clean get_catalogue_song_count() executes strictly 1 query");
 
-// 5. Footer Rendering Invariant Check
-echo "\n5. Footer Presentation & Output Verification\n";
+$q8 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$directCount2 = get_catalogue_song_count();
+$q9 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$directRunQueries2 = $q9 - $q8 - 1;
+
+assert_phase2a($directRunQueries2 === 0, "Subsequent get_catalogue_song_count() reuses cached count with ZERO queries");
+assert_phase2a($directCount1 === $directCount2, "Repeated count calls return identical value ({$directCount1})");
+
+// ---------------------------------------------------------------------
+// 4. Cache Invalidation: clear_dashboard_stats_cache() Clears Both
+// ---------------------------------------------------------------------
+echo "\n4. Cache Invalidation via clear_dashboard_stats_cache()\n";
+// Populate both stats and song_count
+get_dashboard_stats();
+get_catalogue_song_count();
+$cacheRef = &get_dashboard_stats_cache_ref();
+assert_phase2a($cacheRef['stats'] !== null, "Pre-condition: cache['stats'] is populated");
+assert_phase2a($cacheRef['song_count'] !== null, "Pre-condition: cache['song_count'] is populated");
+
+clear_dashboard_stats_cache();
+assert_phase2a($cacheRef['stats'] === null, "clear_dashboard_stats_cache() invalidates cache['stats']");
+assert_phase2a($cacheRef['song_count'] === null, "clear_dashboard_stats_cache() invalidates cache['song_count']");
+assert_phase2a(get_cached_dashboard_stats() === null, "get_cached_dashboard_stats() is null after clear");
+
+// Verify that a subsequent call re-queries because cache was invalidated
+$q10 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$reloadedCount = get_catalogue_song_count();
+$q11 = (int)$pdo->query("SHOW STATUS LIKE 'Questions'")->fetch(\PDO::FETCH_ASSOC)['Value'];
+$reloadedQueries = $q11 - $q10 - 1;
+
+assert_phase2a($reloadedQueries === 1, "get_catalogue_song_count() re-queries database after cache clear (queries: {$reloadedQueries})");
+
+// ---------------------------------------------------------------------
+// 5. Simulated Song Count Change Followed by Refresh
+// ---------------------------------------------------------------------
+echo "\n5. Simulated Song Count Change & Refresh Verification\n";
+clear_dashboard_stats_cache();
+$baseCount = get_catalogue_song_count();
+assert_phase2a(is_int($baseCount) && $baseCount >= 2400, "Base catalogue count obtained ({$baseCount})");
+
+// Transaction isolation ensures zero pollution of local database
+$pdo->beginTransaction();
+try {
+    $pdo->exec("
+        INSERT INTO `songs` (`title`, `artist`, `is_consolidated`) 
+        VALUES ('__SIMULATED_TEST_SONG_PHASE2A__', 'Test Performer', 0)
+    ");
+
+    // Without refresh or clearing, cached count must be returned
+    $cachedBeforeRefresh = get_catalogue_song_count();
+    assert_phase2a($cachedBeforeRefresh === $baseCount, "Without refresh or clearing, cached count is preserved ({$cachedBeforeRefresh} === {$baseCount})");
+
+    // With forceRefresh = true, the new database count must be fetched
+    $refreshedCount = get_catalogue_song_count(true);
+    assert_phase2a($refreshedCount === $baseCount + 1, "get_catalogue_song_count(true) returns updated count ({$refreshedCount} === " . ($baseCount + 1) . ")");
+
+    // With clear_dashboard_stats_cache(), subsequent call returns the new count
+    clear_dashboard_stats_cache();
+    $clearedAndReloadedCount = get_catalogue_song_count();
+    assert_phase2a($clearedAndReloadedCount === $baseCount + 1, "After clear_dashboard_stats_cache(), fresh call returns updated count ({$clearedAndReloadedCount})");
+
+} finally {
+    // Strictly rollback to restore clean database state
+    $pdo->rollBack();
+}
+
+// Confirm rollback and reset cache
+clear_dashboard_stats_cache();
+$restoredCount = get_catalogue_song_count();
+assert_phase2a($restoredCount === $baseCount, "Rollback cleanly restored original count ({$restoredCount} === {$baseCount})");
+
+// ---------------------------------------------------------------------
+// 6. Database Failure Handling & No Fabricated Numeric Count
+// ---------------------------------------------------------------------
+echo "\n6. Database Failure Handling & Honest Fallbacks\n";
+// Test get_catalogue_song_count() and footer when DB connection fails
+$testFailureCode = <<<'PHP'
+<?php
+define('AFM_APP', true);
+// Force connection failure through the authentic config/db stack by pointing to unreachable port
+$_ENV['DB_PORT'] = 59999;
+require_once '/mnt/data/GY/Music/AFM#2/config/config.php';
+require_once '/mnt/data/GY/Music/AFM#2/includes/db_helper.php';
+
+// Test 1: get_catalogue_song_count returns null on failure (never 2461, never 2475)
+clear_dashboard_stats_cache();
+$count = get_catalogue_song_count();
+
+// Test 2: Footer renders graceful non-numeric fallback without exposing errors
+ob_start();
+require '/mnt/data/GY/Music/AFM#2/includes/footer.php';
+$footerHtml = ob_get_clean();
+
+echo json_encode([
+    'count_result'         => $count,
+    'footer_has_2461'      => (strpos($footerHtml, '2461') !== false || strpos($footerHtml, '2,461') !== false),
+    'footer_has_2475'      => (strpos($footerHtml, '2475') !== false || strpos($footerHtml, '2,475') !== false),
+    'fallback_rendered'    => (strpos($footerHtml, 'Catalogue Preserved') !== false),
+    'dot_live_rendered'    => (strpos($footerHtml, 'dot-live') !== false),
+    'exception_leaked'     => (strpos($footerHtml, 'Connection refused') !== false || strpos($footerHtml, 'PDOException') !== false)
+]);
+PHP;
+
+$tmpFailFile = sys_get_temp_dir() . '/afm_test_db_failure.php';
+file_put_contents($tmpFailFile, $testFailureCode);
+$failOutputJson = shell_exec("php {$tmpFailFile} 2>/dev/null");
+unlink($tmpFailFile);
+
+$failData = json_decode($failOutputJson ?? '', true);
+assert_phase2a(is_array($failData), "Simulation of database failure executed");
+assert_phase2a($failData['count_result'] === null, "get_catalogue_song_count() returns NULL on database failure (never fabricated int)");
+assert_phase2a($failData['footer_has_2461'] === false, "Footer output contains ZERO fabricated numbers ('2461' or '2,461') on failure");
+assert_phase2a($failData['footer_has_2475'] === false, "Footer output contains ZERO fabricated numbers ('2475' or '2,475') on failure");
+assert_phase2a($failData['fallback_rendered'] === true, "Footer gracefully displays 'Catalogue Preserved' on failure");
+assert_phase2a($failData['dot_live_rendered'] === true, "Footer preserves styled status pill with dot-live indicator");
+assert_phase2a($failData['exception_leaked'] === false, "Zero database exception details leaked to visitor");
+
+// ---------------------------------------------------------------------
+// 7. Existing Footer Output Verification When Valid Count Available
+// ---------------------------------------------------------------------
+echo "\n7. Existing Footer Presentation with Valid Count\n";
 // Case A: Footer rendered when $stats is already present (e.g. index.php, library.php)
+clear_dashboard_stats_cache();
 $stats = get_dashboard_stats();
+$validCount = $stats['total_songs'];
+
 ob_start();
 require dirname(__DIR__) . '/includes/footer.php';
 $footerHtmlWithStats = ob_get_clean();
 
-assert_phase2a(strpos($footerHtmlWithStats, number_format($count) . ' Songs Preserved') !== false, "Footer renders dynamic count with in-scope stats");
+assert_phase2a(strpos($footerHtmlWithStats, number_format($validCount) . ' Songs Preserved') !== false, "Footer renders '" . number_format($validCount) . " Songs Preserved' with in-scope stats");
 assert_phase2a(strpos($footerHtmlWithStats, 'dot-live') !== false, "Footer renders live status indicator");
+assert_phase2a(strpos($footerHtmlWithStats, '2461') === false && strpos($footerHtmlWithStats, '2,461') === false, "Footer has no fabricated 2461 count");
 
 // Case B: Footer rendered when $stats is NOT present (e.g. auditions.php, tournament.php)
 unset($stats);
 clear_dashboard_stats_cache();
+
 ob_start();
 require dirname(__DIR__) . '/includes/footer.php';
 $footerHtmlWithoutStats = ob_get_clean();
 
-assert_phase2a(strpos($footerHtmlWithoutStats, number_format($count) . ' Songs Preserved') !== false, "Footer renders identical dynamic count without in-scope stats");
+assert_phase2a(strpos($footerHtmlWithoutStats, number_format($validCount) . ' Songs Preserved') !== false, "Footer renders '" . number_format($validCount) . " Songs Preserved' without in-scope stats via catalogue helper");
+assert_phase2a(strpos($footerHtmlWithoutStats, 'dot-live') !== false, "Footer renders live status indicator");
+
+// ---------------------------------------------------------------------
+// 8. Baseline Catalogue Invariant Safeguard
+// ---------------------------------------------------------------------
+echo "\n8. Catalogue Invariant Safeguard\n";
+$finalSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+assert_phase2a($finalSongCount === 2411, "MANDATORY INVARIANT: Active catalogue songs remain strictly intact (count: {$finalSongCount} === 2411)");
 
 echo "\n======================================================================\n";
 echo " ALL PHASE 2A TESTS PASSED SUCCESSFULLY! (100% PASS RATE)\n";

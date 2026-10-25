@@ -10,11 +10,14 @@ require_once dirname(__DIR__) . '/config/db.php';
 require_once __DIR__ . '/media_helper.php';
 
 /**
- * Request-level cache container for dashboard statistics.
+ * Request-level cache container for dashboard statistics and catalogue metrics.
  * Scoped strictly to the current request lifecycle.
  */
 function &get_dashboard_stats_cache_ref(): array {
-    static $cache = ['data' => null];
+    static $cache = [
+        'stats'      => null,
+        'song_count' => null,
+    ];
     return $cache;
 }
 
@@ -23,41 +26,44 @@ function &get_dashboard_stats_cache_ref(): array {
  */
 function get_cached_dashboard_stats(): ?array {
     $cache = &get_dashboard_stats_cache_ref();
-    return $cache['data'];
+    return $cache['stats'];
 }
 
 /**
- * Invalidate request-level dashboard statistics cache (e.g. after mutations or in test runners).
+ * Invalidate request-level dashboard statistics cache and catalogue count.
  */
 function clear_dashboard_stats_cache(): void {
     $cache = &get_dashboard_stats_cache_ref();
-    $cache['data'] = null;
+    $cache['stats'] = null;
+    $cache['song_count'] = null;
 }
 
 /**
  * Get lightweight total active song count without computing full dashboard statistics.
  * Uses cached dashboard stats if available, or executes a single fast COUNT query.
+ * Returns null if the database query fails, avoiding fabricated fallback counts.
  */
-function get_catalogue_song_count(bool $forceRefresh = false): int {
-    static $cachedCount = null;
-    if ($cachedCount !== null && !$forceRefresh) {
-        return $cachedCount;
+function get_catalogue_song_count(bool $forceRefresh = false): ?int {
+    $cache = &get_dashboard_stats_cache_ref();
+    if ($cache['song_count'] !== null && !$forceRefresh) {
+        return $cache['song_count'];
     }
 
-    $cachedStats = get_cached_dashboard_stats();
+    $cachedStats = $cache['stats'];
     if ($cachedStats !== null && isset($cachedStats['total_songs']) && !$forceRefresh) {
-        $cachedCount = (int)$cachedStats['total_songs'];
-        return $cachedCount;
+        $cache['song_count'] = (int)$cachedStats['total_songs'];
+        return $cache['song_count'];
     }
 
     try {
         $pdo = get_db_connection();
-        $cachedCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        $count = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        $cache['song_count'] = $count;
+        return $count;
     } catch (\Throwable $e) {
-        $cachedCount = 2461;
+        error_log("AFM2 Catalogue Song Count Error: " . $e->getMessage());
+        return null;
     }
-
-    return $cachedCount;
 }
 
 /**
@@ -66,8 +72,8 @@ function get_catalogue_song_count(bool $forceRefresh = false): int {
  */
 function get_dashboard_stats(bool $forceRefresh = false): array {
     $cache = &get_dashboard_stats_cache_ref();
-    if ($cache['data'] !== null && !$forceRefresh) {
-        return $cache['data'];
+    if ($cache['stats'] !== null && !$forceRefresh) {
+        return $cache['stats'];
     }
 
     $pdo = get_db_connection();
@@ -162,7 +168,7 @@ function get_dashboard_stats(bool $forceRefresh = false): array {
         LIMIT 6
     ")->fetchAll();
 
-    $cache['data'] = [
+    $cache['stats'] = [
         'total_songs'          => $totalSongs,
         'reviewed_count'       => $reviewed,
         'shortlisted_count'    => $shortlisted,
@@ -175,8 +181,9 @@ function get_dashboard_stats(bool $forceRefresh = false): array {
         'rounds'               => $rounds,
         'recent_shortlisted'   => $recentShortlisted
     ];
+    $cache['song_count'] = $totalSongs;
 
-    return $cache['data'];
+    return $cache['stats'];
 }
 
 /**
