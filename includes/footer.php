@@ -255,7 +255,9 @@
                          alt="AFM#2 — Annual Musical Finale" 
                          class="footer-logo-img" 
                          width="70" 
-                         height="38">
+                         height="38"
+                         loading="lazy"
+                         decoding="async">
                 </a>
                 <div class="footer-text-block">
                     <span class="footer-brand">AFM#2 &bull; 2026 Annual Musical Finale</span>
@@ -299,6 +301,6 @@
         </div>
     </footer>
 
-    <script src="assets/js/app.js?v=3.3"></script>
+    <script src="assets/js/app.js?v=3.6"></script>
 </body>
 </html>

@@ -47,9 +47,10 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
     <link rel="icon" type="image/png" sizes="192x192" href="assets/img/afm2-favicon-192x192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
-    <link rel="stylesheet" href="assets/css/style.css?v=3.5">
+    <link rel="stylesheet" href="assets/css/style.css?v=3.6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Cinematic Atmosphere & Mood Layers -->
@@ -67,7 +68,8 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
                          alt="AFM#2 — Annual Musical Finale" 
                          class="brand-logo-img" 
                          width="81" 
-                         height="44">
+                         height="44"
+                         decoding="async">
                     <span class="badge-year">2026</span>
                     <div class="sound-equalizer" aria-hidden="true" title="AFM 2026 Active">
                         <span class="eq-bar eq-1"></span>
