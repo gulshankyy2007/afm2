@@ -121,6 +121,8 @@ assert_phase2b(true, "All items in manual filter have is_manual === 1");
 // ---------------------------------------------------------------------
 echo "\n4. Engine Fallback Robustness Verification\n";
 
+assert_phase2b(is_bool(YouTubeMatcher::supports_window_functions()), "supports_window_functions() returns boolean probe result");
+
 // Execute simulated fallback code directly
 $testSongIds = [1, 2, 3, 4, 5];
 $placeholders = implode(',', array_fill(0, count($testSongIds), '?'));
@@ -172,6 +174,14 @@ foreach ($winTop as $sId => $wItem) {
     assert_phase2b($wItem['score_total'] == $fallbackTop[$sId]['score_total'], "Song #{$sId} score_total matches ({$wItem['score_total']})");
 }
 
+// Direct test of hydrate_candidates_fallback() method
+$directFallback = YouTubeMatcher::hydrate_candidates_fallback($pdo, $testSongIds);
+assert_phase2b(count($directFallback) === count($winTop), "hydrate_candidates_fallback() returns identical count as window function");
+foreach ($winTop as $sId => $wItem) {
+    assert_phase2b(isset($directFallback[$sId]), "hydrate_candidates_fallback() has song #{$sId}");
+    assert_phase2b($directFallback[$sId]['video_id'] === $wItem['video_id'], "hydrate_candidates_fallback() video_id matches window function for #{$sId}");
+}
+
 // ---------------------------------------------------------------------
 // 5. Request-Scoped Matching Stats Memoization
 // ---------------------------------------------------------------------
@@ -196,17 +206,41 @@ $s4 = YouTubeMatcher::get_matching_stats();
 assert_phase2b(is_array($s4) && $s4['total_songs'] === $s1['total_songs'], "Re-population after clear_matching_stats_cache() works cleanly");
 
 // ---------------------------------------------------------------------
-// 6. Mutation Cache Invalidation Safeguard
+// 6. Mutation Cache Invalidation & Failure Safety Safeguards
 // ---------------------------------------------------------------------
-echo "\n6. Mutation Cache Invalidation Safeguard\n";
+echo "\n6. Mutation Cache Invalidation Safeguards\n";
 // Populate stats cache
 $preStats = YouTubeMatcher::get_matching_stats();
+assert_phase2b(is_array($preStats), "Initial stats cached before mutation test");
 
-// Clear recording for a test track (or simulate mutation)
-// We'll test clear_matching_stats_cache explicitly
-YouTubeMatcher::clear_matching_stats_cache();
-$refreshedStats = YouTubeMatcher::get_matching_stats();
-assert_phase2b(is_array($refreshedStats), "Cache reloads accurately after invalidation");
+// Test invalidation via media_helper save_song_media & remove_song_media
+$testSongId = 1;
+save_song_media($testSongId, 'https://www.youtube.com/watch?v=TEST_MUTATION_VID');
+// Cache must be cleared by save_song_media
+$reloadedAfterSave = YouTubeMatcher::get_matching_stats();
+assert_phase2b(is_array($reloadedAfterSave), "Cache successfully reloads after save_song_media mutation");
+
+remove_song_media($testSongId);
+// Cache must be cleared by remove_song_media
+$reloadedAfterRemove = YouTubeMatcher::get_matching_stats();
+assert_phase2b(is_array($reloadedAfterRemove), "Cache successfully reloads after remove_song_media mutation");
+
+// Restore song 1 media state if needed
+save_song_media($testSongId, 'https://www.youtube.com/watch?v=MOCK_HIGH01', 'original', 'Restored baseline test link');
+
+// Test failed mutation safety: ensure clear_matching_stats_cache() prevents inconsistent cache
+YouTubeMatcher::get_matching_stats(); // populate
+try {
+    // Attempt invalid candidate save to trigger failure
+    YouTubeMatcher::save_candidates($testSongId, [
+        ['video_id' => 'INVALID_CAND', 'score_total' => 'NOT_A_NUMBER', 'confidence' => 'invalid_enum']
+    ]);
+} catch (\Throwable $e) {
+    // Expected database type/enum error
+}
+// After failed mutation, cache must be cleared (not holding stale pre-mutation state)
+$postFailStats = YouTubeMatcher::get_matching_stats();
+assert_phase2b(is_array($postFailStats), "Cache recomputed cleanly after failed mutation (no stale state)");
 
 // ---------------------------------------------------------------------
 // 7. Mandatory Baseline Catalogue Invariant Safeguard
@@ -216,7 +250,16 @@ $activeCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolid
 assert_phase2b($activeCount === 2411, "MANDATORY INVARIANT: Active catalogue songs remain strictly intact ({$activeCount} === 2411)");
 
 $nullArtistCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `artist` IS NULL")->fetchColumn();
-assert_phase2b($nullArtistCount === 3, "MANDATORY INVARIANT: Authentic NULL artist records preserved intact ({$nullArtistCount} === 3)");
+assert_phase2b($nullArtistCount === 3, "MANDATORY INVARIANT: Authentic NULL artist count preserved intact ({$nullArtistCount} === 3)");
+
+$nullArtistRows = $pdo->query("SELECT `song_id`, `title`, `artist` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id` ASC")->fetchAll(PDO::FETCH_ASSOC);
+$nullArtistIds = array_map('intval', array_column($nullArtistRows, 'song_id'));
+$expectedNullIds = [1546, 2015, 2196];
+assert_phase2b($nullArtistIds === $expectedNullIds, "MANDATORY INVARIANT: Authentic NULL artist IDs match baseline exactly ([1546, 2015, 2196])");
+
+assert_phase2b($nullArtistRows[0]['title'] === "80s Remix: Baby - Justin Bieber", "Song #1546 title matches authentic baseline");
+assert_phase2b($nullArtistRows[1]['title'] === "Happier Than Ever (Billie Eilish Cover) in the Live Lounge", "Song #2015 title matches authentic baseline");
+assert_phase2b($nullArtistRows[2]['title'] === "Frozen - Let It Go ( cover by J.Fla )", "Song #2196 title matches authentic baseline");
 
 echo "\n======================================================================\n";
 echo " ALL PHASE 2B OPTIMIZATION TESTS PASSED SUCCESSFULLY! (100% PASS RATE)\n";

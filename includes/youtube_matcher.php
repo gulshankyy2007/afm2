@@ -749,37 +749,40 @@ class YouTubeMatcher {
                 `updated_at` = NOW()
         ");
 
-        $stmt->execute([
-            ':song_id'       => $songId,
-            ':user_url'      => $canonicalUrl,
-            ':video_id'      => $cleanVid,
-            ':title'         => $title ? mb_substr($title, 0, 255) : null,
-            ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
-            ':version_type'  => $versionType,
-            ':version_notes' => $versionNotes,
-            ':match_score'   => $score
-        ]);
-
-        // Mark candidate is_selected
-        $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 0 WHERE `song_id` = :id")->execute([':id' => $songId]);
-        $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 1 WHERE `song_id` = :id AND `video_id` = :vid")
-            ->execute([':id' => $songId, ':vid' => $cleanVid]);
-
-        // Sync artwork
         try {
-            $artStmt = $pdo->prepare("
-                INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
-                VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
-                ON DUPLICATE KEY UPDATE 
-                    `thumbnail_url` = VALUES(`thumbnail_url`), 
-                    `image_url` = VALUES(`image_url`),
-                    `is_confirmed` = 1,
-                    `status` = 'matched'
-            ");
-            $thumbUrl = "https://img.youtube.com/vi/{$cleanVid}/hqdefault.jpg";
-            $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            $stmt->execute([
+                ':song_id'       => $songId,
+                ':user_url'      => $canonicalUrl,
+                ':video_id'      => $cleanVid,
+                ':title'         => $title ? mb_substr($title, 0, 255) : null,
+                ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
+                ':version_type'  => $versionType,
+                ':version_notes' => $versionNotes,
+                ':match_score'   => $score
+            ]);
+
+            // Mark candidate is_selected
+            $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 0 WHERE `song_id` = :id")->execute([':id' => $songId]);
+            $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 1 WHERE `song_id` = :id AND `video_id` = :vid")
+                ->execute([':id' => $songId, ':vid' => $cleanVid]);
+
+            // Sync artwork
+            try {
+                $artStmt = $pdo->prepare("
+                    INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
+                    VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
+                    ON DUPLICATE KEY UPDATE 
+                        `thumbnail_url` = VALUES(`thumbnail_url`), 
+                        `image_url` = VALUES(`image_url`),
+                        `is_confirmed` = 1,
+                        `status` = 'matched'
+                ");
+                $thumbUrl = "https://img.youtube.com/vi/{$cleanVid}/hqdefault.jpg";
+                $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            } catch (\Throwable $e) {}
+        } finally {
             self::clear_matching_stats_cache();
-        } catch (\Throwable $e) {}
+        }
 
         return [
             'success'  => true,
@@ -844,31 +847,34 @@ class YouTubeMatcher {
                 `updated_at` = NOW()
         ");
 
-        $stmt->execute([
-            ':song_id'       => $songId,
-            ':user_url'      => $userUrl,
-            ':video_id'      => $videoId,
-            ':title'         => $title ? mb_substr($title, 0, 255) : null,
-            ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
-            ':version_type'  => $versionType,
-            ':version_notes' => $versionNotes
-        ]);
-
-        // Sync artwork
         try {
-            $artStmt = $pdo->prepare("
-                INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
-                VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
-                ON DUPLICATE KEY UPDATE 
-                    `thumbnail_url` = VALUES(`thumbnail_url`), 
-                    `image_url` = VALUES(`image_url`),
-                    `is_confirmed` = 1,
-                    `status` = 'matched'
-            ");
-            $thumbUrl = $meta['thumbnail_url'] ?? "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
-            $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            $stmt->execute([
+                ':song_id'       => $songId,
+                ':user_url'      => $userUrl,
+                ':video_id'      => $videoId,
+                ':title'         => $title ? mb_substr($title, 0, 255) : null,
+                ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
+                ':version_type'  => $versionType,
+                ':version_notes' => $versionNotes
+            ]);
+
+            // Sync artwork
+            try {
+                $artStmt = $pdo->prepare("
+                    INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
+                    VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
+                    ON DUPLICATE KEY UPDATE 
+                        `thumbnail_url` = VALUES(`thumbnail_url`), 
+                        `image_url` = VALUES(`image_url`),
+                        `is_confirmed` = 1,
+                        `status` = 'matched'
+                ");
+                $thumbUrl = $meta['thumbnail_url'] ?? "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
+                $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            } catch (\Throwable $e) {}
+        } finally {
             self::clear_matching_stats_cache();
-        } catch (\Throwable $e) {}
+        }
 
         return [
             'success'  => true,
@@ -1196,6 +1202,67 @@ class YouTubeMatcher {
     private static ?array $matchingStatsCache = null;
 
     /**
+     * Cache whether the active database engine supports window functions (e.g. MySQL 8.0+, MariaDB 10.2+, TiDB 3.0+).
+     */
+    private static ?bool $engineSupportsWindowFunctions = null;
+
+    /**
+     * Probe whether the database engine supports SQL window functions (ROW_NUMBER, OVER).
+     */
+    public static function supports_window_functions(): bool {
+        if (self::$engineSupportsWindowFunctions !== null) {
+            return self::$engineSupportsWindowFunctions;
+        }
+
+        try {
+            $pdo = get_db_connection();
+            $pdo->query("SELECT ROW_NUMBER() OVER () LIMIT 0");
+            self::$engineSupportsWindowFunctions = true;
+        } catch (\Throwable $e) {
+            self::$engineSupportsWindowFunctions = false;
+        }
+
+        return self::$engineSupportsWindowFunctions;
+    }
+
+    /**
+     * Fallback candidate hydration for database engines without window function support.
+     * Executes grouped count query followed by top candidate lookup with deterministic tie-breaking.
+     */
+    public static function hydrate_candidates_fallback(PDO $pdo, array $songIds): array {
+        if (empty($songIds)) {
+            return [];
+        }
+        $candMap = [];
+        $placeholders = implode(',', array_fill(0, count($songIds), '?'));
+
+        try {
+            $cntSql = "SELECT song_id, COUNT(*) AS cnt FROM song_youtube_candidates WHERE song_id IN ({$placeholders}) GROUP BY song_id";
+            $cStmt = $pdo->prepare($cntSql);
+            $cStmt->execute($songIds);
+            $counts = $cStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            $topSql = "SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url 
+                       FROM song_youtube_candidates WHERE song_id = ? ORDER BY score_total DESC, video_id ASC LIMIT 1";
+            $topStmt = $pdo->prepare($topSql);
+            foreach ($songIds as $sid) {
+                if (!empty($counts[$sid])) {
+                    $topStmt->execute([$sid]);
+                    $top = $topStmt->fetch();
+                    if ($top) {
+                        $top['cand_count'] = (int)$counts[$sid];
+                        $candMap[$sid] = $top;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("AFM2 Candidate Hydration Fallback Error: " . $e->getMessage());
+        }
+
+        return $candMap;
+    }
+
+    /**
      * Clear request-scoped matching stats cache.
      */
     public static function clear_matching_stats_cache(): void {
@@ -1207,15 +1274,23 @@ class YouTubeMatcher {
      * Memoized per-request to avoid redundant full-scan aggregations across controllers and templates.
      */
     public static function get_matching_stats(bool $forceRefresh = false): array {
-        if (self::$matchingStatsCache !== null && !$forceRefresh) {
+        if ($forceRefresh) {
+            self::$matchingStatsCache = null;
+        }
+
+        if (self::$matchingStatsCache !== null) {
             return self::$matchingStatsCache;
         }
 
         $pdo = get_db_connection();
 
-        $totalSongs = function_exists('get_catalogue_song_count')
-            ? (get_catalogue_song_count($forceRefresh) ?? (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn())
-            : (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        $totalSongs = null;
+        if (function_exists('get_catalogue_song_count')) {
+            $totalSongs = get_catalogue_song_count($forceRefresh);
+        }
+        if ($totalSongs === null) {
+            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        }
         
         $mediaCounts = $pdo->query("
             SELECT 
@@ -1388,51 +1463,37 @@ class YouTubeMatcher {
         // Batch hydrate candidate counts and top candidate info for the current page
         if (!empty($items)) {
             $songIds = array_map('intval', array_column($items, 'song_id'));
-            $placeholders = implode(',', array_fill(0, count($songIds), '?'));
-
             $candMap = [];
-            try {
-                // High-performance window function: single query resolves both counts and top candidates
-                $winSql = "
-                    SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url, cand_count
-                    FROM (
-                        SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url,
-                               ROW_NUMBER() OVER (PARTITION BY song_id ORDER BY score_total DESC, video_id ASC) AS rn,
-                               COUNT(*) OVER (PARTITION BY song_id) AS cand_count
-                        FROM song_youtube_candidates
-                        WHERE song_id IN ({$placeholders})
-                    ) ranked
-                    WHERE rn = 1
-                ";
-                $winStmt = $pdo->prepare($winSql);
-                $winStmt->execute($songIds);
-                while ($cRow = $winStmt->fetch()) {
-                    $candMap[(int)$cRow['song_id']] = $cRow;
-                }
-            } catch (\Throwable $e) {
-                // Engine fallback for database environments without window function support
-                try {
-                    $cntSql = "SELECT song_id, COUNT(*) AS cnt FROM song_youtube_candidates WHERE song_id IN ({$placeholders}) GROUP BY song_id";
-                    $cStmt = $pdo->prepare($cntSql);
-                    $cStmt->execute($songIds);
-                    $counts = $cStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
-                    $topSql = "SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url 
-                               FROM song_youtube_candidates WHERE song_id = ? ORDER BY score_total DESC, video_id ASC LIMIT 1";
-                    $topStmt = $pdo->prepare($topSql);
-                    foreach ($songIds as $sid) {
-                        if (!empty($counts[$sid])) {
-                            $topStmt->execute([$sid]);
-                            $top = $topStmt->fetch();
-                            if ($top) {
-                                $top['cand_count'] = (int)$counts[$sid];
-                                $candMap[$sid] = $top;
-                            }
-                        }
+            if (self::supports_window_functions()) {
+                $placeholders = implode(',', array_fill(0, count($songIds), '?'));
+                try {
+                    // High-performance window function: single query resolves both counts and top candidates
+                    $winSql = "
+                        SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url, cand_count
+                        FROM (
+                            SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url,
+                                   ROW_NUMBER() OVER (PARTITION BY song_id ORDER BY score_total DESC, video_id ASC) AS rn,
+                                   COUNT(*) OVER (PARTITION BY song_id) AS cand_count
+                            FROM song_youtube_candidates
+                            WHERE song_id IN ({$placeholders})
+                        ) ranked
+                        WHERE rn = 1
+                    ";
+                    $winStmt = $pdo->prepare($winSql);
+                    $winStmt->execute($songIds);
+                    while ($cRow = $winStmt->fetch()) {
+                        $candMap[(int)$cRow['song_id']] = $cRow;
                     }
-                } catch (\Throwable $e2) {
-                    error_log("AFM2 Candidate Hydration Fallback Error: " . $e2->getMessage());
+                } catch (\Throwable $e) {
+                    // Query failure on an engine that supports window functions is a real database error, not unsupported syntax
+                    error_log("AFM2 Window Query Execution Error: " . $e->getMessage());
+                    // Fall back for fault resilience
+                    $candMap = self::hydrate_candidates_fallback($pdo, $songIds);
                 }
+            } else {
+                // Database engine lacks window function support: execute fallback query path
+                $candMap = self::hydrate_candidates_fallback($pdo, $songIds);
             }
 
             // Hydrate items array with candidate metrics matching expected schema

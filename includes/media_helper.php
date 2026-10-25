@@ -289,6 +289,11 @@ function save_song_media(
         ]);
     } catch (\Throwable $e) {}
 
+    // Invalidate matching stats cache if YouTubeMatcher is active
+    if (class_exists('YouTubeMatcher', false)) {
+        YouTubeMatcher::clear_matching_stats_cache();
+    }
+
     return [
         'success' => true,
         'media' => [
@@ -322,6 +327,11 @@ function remove_song_media(int $songId, string $service = 'youtube'): array {
         $artDel = $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` = :song_id AND `source` = 'confirmed'");
         $artDel->execute([':song_id' => $songId]);
     } catch (\Throwable $e) {}
+
+    // Invalidate matching stats cache if YouTubeMatcher is active
+    if (class_exists('YouTubeMatcher', false)) {
+        YouTubeMatcher::clear_matching_stats_cache();
+    }
 
     return ['success' => true];
 }
@@ -464,6 +474,12 @@ function update_song_media_embed_status(int $songId, string $embedStatus): array
         WHERE `song_id` = :song_id AND `service` = 'youtube'
     ");
     $stmt->execute([':status' => $embedStatus, ':song_id' => $songId]);
+
+    // Invalidate matching stats cache if YouTubeMatcher is active
+    if (class_exists('YouTubeMatcher', false)) {
+        YouTubeMatcher::clear_matching_stats_cache();
+    }
+
     return ['success' => true, 'embed_status' => $embedStatus];
 }
 
