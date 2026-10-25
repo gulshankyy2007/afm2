@@ -266,7 +266,15 @@
                 <span class="db-status-pill">
                     <?php
                     $footerTrackCount = null;
-                    if (function_exists('get_dashboard_stats')) {
+                    if (isset($stats['total_songs']) && is_numeric($stats['total_songs'])) {
+                        $footerTrackCount = (int)$stats['total_songs'];
+                    } elseif (function_exists('get_cached_dashboard_stats') && ($cachedFooterStats = get_cached_dashboard_stats()) !== null) {
+                        $footerTrackCount = $cachedFooterStats['total_songs'] ?? null;
+                    } elseif (function_exists('get_catalogue_song_count')) {
+                        try {
+                            $footerTrackCount = get_catalogue_song_count();
+                        } catch (\Throwable $e) {}
+                    } elseif (function_exists('get_dashboard_stats')) {
                         try {
                             $footerStats = get_dashboard_stats();
                             $footerTrackCount = $footerStats['total_songs'] ?? null;

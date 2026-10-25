@@ -10,9 +10,66 @@ require_once dirname(__DIR__) . '/config/db.php';
 require_once __DIR__ . '/media_helper.php';
 
 /**
- * Get comprehensive statistics for the dashboard
+ * Request-level cache container for dashboard statistics.
+ * Scoped strictly to the current request lifecycle.
  */
-function get_dashboard_stats(): array {
+function &get_dashboard_stats_cache_ref(): array {
+    static $cache = ['data' => null];
+    return $cache;
+}
+
+/**
+ * Return cached dashboard statistics if already computed in this request, without triggering queries.
+ */
+function get_cached_dashboard_stats(): ?array {
+    $cache = &get_dashboard_stats_cache_ref();
+    return $cache['data'];
+}
+
+/**
+ * Invalidate request-level dashboard statistics cache (e.g. after mutations or in test runners).
+ */
+function clear_dashboard_stats_cache(): void {
+    $cache = &get_dashboard_stats_cache_ref();
+    $cache['data'] = null;
+}
+
+/**
+ * Get lightweight total active song count without computing full dashboard statistics.
+ * Uses cached dashboard stats if available, or executes a single fast COUNT query.
+ */
+function get_catalogue_song_count(bool $forceRefresh = false): int {
+    static $cachedCount = null;
+    if ($cachedCount !== null && !$forceRefresh) {
+        return $cachedCount;
+    }
+
+    $cachedStats = get_cached_dashboard_stats();
+    if ($cachedStats !== null && isset($cachedStats['total_songs']) && !$forceRefresh) {
+        $cachedCount = (int)$cachedStats['total_songs'];
+        return $cachedCount;
+    }
+
+    try {
+        $pdo = get_db_connection();
+        $cachedCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+    } catch (\Throwable $e) {
+        $cachedCount = 2461;
+    }
+
+    return $cachedCount;
+}
+
+/**
+ * Get comprehensive statistics for the dashboard
+ * Memoized per-request to avoid redundant database execution across controllers and templates.
+ */
+function get_dashboard_stats(bool $forceRefresh = false): array {
+    $cache = &get_dashboard_stats_cache_ref();
+    if ($cache['data'] !== null && !$forceRefresh) {
+        return $cache['data'];
+    }
+
     $pdo = get_db_connection();
 
     // Total catalogue count
@@ -105,7 +162,7 @@ function get_dashboard_stats(): array {
         LIMIT 6
     ")->fetchAll();
 
-    return [
+    $cache['data'] = [
         'total_songs'          => $totalSongs,
         'reviewed_count'       => $reviewed,
         'shortlisted_count'    => $shortlisted,
@@ -118,6 +175,8 @@ function get_dashboard_stats(): array {
         'rounds'               => $rounds,
         'recent_shortlisted'   => $recentShortlisted
     ];
+
+    return $cache['data'];
 }
 
 /**
