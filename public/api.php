@@ -750,7 +750,7 @@ switch ($action) {
             exit;
         }
 
-        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : (isset($_GET['song_id']) ? (int)$_GET['song_id'] : 0);
         if ($songId <= 0) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
@@ -772,12 +772,20 @@ switch ($action) {
         $lyricsRow = $lyricsStmt->fetch();
         $expectedDuration = ($lyricsRow && !empty($lyricsRow['duration'])) ? (int)round((float)$lyricsRow['duration']) : null;
 
-        $forceRefresh = !empty($input['force_refresh']);
+        $forceRefresh = !empty($input['force_refresh']) || !empty($_POST['force_refresh']);
         $candidates = [];
         if (!$forceRefresh) {
             $existing = YouTubeMatcher::get_candidates_for_song($songId);
             if (!empty($existing)) {
                 $candidates = $existing;
+            }
+        } else {
+            // Safeguard against accidental rapid duplicate discovery (5-second debounce)
+            $checkRecentStmt = $pdo->prepare("SELECT MAX(`updated_at`) FROM `song_youtube_candidates` WHERE `song_id` = :id");
+            $checkRecentStmt->execute([':id' => $songId]);
+            $lastUpdated = $checkRecentStmt->fetchColumn();
+            if ($lastUpdated && (time() - strtotime($lastUpdated)) < 5) {
+                $candidates = YouTubeMatcher::get_candidates_for_song($songId);
             }
         }
 
@@ -817,18 +825,8 @@ switch ($action) {
             exit;
         }
 
+        // Pure read-only candidate retrieval. Side-effecting discovery and writes are restricted to POST youtube_discover_candidates.
         $candidates = YouTubeMatcher::get_candidates_for_song($songId);
-        if (empty($candidates)) {
-            $lyricsStmt = $pdo->prepare("SELECT `duration` FROM `song_lyrics_ref` WHERE `song_id` = :id");
-            $lyricsStmt->execute([':id' => $songId]);
-            $lyricsRow = $lyricsStmt->fetch();
-            $expectedDuration = ($lyricsRow && !empty($lyricsRow['duration'])) ? (int)round((float)$lyricsRow['duration']) : null;
-
-            $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
-            $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
-            YouTubeMatcher::save_candidates_for_song($songId, $candidates);
-        }
-
         $savedMedia = get_song_media($songId);
 
         echo json_encode([

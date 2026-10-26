@@ -107,7 +107,10 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
                         <span class="status-indicator online"></span>
                         <span class="user-name"><?= htmlspecialchars($currentUsername ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
                     </span>
-                    <a href="logout.php" class="btn-logout" id="btnLogout" title="Log out of application">Sign Out</a>
+                    <form action="logout.php" method="POST" class="logout-form" style="display:inline;margin:0;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="submit" class="btn-logout" id="btnLogout" title="Log out of application">Sign Out</button>
+                    </form>
                 </div>
             </nav>
             <?php else: ?>

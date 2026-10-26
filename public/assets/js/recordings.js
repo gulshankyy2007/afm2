@@ -240,6 +240,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    document.getElementById('btnDiscoverFromEmpty')?.addEventListener('click', function() {
+        if (activeSongIdForCand) {
+            loadCandidates(activeSongIdForCand, true);
+        }
+    });
+
     document.getElementById('btnCloseCandModal')?.addEventListener('click', () => closeModal('candidateReviewModal'));
     document.getElementById('btnCancelCandModal')?.addEventListener('click', () => closeModal('candidateReviewModal'));
 
@@ -248,9 +254,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (candEmptyState) candEmptyState.style.display = 'none';
         if (candCardsList) candCardsList.innerHTML = '';
 
+        const btnRescan = document.getElementById('btnRescanCandidates');
+        const btnDiscoverEmpty = document.getElementById('btnDiscoverFromEmpty');
+        if (btnRescan) btnRescan.disabled = true;
+        if (btnDiscoverEmpty) btnDiscoverEmpty.disabled = true;
+
         try {
-            const action = forceDiscover ? 'youtube_discover_candidates' : 'youtube_get_candidates';
-            const res = await fetch(`api.php?action=${action}&song_id=${songId}`);
+            let res;
+            if (forceDiscover) {
+                res = await fetch('api.php?action=youtube_discover_candidates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({
+                        song_id: songId,
+                        force_refresh: true,
+                        csrf_token: csrfToken
+                    })
+                });
+            } else {
+                res = await fetch(`api.php?action=youtube_get_candidates&song_id=${encodeURIComponent(songId)}`);
+            }
+
             const data = await res.json();
 
             if (candLoadingState) candLoadingState.style.display = 'none';
@@ -263,7 +290,10 @@ document.addEventListener('DOMContentLoaded', function() {
             renderCandidates(data.candidates, songId);
         } catch (err) {
             if (candLoadingState) candLoadingState.style.display = 'none';
-            if (candCardsList) candCardsList.innerHTML = `<div class="alert alert-danger">Failed to load candidates: ${err.message}</div>`;
+            if (candCardsList) candCardsList.innerHTML = `<div class="alert alert-danger">Failed to load candidates: ${escapeHtml(err.message)}</div>`;
+        } finally {
+            if (btnRescan) btnRescan.disabled = false;
+            if (btnDiscoverEmpty) btnDiscoverEmpty.disabled = false;
         }
     }
 

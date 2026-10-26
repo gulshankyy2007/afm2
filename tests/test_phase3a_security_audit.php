@@ -250,7 +250,7 @@ $logoutRes = make_http_request(
     ['Cookie' => $sessionCookie]
 );
 $logoutVulnerable = ($logoutRes['status'] === 302 && strpos($logoutRes['headers']['location'] ?? '', 'login.php?logged_out=1') !== false);
-assert_test("VULNERABILITY CONFIRMED: logout.php terminates session via unvalidated GET request", $logoutVulnerable, "Status: {$logoutRes['status']}");
+assert_test("FINDING-02 RESOLVED: logout.php rejects GET request and requires POST with CSRF (HTTP 405)", $logoutRes['status'] === 405, "Status: {$logoutRes['status']}");
 if ($logoutVulnerable) {
     record_finding(
         'FINDING-02',

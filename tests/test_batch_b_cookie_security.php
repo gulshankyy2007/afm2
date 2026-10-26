@@ -446,8 +446,15 @@ assert_test("Authenticated request to index.php succeeds (HTTP 200)", $authIndex
 $authLib = test_http("http://127.0.0.1:8080/library.php?page=1", 'GET', null, ['Cookie' => $sessionCookie]);
 assert_test("Authenticated request to library.php succeeds (HTTP 200)", $authLib['status'] === 200);
 
-// Logout invalidation
-$logoutRes = test_http("http://127.0.0.1:8080/logout.php", 'GET', null, ['Cookie' => $sessionCookie]);
+// Logout invalidation (Batch D: POST with CSRF)
+preg_match('/name="csrf-token" content="([^"]+)"/', $authIndex['body'], $csrfM);
+$csrfToken = $csrfM[1] ?? '';
+$logoutRes = test_http(
+    "http://127.0.0.1:8080/logout.php",
+    'POST',
+    http_build_query(['csrf_token' => $csrfToken]),
+    ['Cookie' => $sessionCookie, 'Content-Type' => 'application/x-www-form-urlencoded']
+);
 assert_test("Logout executes and redirects (HTTP 302)", $logoutRes['status'] === 302);
 
 // Verify cookie invalidation header in logout response

@@ -478,10 +478,15 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <div id="candEmptyState" style="display: none; text-align: center; padding: 2.5rem 1rem;">
                 <div class="empty-icon">🔍</div>
                 <h4 style="margin: 0.5rem 0;">No Candidates Discovered</h4>
-                <p class="text-muted" style="font-size: 0.85rem;">No suitable YouTube recordings were found matching the track title and artist. You can enter a link manually.</p>
-                <button type="button" class="btn btn-primary btn-sm" id="btnSwitchToManualFromCand" style="margin-top: 1rem;">
-                    Enter URL Manually
-                </button>
+                <p class="text-muted" style="font-size: 0.85rem;">No candidates are cached for this track yet. You can scan YouTube now or enter a link manually.</p>
+                <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-primary btn-sm" id="btnDiscoverFromEmpty">
+                        <span>⚡</span> Discover Candidates
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnSwitchToManualFromCand">
+                        Enter URL Manually
+                    </button>
+                </div>
             </div>
 
             <div class="candidate-cards-list" id="candCardsList">

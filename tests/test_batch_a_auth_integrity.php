@@ -235,8 +235,15 @@ assert_test("Authenticated request to library.php returns HTTP 200 OK", $authLib
 $authApiRes = test_http("http://127.0.0.1:8080/api.php?action=get_preferences", 'GET', null, ['Cookie' => $authedCookie]);
 assert_test("Authenticated request to api.php returns HTTP 200 OK", $authApiRes['status'] === 200);
 
-// Step 3.5: Logout invalidation
-$logoutRes = test_http("http://127.0.0.1:8080/logout.php", 'GET', null, ['Cookie' => $authedCookie]);
+// Step 3.5: Logout invalidation (Batch D: POST with CSRF)
+preg_match('/name="csrf-token" content="([^"]+)"/', $authIndexRes['body'], $csrfM);
+$csrfToken = $csrfM[1] ?? '';
+$logoutRes = test_http(
+    "http://127.0.0.1:8080/logout.php",
+    'POST',
+    http_build_query(['csrf_token' => $csrfToken]),
+    ['Cookie' => $authedCookie, 'Content-Type' => 'application/x-www-form-urlencoded']
+);
 assert_test("Logout redirects to login.php?logged_out=1", $logoutRes['status'] === 302);
 
 // Post-logout request with the same cookie must now be denied
