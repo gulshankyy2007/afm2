@@ -774,25 +774,48 @@ switch ($action) {
 
         $forceRefresh = !empty($input['force_refresh']) || !empty($_POST['force_refresh']);
         $candidates = [];
-        if (!$forceRefresh) {
-            $existing = YouTubeMatcher::get_candidates_for_song($songId);
-            if (!empty($existing)) {
-                $candidates = $existing;
-            }
-        } else {
-            // Safeguard against accidental rapid duplicate discovery (5-second debounce)
-            $checkRecentStmt = $pdo->prepare("SELECT MAX(`updated_at`) FROM `song_youtube_candidates` WHERE `song_id` = :id");
-            $checkRecentStmt->execute([':id' => $songId]);
-            $lastUpdated = $checkRecentStmt->fetchColumn();
-            if ($lastUpdated && (time() - strtotime($lastUpdated)) < 5) {
-                $candidates = YouTubeMatcher::get_candidates_for_song($songId);
-            }
+
+        // Acquire short-timeout MySQL advisory lock to serialize concurrent discovery requests for the same song
+        $lockKey = "afm2_discover_song_{$songId}";
+        $hasLock = false;
+        try {
+            $lockStmt = $pdo->prepare("SELECT GET_LOCK(:k, 3)");
+            $lockStmt->execute([':k' => $lockKey]);
+            $hasLock = (int)$lockStmt->fetchColumn() === 1;
+        } catch (Exception $e) {
+            $hasLock = false;
         }
 
-        if (empty($candidates)) {
-            $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
-            $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
-            YouTubeMatcher::save_candidates_for_song($songId, $candidates);
+        try {
+            if (!$forceRefresh) {
+                $existing = YouTubeMatcher::get_candidates_for_song($songId);
+                if (!empty($existing)) {
+                    $candidates = $existing;
+                }
+            } else {
+                // Safeguard against accidental rapid duplicate discovery (5-second debounce)
+                // Use MySQL TIMESTAMPDIFF to eliminate PHP vs MySQL timezone offset mismatches
+                $checkRecentStmt = $pdo->prepare("SELECT TIMESTAMPDIFF(SECOND, MAX(`updated_at`), NOW()) FROM `song_youtube_candidates` WHERE `song_id` = :id");
+                $checkRecentStmt->execute([':id' => $songId]);
+                $diffSec = $checkRecentStmt->fetchColumn();
+                if ($diffSec !== null && $diffSec !== false && (int)$diffSec >= 0 && (int)$diffSec < 5) {
+                    $candidates = YouTubeMatcher::get_candidates_for_song($songId);
+                }
+            }
+
+            if (empty($candidates)) {
+                $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
+                $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
+                YouTubeMatcher::save_candidates_for_song($songId, $candidates);
+            }
+        } finally {
+            if ($hasLock) {
+                try {
+                    $pdo->prepare("SELECT RELEASE_LOCK(:k)")->execute([':k' => $lockKey]);
+                } catch (Exception $e) {
+                    // Advisory lock auto-releases on connection close
+                }
+            }
         }
 
         $savedMedia = get_song_media($songId);

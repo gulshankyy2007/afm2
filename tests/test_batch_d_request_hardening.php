@@ -413,6 +413,31 @@ assert_test(
     "Status: {$postValidCsrfRes['status']}, Body: " . substr($postValidCsrfRes['body'], 0, 120)
 );
 
+// Test 12b: Five-second server-side debounce suppresses rapid duplicate discovery
+$rapidPostRes = test_http(
+    "http://127.0.0.1:8080/api.php?action=youtube_discover_candidates",
+    'POST',
+    json_encode([
+        'song_id'       => $testSongId,
+        'force_refresh' => true,
+        'csrf_token'    => $activeSession['csrf_token']
+    ]),
+    [
+        'Content-Type' => 'application/json',
+        'Cookie'       => $activeSession['cookie'],
+        'X-CSRF-Token' => $activeSession['csrf_token']
+    ]
+);
+$rapidData = json_decode($rapidPostRes['body'], true);
+assert_test(
+    "12b. Five-second server-side debounce suppresses rapid duplicate external discovery and returns cached candidates",
+    $rapidPostRes['status'] === 200 &&
+    is_array($rapidData) &&
+    ($rapidData['success'] ?? false) === true &&
+    isset($rapidData['candidates']),
+    "Status: {$rapidPostRes['status']}, Candidates count: " . (is_array($rapidData['candidates'] ?? null) ? count($rapidData['candidates']) : 'null')
+);
+
 // Restore any backed up candidates for song 1
 if (!empty($backupCandidates)) {
     foreach ($backupCandidates as $bc) {
