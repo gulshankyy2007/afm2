@@ -173,3 +173,49 @@ function get_base_url(): string {
     
     return $protocol . $host;
 }
+
+/**
+ * Send standard defensive HTTP security headers.
+ * Safe for all AFM#2 pages, API endpoints, YouTube embeds, and InfinityFree challenge scripts.
+ */
+function send_security_headers(): void {
+    if (headers_sent()) {
+        return;
+    }
+
+    // 1. Prevent MIME-type sniffing
+    header('X-Content-Type-Options: nosniff', true);
+
+    // 2. Prevent clickjacking / framing
+    header('X-Frame-Options: SAMEORIGIN', true);
+
+    // 3. Referrer Policy
+    header('Referrer-Policy: strict-origin-when-cross-origin', true);
+
+    // 4. Permissions Policy - disable unneeded browser features
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()', true);
+
+    // 5. Content Security Policy (narrowly scoped to legitimate AFM#2 requirements and hosting compatibility)
+    $csp = "default-src 'self'; "
+        . "script-src 'self' 'unsafe-inline'; "
+        . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        . "font-src 'self' https://fonts.gstatic.com data:; "
+        . "img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://yt3.ggpht.com https://images.unsplash.com https://coverartarchive.org https://archive.org https://*.archive.org; "
+        . "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
+        . "connect-src 'self'; "
+        . "object-src 'none'; "
+        . "base-uri 'self'; "
+        . "form-action 'self'; "
+        . "frame-ancestors 'self';";
+    header("Content-Security-Policy: {$csp}", true);
+
+    // 6. Strict-Transport-Security (HSTS) - ONLY when connection is verified HTTPS
+    if (is_https_request()) {
+        header('Strict-Transport-Security: max-age=31536000', true);
+    }
+}
+
+// Automatically emit security headers for web requests
+if (php_sapi_name() !== 'cli' && !headers_sent()) {
+    send_security_headers();
+}
