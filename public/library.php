@@ -183,141 +183,77 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($songs as $s): ?>
-                    <tr 
-                        data-song-id="<?= (int)$s['song_id'] ?>" 
-                        data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>"
-                        data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>"
-                        data-song-video="<?= htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                    >
-                        <td class="col-select" data-label="Select">
-                            <input type="checkbox" class="song-select-checkbox" data-song-id="<?= (int)$s['song_id'] ?>" data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>" aria-label="Select track <?= (int)$s['song_id'] ?>">
-                        </td>
-                        <td class="col-id" data-label="ID">
-                            <?= (int)$s['song_id'] ?>
-                        </td>
-
-                        <td class="song-title-cell col-title" data-label="Title">
-                            <div class="song-title-wrap">
-                                <?php 
-                                    $sThumb = $s['artwork_thumbnail_url'] ?? $s['artwork_image_url'] ?? null;
-                                    if (empty($sThumb)) {
-                                        $sThumb = 'assets/img/artwork-fallback.svg';
-                                    }
-                                ?>
-                                <img src="<?= htmlspecialchars($sThumb, ENT_QUOTES, 'UTF-8') ?>" 
-                                     alt="" 
-                                     class="song-row-thumb" 
-                                     loading="lazy"
-                                     onerror="this.onerror=null; this.src='assets/img/artwork-fallback.svg';">
-                                <span class="song-title-text font-bold" title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>
-                                </span>
-                            </div>
-                            <div class="song-quick-media">
-                                <a href="auditions.php?song_id=<?= (int)$s['song_id'] ?>" class="btn-xs btn-primary-subtle" title="Play recording directly inside AFM#2 integrated audition console">
-                                    ▶ Play in AFM#2
-                                </a>
-                                <?php if (!empty($s['media_video_id'])): ?>
-                                    <a href="https://www.youtube.com/watch?v=<?= htmlspecialchars($s['media_video_id'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube">
-                                        YouTube ↗
-                                    </a>
-                                <?php else: ?>
-                                    <a href="<?= htmlspecialchars(get_youtube_search_url($s['title'], $s['artist'])) ?>" target="_blank" rel="noopener noreferrer" class="link-external text-muted" title="Search YouTube in new tab">
-                                        Search ↗
-                                    </a>
-                                <?php endif; ?>
-                                <button type="button" class="btn-xs btn-lyrics-quick-view" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    title="View lyrics from LRCLIB">
-                                    📜 Lyrics
-                                </button>
-                            </div>
-                        </td>
-
-                        <td class="song-artist-cell col-artist" data-label="Artist">
-                            <?php if ($s['artist'] === 'Unknown Artist'): ?>
-                                <span class="artist-empty">&mdash; Unknown Artist &mdash;</span>
+                <?php foreach ($songs as $s): 
+                    $sId = (int)$s['song_id'];
+                    $sTitle = htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8');
+                    $sArtistClean = $s['artist'] === 'Unknown Artist' ? '' : $s['artist'];
+                    $sArtistEsc = htmlspecialchars($sArtistClean, ENT_QUOTES, 'UTF-8');
+                    $sVideo = htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $sThumb = $s['artwork_thumbnail_url'] ?? $s['artwork_image_url'] ?? null;
+                    if (empty($sThumb)) {
+                        $sThumb = 'assets/img/artwork-fallback.svg';
+                    }
+                ?>
+                <tr data-song-id="<?= $sId ?>" data-song-title="<?= $sTitle ?>" data-song-artist="<?= $sArtistEsc ?>" data-song-video="<?= $sVideo ?>">
+                    <td class="col-select" data-label="Select">
+                        <input type="checkbox" class="song-select-checkbox" value="<?= $sId ?>" aria-label="Select track <?= $sId ?>">
+                    </td>
+                    <td class="col-id" data-label="ID"><?= $sId ?></td>
+                    <td class="song-title-cell col-title" data-label="Title">
+                        <div class="song-title-wrap">
+                            <img src="<?= htmlspecialchars($sThumb, ENT_QUOTES, 'UTF-8') ?>" alt="" class="song-row-thumb" loading="lazy">
+                            <span class="song-title-text font-bold" title="<?= $sTitle ?>"><?= $sTitle ?></span>
+                        </div>
+                        <div class="song-quick-media">
+                            <a href="auditions.php?song_id=<?= $sId ?>" class="btn-xs btn-primary-subtle" title="Play recording directly inside AFM#2 integrated audition console">▶ Play in AFM#2</a>
+                            <?php if (!empty($s['media_video_id'])): ?>
+                                <a href="https://www.youtube.com/watch?v=<?= $sVideo ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube">YouTube ↗</a>
                             <?php else: ?>
-                                <span title="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>
-                                </span>
+                                <a href="<?= htmlspecialchars(get_youtube_search_url($s['title'], $s['artist'])) ?>" target="_blank" rel="noopener noreferrer" class="link-external text-muted" title="Search YouTube in new tab">Search ↗</a>
                             <?php endif; ?>
-                        </td>
-
-                        <td data-label="Status" class="col-status status-badge-container">
-                            <?php if ($s['discovery_status'] === 'shortlisted'): ?>
-                                <span class="badge badge-shortlisted">Shortlisted</span>
-                            <?php elseif ($s['discovery_status'] === 'passed'): ?>
-                                <span class="badge badge-passed">Passed</span>
-                            <?php else: ?>
-                                <span class="badge badge-unreviewed">Not Reviewed</span>
-                            <?php endif; ?>
-                        </td>
-
-                        <td data-label="Audition" class="col-audition">
-                            <?php if ($s['audition_total'] !== null): ?>
-                                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--success);">
-                                    <?= (int)$s['audition_total'] ?> / 50
-                                </span>
-                            <?php elseif (!empty($s['audition_incomplete'])): ?>
-                                <span style="font-family: var(--font-mono); color: var(--gold); font-size: 0.825rem;">
-                                    Incomplete
-                                </span>
-                            <?php elseif ($s['discovery_status'] === 'shortlisted'): ?>
-                                <a href="auditions.php?q=<?= urlencode($s['title']) ?>" style="font-size: 0.825rem;">Score &rarr;</a>
-                            <?php else: ?>
-                                <span style="color: var(--text-muted); font-size: 0.825rem;">&mdash;</span>
-                            <?php endif; ?>
-                        </td>
-
-                        <td class="col-actions" data-label="Discovery Action">
-                            <div class="action-group">
-                                <button 
-                                    type="button" 
-                                    class="btn-action-shortlist <?= $s['discovery_status'] === 'shortlisted' ? 'active' : '' ?>" 
-                                    title="Shortlist for formal auditions"
-                                >
-                                    ★ Shortlist
-                                </button>
-                                <button 
-                                    type="button" 
-                                    class="btn-action-pass <?= $s['discovery_status'] === 'passed' ? 'active' : '' ?>" 
-                                    title="Pass on song"
-                                >
-                                    ✕ Pass
-                                </button>
-                            </div>
-                        </td>
-
-                        <td class="col-manage" data-label="Manage">
-                            <div class="manage-btn-group">
-                                <button 
-                                    type="button" 
-                                    class="btn-manage-edit" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-video="<?= htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                    title="Edit title, artist, or YouTube recording"
-                                >
-                                    ✏️ Edit
-                                </button>
-                                <button 
-                                    type="button" 
-                                    class="btn-manage-delete" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>"
-                                    title="Permanently remove from catalogue (safe duplicate elimination)"
-                                >
-                                    🗑️ Delete
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
+                            <button type="button" class="btn-xs btn-lyrics-quick-view" title="View lyrics from LRCLIB">📜 Lyrics</button>
+                        </div>
+                    </td>
+                    <td class="song-artist-cell col-artist" data-label="Artist">
+                        <?php if ($s['artist'] === 'Unknown Artist'): ?>
+                            <span class="artist-empty">&mdash; Unknown Artist &mdash;</span>
+                        <?php else: ?>
+                            <span title="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td data-label="Status" class="col-status status-badge-container">
+                        <?php if ($s['discovery_status'] === 'shortlisted'): ?>
+                            <span class="badge badge-shortlisted">Shortlisted</span>
+                        <?php elseif ($s['discovery_status'] === 'passed'): ?>
+                            <span class="badge badge-passed">Passed</span>
+                        <?php else: ?>
+                            <span class="badge badge-unreviewed">Not Reviewed</span>
+                        <?php endif; ?>
+                    </td>
+                    <td data-label="Audition" class="col-audition">
+                        <?php if ($s['audition_total'] !== null): ?>
+                            <span style="font-family: var(--font-mono); font-weight: 700; color: var(--success);"><?= (int)$s['audition_total'] ?> / 50</span>
+                        <?php elseif (!empty($s['audition_incomplete'])): ?>
+                            <span style="font-family: var(--font-mono); color: var(--gold); font-size: 0.825rem;">Incomplete</span>
+                        <?php elseif ($s['discovery_status'] === 'shortlisted'): ?>
+                            <a href="auditions.php?q=<?= urlencode($s['title']) ?>" style="font-size: 0.825rem;">Score &rarr;</a>
+                        <?php else: ?>
+                            <span style="color: var(--text-muted); font-size: 0.825rem;">&mdash;</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="col-actions" data-label="Discovery Action">
+                        <div class="action-group">
+                            <button type="button" class="btn-action-shortlist <?= $s['discovery_status'] === 'shortlisted' ? 'active' : '' ?>" title="Shortlist for formal auditions">★ Shortlist</button>
+                            <button type="button" class="btn-action-pass <?= $s['discovery_status'] === 'passed' ? 'active' : '' ?>" title="Pass on song">✕ Pass</button>
+                        </div>
+                    </td>
+                    <td class="col-manage" data-label="Manage">
+                        <div class="manage-btn-group">
+                            <button type="button" class="btn-manage-edit" title="Edit title, artist, or YouTube recording">✏️ Edit</button>
+                            <button type="button" class="btn-manage-delete" title="Permanently remove from catalogue (safe duplicate elimination)">🗑️ Delete</button>
+                        </div>
+                    </td>
+                </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>

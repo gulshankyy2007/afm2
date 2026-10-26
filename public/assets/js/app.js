@@ -78,6 +78,14 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Global Image Error Fallback Handler (captures non-bubbling error events on images)
+window.addEventListener('error', (e) => {
+    if (e.target && e.target.tagName === 'IMG' && !e.target.dataset.fallbackApplied) {
+        e.target.dataset.fallbackApplied = 'true';
+        e.target.src = 'assets/img/artwork-fallback.svg';
+    }
+}, true);
+
 /**
  * One-Tap Discovery Actions (Shortlist & Pass)
  */
@@ -1923,9 +1931,10 @@ function initGlobalQuickLyricsModal() {
         if (!btn) return;
 
         e.preventDefault();
-        const songId = parseInt(btn.dataset.songId, 10);
-        const title = btn.dataset.songTitle || 'Song';
-        const artist = btn.dataset.songArtist || '';
+        const row = btn.closest('tr');
+        const songId = parseInt(btn.dataset.songId || row?.dataset?.songId, 10);
+        const title = btn.dataset.songTitle || row?.dataset?.songTitle || 'Song';
+        const artist = btn.dataset.songArtist || row?.dataset?.songArtist || '';
         currentSongId = songId;
 
         titleEl.textContent = title;
@@ -2747,10 +2756,11 @@ function initSongManagement() {
         if (!editBtn || !editModal) return;
 
         e.preventDefault();
-        const songId = editBtn.getAttribute('data-song-id');
-        const songTitle = editBtn.getAttribute('data-song-title') || '';
-        const songArtist = editBtn.getAttribute('data-song-artist') || '';
-        const songVideo = editBtn.getAttribute('data-song-video') || '';
+        const row = editBtn.closest('tr');
+        const songId = editBtn.getAttribute('data-song-id') || row?.getAttribute('data-song-id');
+        const songTitle = editBtn.getAttribute('data-song-title') || row?.getAttribute('data-song-title') || '';
+        const songArtist = editBtn.getAttribute('data-song-artist') || row?.getAttribute('data-song-artist') || '';
+        const songVideo = editBtn.getAttribute('data-song-video') || row?.getAttribute('data-song-video') || '';
 
         if (editSongId) editSongId.value = songId;
         if (editSongTitle) editSongTitle.value = songTitle;
@@ -2923,9 +2933,10 @@ function initSongManagement() {
         if (!delBtn || !deleteModal) return;
 
         e.preventDefault();
-        const songId = delBtn.getAttribute('data-song-id');
-        const songTitle = delBtn.getAttribute('data-song-title') || 'Song';
-        const songArtist = delBtn.getAttribute('data-song-artist') || 'Unknown Artist';
+        const row = delBtn.closest('tr');
+        const songId = delBtn.getAttribute('data-song-id') || row?.getAttribute('data-song-id');
+        const songTitle = delBtn.getAttribute('data-song-title') || row?.getAttribute('data-song-title') || 'Song';
+        const songArtist = delBtn.getAttribute('data-song-artist') || row?.getAttribute('data-song-artist') || 'Unknown Artist';
 
         if (deleteSongId) deleteSongId.value = songId;
         if (deleteDisplayId) deleteDisplayId.textContent = `#${songId}`;
@@ -3078,9 +3089,10 @@ function initSongManagement() {
             if (bulkDeleteListPreview) {
                 bulkDeleteListPreview.innerHTML = '';
                 checkedBoxes.forEach(cb => {
-                    const songId = cb.getAttribute('data-song-id');
-                    const title = cb.getAttribute('data-song-title') || 'Song';
-                    const artist = cb.getAttribute('data-song-artist') || 'Unknown Artist';
+                    const row = cb.closest('tr');
+                    const songId = cb.getAttribute('data-song-id') || row?.getAttribute('data-song-id') || cb.value;
+                    const title = cb.getAttribute('data-song-title') || row?.getAttribute('data-song-title') || 'Song';
+                    const artist = cb.getAttribute('data-song-artist') || row?.getAttribute('data-song-artist') || 'Unknown Artist';
 
                     const item = document.createElement('div');
                     item.className = 'bulk-delete-item';
@@ -3109,7 +3121,10 @@ function initSongManagement() {
     if (confirmBulkDeleteBtn && bulkDeleteModal) {
         confirmBulkDeleteBtn.addEventListener('click', async () => {
             const checkedBoxes = Array.from(document.querySelectorAll('.song-select-checkbox:checked'));
-            const songIds = checkedBoxes.map(cb => parseInt(cb.getAttribute('data-song-id'), 10)).filter(id => id > 0);
+            const songIds = checkedBoxes.map(cb => {
+                const row = cb.closest('tr');
+                return parseInt(cb.getAttribute('data-song-id') || row?.getAttribute('data-song-id') || cb.value, 10);
+            }).filter(id => id > 0);
 
             if (songIds.length === 0) return;
 
