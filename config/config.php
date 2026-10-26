@@ -8,8 +8,8 @@ if (!defined('AFM_APP')) {
     define('AFM_APP', true);
 }
 
-// Load .env file from project root
-$envFile = dirname(__DIR__) . '/.env';
+// Load .env file from project root (or ENV_FILE path if configured for test isolation)
+$envFile = getenv('ENV_FILE') ?: (dirname(__DIR__) . '/.env');
 if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
@@ -26,7 +26,7 @@ if (file_exists($envFile)) {
                 (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
                 $val = substr($val, 1, -1);
             }
-            if (!array_key_exists($key, $_ENV)) {
+            if (!array_key_exists($key, $_ENV) && getenv($key) === false) {
                 $_ENV[$key] = $val;
                 putenv("$key=$val");
             }
@@ -47,13 +47,27 @@ function env(string $key, $default = null) {
 
 // App Constants
 define('APP_ENV', env('APP_ENV', 'development'));
-define('APP_SECRET', env('APP_SECRET', 'afm2_default_secret_key_change_me'));
+define('APP_SECRET', (string)env('APP_SECRET', 'afm2_default_secret_key_change_me'));
 define('DB_HOST', env('DB_HOST', '127.0.0.1'));
 define('DB_PORT', (int)env('DB_PORT', 3306));
 define('DB_NAME', env('DB_NAME', 'afm_db'));
 define('DB_USER', env('DB_USER', 'gulshan'));
 define('DB_PASS', env('DB_PASS', ''));
 define('GOOGLE_SITE_VERIFICATION', env('GOOGLE_SITE_VERIFICATION', ''));
+
+// Validate APP_SECRET for production environments (fails closed on missing, empty, or default secrets)
+if (APP_ENV === 'production') {
+    $insecurePlaceholders = [
+        '',
+        'afm2_default_secret_key_change_me',
+        'generate_a_random_32_char_secret_key',
+        'your_secure_generated_64_character_hex_secret'
+    ];
+    if (in_array(APP_SECRET, $insecurePlaceholders, true) || strlen(APP_SECRET) < 32) {
+        error_log('[SECURITY CONFIG ERROR] Missing or insecure APP_SECRET configured for production environment.');
+        throw new RuntimeException('Application security configuration error. Please contact the administrator.');
+    }
+}
 
 // Error handling based on environment
 if (APP_ENV === 'development') {

@@ -527,6 +527,59 @@ $cspNoUnsafeEval = strpos($cspStr, "'unsafe-eval'") === false;
 assert_test("24. CSP frame-ancestors and X-Frame-Options are non-conflicting, with unsafe-inline preserved and unsafe-eval omitted", $cspFrameAncestors && $xFrameSameOrigin && $cspHasUnsafeInline && $cspNoUnsafeEval);
 
 // =====================================================================
+// SECTION 2.5: APP_SECRET & PRODUCTION CONFIGURATION SAFETY
+// =====================================================================
+echo "\n--- 2.5: Production Secret Safety & Fail-Closed Validation ---\n";
+
+function run_secret_isolation_test(string $env, ?string $secret): array {
+    $envVar = "APP_ENV=" . escapeshellarg($env) . " ENV_FILE=/dev/null";
+    $unsetClause = ($secret === null) ? "env -u APP_SECRET" : "";
+    $secretVar = ($secret === null) ? "" : "APP_SECRET=" . escapeshellarg($secret);
+    $cmd = "{$unsetClause} {$envVar} {$secretVar} php -d variables_order=EGPCS -r " . escapeshellarg('
+        try {
+            require "config/config.php";
+            echo json_encode(["status" => "SUCCESS", "error" => ""]);
+        } catch (Throwable $e) {
+            echo json_encode(["status" => "EXCEPTION", "error" => $e->getMessage()]);
+        }
+    ') . " 2>/dev/null";
+    return json_decode(trim((string)shell_exec($cmd)), true) ?? ["status" => "PARSE_ERROR", "error" => ""];
+}
+
+// 25a: In development, missing secret falls back safely
+$devMissing = run_secret_isolation_test('development', null);
+assert_test("25a. Development environment: Missing APP_SECRET loads fallback without exception", $devMissing['status'] === 'SUCCESS');
+
+// 25b: In development, default insecure placeholder is tolerated for local DX
+$devDefault = run_secret_isolation_test('development', 'afm2_default_secret_key_change_me');
+assert_test("25b. Development environment: Default insecure placeholder tolerated for local usability", $devDefault['status'] === 'SUCCESS');
+
+// 25c: In production, missing secret fails closed with generic error
+$prodMissing = run_secret_isolation_test('production', null);
+assert_test("25c. Production environment: Missing APP_SECRET fails closed with generic error", $prodMissing['status'] === 'EXCEPTION' && strpos($prodMissing['error'], 'Application security configuration error') !== false);
+
+// 25d: In production, empty secret fails closed
+$prodEmpty = run_secret_isolation_test('production', '');
+assert_test("25d. Production environment: Empty APP_SECRET fails closed with generic error", $prodEmpty['status'] === 'EXCEPTION' && strpos($prodEmpty['error'], 'Application security configuration error') !== false);
+
+// 25e: In production, known default placeholder fails closed
+$prodDefault = run_secret_isolation_test('production', 'afm2_default_secret_key_change_me');
+assert_test("25e. Production environment: Known default placeholder fails closed", $prodDefault['status'] === 'EXCEPTION' && strpos($prodDefault['error'], 'Application security configuration error') !== false);
+
+// 25f: In production, .env.example placeholder fails closed
+$prodExPlaceholder = run_secret_isolation_test('production', 'generate_a_random_32_char_secret_key');
+assert_test("25f. Production environment: Template placeholder fails closed", $prodExPlaceholder['status'] === 'EXCEPTION' && strpos($prodExPlaceholder['error'], 'Application security configuration error') !== false);
+
+// 25g: In production, short secret (<32 chars) fails closed
+$prodShort = run_secret_isolation_test('production', 'short_secret_under_32');
+assert_test("25g. Production environment: Short secret (<32 chars) fails closed", $prodShort['status'] === 'EXCEPTION' && strpos($prodShort['error'], 'Application security configuration error') !== false);
+
+// 25h: In production, strong 64-character hex secret loads successfully
+$valid64 = hash('sha256', 'production_test_seed_2026');
+$prodValid = run_secret_isolation_test('production', $valid64);
+assert_test("25h. Production environment: Strong 64-char hex secret passes validation", $prodValid['status'] === 'SUCCESS');
+
+// =====================================================================
 // SECTION 3: POST-FLIGHT CATALOGUE INVARIANTS
 // =====================================================================
 echo "\n--- 3. Post-Flight Catalogue Invariants ---\n";
