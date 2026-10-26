@@ -267,20 +267,21 @@ if ($logoutVulnerable) {
 echo "\n4. Session Security & Reverse Proxy Cookie Attributes\n";
 
 $proxyHttpsSim = function() {
+    $origServer = $_SERVER;
     $_SERVER['HTTPS'] = 'off';
     $_SERVER['SERVER_PORT'] = '80';
+    $_SERVER['HTTP_HOST'] = 'afm2.infinityfreeapp.com';
+    $_SERVER['REMOTE_ADDR'] = '185.27.134.57';
     $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
 
-    // Logic in config/config.php line 71-72
-    $isHttpsOriginal = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                       (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-    
-    return $isHttpsOriginal;
+    $res = is_https_request();
+    $_SERVER = $origServer;
+    return $res;
 };
 
 $cookieSecureUnderProxy = $proxyHttpsSim();
-assert_test("VULNERABILITY CONFIRMED: Session cookie 'secure' attribute evaluates to FALSE behind HTTPS reverse proxy", $cookieSecureUnderProxy === false);
-if ($cookieSecureUnderProxy === false) {
+assert_test("FINDING-01 RESOLVED: Verified reverse proxy enables Secure cookie attribute in production", $cookieSecureUnderProxy === true);
+if (!$cookieSecureUnderProxy) {
     record_finding(
         'FINDING-01',
         'Missing Secure Attribute on Session Cookie Behind Reverse Proxies',

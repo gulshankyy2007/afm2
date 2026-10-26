@@ -5,6 +5,10 @@
 
 # Disable directory browsing
 Options -Indexes
+# Normalize reverse-proxy HTTPS status if supported by Apache environment
+<IfModule mod_setenvif.c>
+    SetEnvIf X-Forwarded-Proto "^https$" HTTPS=on
+</IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On

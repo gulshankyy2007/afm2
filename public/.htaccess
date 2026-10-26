@@ -1,6 +1,10 @@
 # ==============================================================================
 # AFM#2 - Public Directory Security Controls
 # ==============================================================================
+# Normalize reverse-proxy HTTPS status if supported by Apache environment
+<IfModule mod_setenvif.c>
+    SetEnvIf X-Forwarded-Proto "^https$" HTTPS=on
+</IfModule>
 
 Options -Indexes
 
