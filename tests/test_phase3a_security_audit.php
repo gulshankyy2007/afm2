@@ -268,27 +268,45 @@ echo "\n4. Session Security & Reverse Proxy Cookie Attributes\n";
 
 $proxyHttpsSim = function() {
     $origServer = $_SERVER;
+    $origEnv = $_ENV['TRUST_PROXY_HEADERS'] ?? null;
+    $origGetEnv = getenv('TRUST_PROXY_HEADERS');
+
     $_SERVER['HTTPS'] = 'off';
     $_SERVER['SERVER_PORT'] = '80';
     $_SERVER['HTTP_HOST'] = 'afm2.infinityfreeapp.com';
-    $_SERVER['REMOTE_ADDR'] = '185.27.134.57';
     $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
 
-    $res = is_https_request();
+    // 1. Unconfigured (default): proxy headers are safely rejected
+    $defaultUntrusted = is_https_request();
+
+    // 2. Explicitly configured: proxy headers are honored
+    $_ENV['TRUST_PROXY_HEADERS'] = 'true';
+    putenv('TRUST_PROXY_HEADERS=true');
+    $trustedConfigured = is_https_request();
+
+    // Restore state
     $_SERVER = $origServer;
-    return $res;
+    if ($origEnv !== null) {
+        $_ENV['TRUST_PROXY_HEADERS'] = $origEnv;
+    } else {
+        unset($_ENV['TRUST_PROXY_HEADERS']);
+    }
+    if ($origGetEnv !== false) {
+        putenv("TRUST_PROXY_HEADERS={$origGetEnv}");
+    } else {
+        putenv('TRUST_PROXY_HEADERS');
+    }
+
+    return [
+        'default_untrusted'  => $defaultUntrusted,
+        'trusted_configured' => $trustedConfigured
+    ];
 };
 
-$cookieSecureUnderProxy = $proxyHttpsSim();
-assert_test("FINDING-01 RESOLVED: Verified reverse proxy enables Secure cookie attribute in production", $cookieSecureUnderProxy === true);
-if (!$cookieSecureUnderProxy) {
-    record_finding(
-        'FINDING-01',
-        'Missing Secure Attribute on Session Cookie Behind Reverse Proxies',
-        'Medium',
-        'config/config.php checks only $_SERVER["HTTPS"] and port 443, ignoring $_SERVER["HTTP_X_FORWARDED_PROTO"]. When hosted behind InfinityFree/Cloudflare SSL reverse proxies, AFM2_SESSID is sent without the Secure flag.'
-    );
-}
+$proxyResults = $proxyHttpsSim();
+assert_test("Default configuration safely rejects unverified reverse proxy headers", $proxyResults['default_untrusted'] === false);
+assert_test("FINDING-01 RESOLVED: Explicitly configured reverse proxy (TRUST_PROXY_HEADERS=true) enables HTTPS detection", $proxyResults['trusted_configured'] === true);
+
 
 
 // ---------------------------------------------------------------------

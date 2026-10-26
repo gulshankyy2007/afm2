@@ -68,30 +68,25 @@ if (APP_ENV === 'development') {
 
 /**
  * Detect whether the current request is securely transmitted over HTTPS.
- * Accounts for direct TLS connections and verified reverse proxies (e.g. InfinityFree OpenResty).
+ * Accounts for direct TLS connections and explicitly trusted reverse proxies.
  *
- * Conservative verification rules:
- * 1. Explicit configuration override: SESSION_COOKIE_SECURE or FORCE_HTTPS env values.
- * 2. Direct TLS connection: $_SERVER['HTTPS'] === 'on', port 443, or REQUEST_SCHEME === 'https'.
- * 3. Verified reverse proxy headers (HTTP_X_FORWARDED_PROTO, HTTP_X_FORWARDED_SSL):
- *    Trusted in production environments (APP_ENV === 'production' or non-loopback host)
- *    OR when TRUST_PROXY_HEADERS is explicitly enabled.
- *    Untrusted in local loopback development (127.0.0.1 / localhost) to prevent forged
- *    headers from falsely establishing HTTPS and causing cookie lockout.
+ * Strict trust boundary rules:
+ * 1. Explicit HTTPS override: FORCE_HTTPS env value.
+ * 2. Direct TLS connection signals: $_SERVER['HTTPS'] === 'on', port 443, or REQUEST_SCHEME === 'https'.
+ *    These server-level signals cannot be spoofed by client HTTP headers.
+ * 3. Reverse-proxy forwarding headers (HTTP_X_FORWARDED_PROTO, HTTP_X_FORWARDED_SSL, etc.):
+ *    Evaluated ONLY when TRUST_PROXY_HEADERS is explicitly set to true.
+ *    Forwarding headers are NEVER trusted by default (even in production) because untrusted
+ *    clients could supply forged headers unless an infrastructure guarantee strips/overwrites them.
  */
 function is_https_request(): bool {
-    // 1. Explicit environment override
-    $forceSecure = env('SESSION_COOKIE_SECURE');
-    if ($forceSecure !== null) {
-        return filter_var($forceSecure, FILTER_VALIDATE_BOOLEAN);
-    }
-
+    // 1. Explicit environment enforcement override
     $forceHttps = env('FORCE_HTTPS');
-    if ($forceHttps !== null && filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN)) {
-        return true;
+    if ($forceHttps !== null) {
+        return filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN);
     }
 
-    // 2. Direct TLS connection signals (100% reliable)
+    // 2. Direct TLS connection signals (authoritative server-level indicators)
     if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
         return true;
     }
@@ -102,37 +97,48 @@ function is_https_request(): bool {
         return true;
     }
 
-    // 3. Reverse-proxy forwarding headers
-    $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
-    $httpHost = $_SERVER['HTTP_HOST'] ?? '';
-    $isLoopback = in_array($remoteAddr, ['127.0.0.1', '::1'], true) ||
-                  stripos($httpHost, 'localhost') !== false ||
-                  stripos($httpHost, '127.0.0.1') !== false;
-
-    $trustProxyHeaders = filter_var(
-        env('TRUST_PROXY_HEADERS', APP_ENV === 'production' || !$isLoopback),
-        FILTER_VALIDATE_BOOLEAN
-    );
-
-    if ($trustProxyHeaders) {
-        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
-            return true;
+    // 3. Reverse-proxy forwarding headers (evaluated ONLY when proxy trust is explicitly enabled)
+    $trustProxy = filter_var(env('TRUST_PROXY_HEADERS', false), FILTER_VALIDATE_BOOLEAN);
+    if ($trustProxy) {
+        // If X-Forwarded-Proto is supplied, it is the primary protocol signal
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $proto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+            return $proto === 'https';
         }
-        if (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
-            return true;
-        }
-        if (!empty($_SERVER['HTTP_X_FORWARDED_PORT']) && (int)$_SERVER['HTTP_X_FORWARDED_PORT'] === 443) {
-            return true;
+        if (!empty($_SERVER['HTTP_X_FORWARDED_SSL'])) {
+            return strtolower(trim($_SERVER['HTTP_X_FORWARDED_SSL'])) === 'on';
         }
         if (!empty($_SERVER['HTTP_CF_VISITOR'])) {
             $visitor = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
-            if (isset($visitor['scheme']) && strtolower($visitor['scheme']) === 'https') {
-                return true;
+            if (is_array($visitor) && isset($visitor['scheme'])) {
+                return strtolower(trim((string)$visitor['scheme'])) === 'https';
             }
+            return false;
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PORT'])) {
+            $port = (int)trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_PORT'])[0]);
+            return $port === 443;
         }
     }
 
     return false;
+}
+
+/**
+ * Determine whether session cookies must be emitted with the Secure attribute.
+ * Allows explicit environment override (SESSION_COOKIE_SECURE), defaulting to is_https_request().
+ *
+ * Security implication:
+ * Setting SESSION_COOKIE_SECURE=true forces Secure cookies even if reverse-proxy headers
+ * are untrusted or unverified, ensuring cookies are only transmitted over TLS on public HTTPS domains.
+ * Setting SESSION_COOKIE_SECURE=false disables Secure cookies for local plain-HTTP testing.
+ */
+function is_session_cookie_secure(): bool {
+    $forceCookie = env('SESSION_COOKIE_SECURE');
+    if ($forceCookie !== null) {
+        return filter_var($forceCookie, FILTER_VALIDATE_BOOLEAN);
+    }
+    return is_https_request();
 }
 
 // Configure secure session parameters before starting session
@@ -142,7 +148,7 @@ if (session_status() === PHP_SESSION_NONE) {
         'lifetime' => (int)env('SESSION_LIFETIME', 86400),
         'path'     => '/',
         'domain'   => '',
-        'secure'   => is_https_request(),
+        'secure'   => is_session_cookie_secure(),
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
@@ -151,10 +157,19 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 /**
- * Determine base URL dynamically
+ * Determine base URL dynamically and securely
  */
 function get_base_url(): string {
+    $configuredUrl = env('APP_URL');
+    if (!empty($configuredUrl)) {
+        return rtrim($configuredUrl, '/');
+    }
+
     $protocol = is_https_request() ? 'https://' : 'http://';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $rawHost = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+    
+    // Sanitize and validate Host header against header injection / SSRF (RFC 3986 host:port)
+    $host = preg_match('/^[a-zA-Z0-9.\-:]+$/', $rawHost) ? $rawHost : 'localhost';
+    
     return $protocol . $host;
 }

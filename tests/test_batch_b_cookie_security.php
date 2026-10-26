@@ -2,17 +2,18 @@
 /**
  * AFM#2 - Batch B: HTTPS Detection & Session-Cookie Security Test Suite
  *
- * Verifies FINDING-01 resolution and cookie hardening:
- * - Direct HTTPS signals ($_SERVER['HTTPS'], port 443, REQUEST_SCHEME) enable Secure attribute.
- * - Verified reverse-proxy forwarding signals (OpenResty/Cloudflare) enable Secure attribute in production.
- * - Forged forwarding headers on direct local development connections DO NOT establish HTTPS trust.
- * - Local development over plain HTTP retains usability without cookie lockout.
- * - Explicit configuration overrides (SESSION_COOKIE_SECURE, FORCE_HTTPS) function as expected.
- * - Cookie attributes (HttpOnly, SameSite=Lax, Path=/, Domain='') are strictly preserved.
- * - Actual Set-Cookie response header inspected from live dev server.
- * - Legitimate login, authenticated requests, and logout invalidation remain fully operational.
- * - Batch A's fail-closed authentication integrity remains intact.
- * - Zero secrets or session identifiers leaked to logs.
+ * Verifies FINDING-01 resolution, proxy trust boundaries, and cookie hardening:
+ * 1. Direct HTTPS detection (HTTPS=on, port 443, REQUEST_SCHEME=https).
+ * 2. Plain HTTP on loopback with no forwarding headers.
+ * 3. Forged X-Forwarded-Proto: https on direct loopback HTTP (in-process & live HTTP).
+ * 4. Forwarding headers when proxy trust is disabled (default fail-closed behavior).
+ * 5. Forwarding headers when proxy trust is explicitly enabled (TRUST_PROXY_HEADERS=true).
+ * 6. Conflicting or malformed forwarding-header values.
+ * 7. Apache integration check (evaluated and documented).
+ * 8. Cookie attributes on verified HTTPS and local HTTP (HttpOnly, SameSite=Lax, Path=/, Secure).
+ * 9. Session creation, login, authenticated requests, and logout invalidation.
+ * 10. Batch A fail-closed behavior for invalid session identities.
+ * 11. Base-URL scheme and host handling (header injection resistance, canonical APP_URL).
  *
  * Usage: php tests/test_batch_b_cookie_security.php
  */
@@ -30,7 +31,7 @@ require_once dirname(__DIR__) . '/includes/csrf.php';
 
 echo "======================================================================\n";
 echo " AFM#2 — BATCH B: HTTPS DETECTION & COOKIE SECURITY TEST SUITE\n";
-echo " Target: config/config.php & session cookie hardening (FINDING-01)\n";
+echo " Target: config/config.php, .htaccess & session cookies (FINDING-01)\n";
 echo "======================================================================\n\n";
 
 $testsTotal = 0;
@@ -100,11 +101,9 @@ function test_http(string $url, string $method = 'GET', ?string $body = null, ar
     ];
 }
 
-// ---------------------------------------------------------------------
-// 1. Direct TLS & Verified Proxy HTTPS Detection Unit Tests
-// ---------------------------------------------------------------------
-echo "1. In-Process HTTPS Detection Signal Matrix\n";
-
+/**
+ * Environment isolation helper
+ */
 $runWithEnv = function(array $serverVars, array $envVars, callable $fn) {
     $origServer = $_SERVER;
     $origEnv = $_ENV;
@@ -140,79 +139,56 @@ $runWithEnv = function(array $serverVars, array $envVars, callable $fn) {
     }
 };
 
-// Test 1.1: Direct HTTPS via $_SERVER['HTTPS'] = 'on'
+// =====================================================================
+// 1. DIRECT HTTPS DETECTION
+// =====================================================================
+echo "1. Direct HTTPS Detection Signals\n";
+
 $directHttps = $runWithEnv(['HTTPS' => 'on', 'SERVER_PORT' => '443'], [], fn() => is_https_request());
 assert_test("Direct HTTPS (\$_SERVER['HTTPS'] = 'on') detects as HTTPS", $directHttps === true);
 
-// Test 1.2: Direct HTTPS via Port 443
+$directHttpsUpper = $runWithEnv(['HTTPS' => 'ON', 'SERVER_PORT' => '443'], [], fn() => is_https_request());
+assert_test("Direct HTTPS (\$_SERVER['HTTPS'] = 'ON' case-insensitive) detects as HTTPS", $directHttpsUpper === true);
+
 $portHttps = $runWithEnv(['HTTPS' => null, 'SERVER_PORT' => '443'], [], fn() => is_https_request());
 assert_test("Direct HTTPS (SERVER_PORT = 443) detects as HTTPS", $portHttps === true);
 
-// Test 1.3: Direct HTTPS via REQUEST_SCHEME = 'https'
 $schemeHttps = $runWithEnv(['HTTPS' => null, 'SERVER_PORT' => '80', 'REQUEST_SCHEME' => 'https'], [], fn() => is_https_request());
 assert_test("Direct HTTPS (REQUEST_SCHEME = 'https') detects as HTTPS", $schemeHttps === true);
 
-// Test 1.4: Verified Reverse-Proxy HTTPS on Production Domain (OpenResty simulation)
-$proxyProd = $runWithEnv(
-    [
-        'HTTPS'                 => null,
-        'SERVER_PORT'           => '80',
-        'HTTP_HOST'             => 'afm2.infinityfreeapp.com',
-        'REMOTE_ADDR'           => '185.27.134.57',
-        'HTTP_X_FORWARDED_PROTO'=> 'https'
-    ],
-    ['APP_ENV' => 'production'],
-    fn() => is_https_request()
-);
-assert_test("Verified OpenResty proxy on production domain with X-Forwarded-Proto: https detects as HTTPS", $proxyProd === true);
+$directCookieSecure = $runWithEnv(['HTTPS' => 'on'], [], fn() => is_session_cookie_secure());
+assert_test("Direct HTTPS activates session cookie Secure attribute", $directCookieSecure === true);
 
-// Test 1.5: Verified Proxy HTTPS via X-Forwarded-Ssl: on
-$proxySsl = $runWithEnv(
-    [
-        'HTTPS'                => null,
-        'SERVER_PORT'          => '80',
-        'HTTP_HOST'            => 'afm2.infinityfreeapp.com',
-        'REMOTE_ADDR'          => '185.27.134.57',
-        'HTTP_X_FORWARDED_SSL' => 'on'
-    ],
-    ['APP_ENV' => 'production'],
-    fn() => is_https_request()
-);
-assert_test("Verified OpenResty proxy with X-Forwarded-Ssl: on detects as HTTPS", $proxySsl === true);
+// =====================================================================
+// 2. PLAIN HTTP ON LOOPBACK WITH NO FORWARDING HEADERS
+// =====================================================================
+echo "\n2. Plain HTTP on Loopback (No Forwarding Headers)\n";
 
-// Test 1.6: Verified Proxy HTTPS via Cloudflare CF-Visitor JSON
-$proxyCf = $runWithEnv(
-    [
-        'HTTPS'             => null,
-        'SERVER_PORT'       => '80',
-        'HTTP_HOST'         => 'afm2.infinityfreeapp.com',
-        'REMOTE_ADDR'       => '185.27.134.57',
-        'HTTP_CF_VISITOR'   => '{"scheme":"https"}'
-    ],
-    ['APP_ENV' => 'production'],
-    fn() => is_https_request()
-);
-assert_test("Verified Cloudflare proxy with HTTP_CF_VISITOR JSON detects as HTTPS", $proxyCf === true);
-
-// ---------------------------------------------------------------------
-// 2. Local Development Safety & Forged Header Resistance
-// ---------------------------------------------------------------------
-echo "\n2. Local Development Safety & Anti-Spoofing Guardrails\n";
-
-// Test 2.1: Plain local development connection over HTTP
 $localDev = $runWithEnv(
     [
-        'HTTPS'       => null,
-        'SERVER_PORT' => '8080',
-        'HTTP_HOST'   => '127.0.0.1:8080',
-        'REMOTE_ADDR' => '127.0.0.1'
+        'HTTPS'          => null,
+        'SERVER_PORT'    => '8080',
+        'HTTP_HOST'      => '127.0.0.1:8080',
+        'REMOTE_ADDR'    => '127.0.0.1',
+        'REQUEST_SCHEME' => 'http'
     ],
     ['APP_ENV' => 'development'],
     fn() => is_https_request()
 );
-assert_test("Local development over HTTP (127.0.0.1:8080) detects as plain HTTP (false)", $localDev === false);
+assert_test("Local loopback plain HTTP detects as false (non-HTTPS)", $localDev === false);
 
-// Test 2.2: Adversarial client forging X-Forwarded-Proto on local loopback
+$localCookieSecure = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '8080', 'REMOTE_ADDR' => '127.0.0.1'],
+    ['APP_ENV' => 'development'],
+    fn() => is_session_cookie_secure()
+);
+assert_test("Local loopback session cookie Secure attribute is false (prevents browser cookie drop)", $localCookieSecure === false);
+
+// =====================================================================
+// 3. FORGED X-FORWARDED-PROTO ON DIRECT LOOPBACK HTTP
+// =====================================================================
+echo "\n3. Forged X-Forwarded-Proto on Direct Loopback HTTP\n";
+
 $forgedHeaderDev = $runWithEnv(
     [
         'HTTPS'                  => null,
@@ -224,40 +200,194 @@ $forgedHeaderDev = $runWithEnv(
     ['APP_ENV' => 'development', 'TRUST_PROXY_HEADERS' => null],
     fn() => is_https_request()
 );
-assert_test("Forged X-Forwarded-Proto on direct local dev connection is REJECTED (anti-lockout guard)", $forgedHeaderDev === false);
+assert_test("Forged X-Forwarded-Proto on direct loopback is REJECTED in-process (is_https_request = false)", $forgedHeaderDev === false);
 
-// Test 2.3: Explicit override FORCE_HTTPS=true
-$forceHttps = $runWithEnv([], ['FORCE_HTTPS' => 'true'], fn() => is_https_request());
-assert_test("Explicit environment override FORCE_HTTPS=true enforces HTTPS", $forceHttps === true);
-
-// Test 2.4: Explicit override SESSION_COOKIE_SECURE=false
-$forceCookieFalse = $runWithEnv(['HTTPS' => 'on'], ['SESSION_COOKIE_SECURE' => 'false'], fn() => is_https_request());
-assert_test("Explicit environment override SESSION_COOKIE_SECURE=false enforces non-secure", $forceCookieFalse === false);
-
-// ---------------------------------------------------------------------
-// 3. Dynamic Base URL Consistency
-// ---------------------------------------------------------------------
-echo "\n3. Dynamic Base URL Scheme Resolution\n";
-
-$baseUrlHttp = $runWithEnv(
-    ['HTTPS' => null, 'SERVER_PORT' => '8080', 'HTTP_HOST' => '127.0.0.1:8080', 'REMOTE_ADDR' => '127.0.0.1'],
-    ['APP_ENV' => 'development'],
-    fn() => get_base_url()
+$forgedCookieDev = $runWithEnv(
+    [
+        'HTTPS'                  => null,
+        'SERVER_PORT'            => '8080',
+        'HTTP_HOST'              => '127.0.0.1:8080',
+        'REMOTE_ADDR'            => '127.0.0.1',
+        'HTTP_X_FORWARDED_PROTO' => 'https'
+    ],
+    ['APP_ENV' => 'development', 'TRUST_PROXY_HEADERS' => null],
+    fn() => is_session_cookie_secure()
 );
-assert_test("get_base_url() returns http://127.0.0.1:8080 in local dev", $baseUrlHttp === 'http://127.0.0.1:8080');
+assert_test("Forged X-Forwarded-Proto on direct loopback does NOT enable Secure cookie (is_session_cookie_secure = false)", $forgedCookieDev === false);
 
-$baseUrlHttps = $runWithEnv(
-    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'REMOTE_ADDR' => '185.27.134.57', 'HTTP_X_FORWARDED_PROTO' => 'https'],
-    ['APP_ENV' => 'production'],
-    fn() => get_base_url()
+// Observable live HTTP request with forged header to local server
+$liveForgedRes = test_http("http://127.0.0.1:8080/login.php", 'GET', null, ['X-Forwarded-Proto' => 'https']);
+$liveForgedCookie = '';
+foreach ($liveForgedRes['cookies'] as $c) {
+    if (stripos($c, 'AFM2_SESSID=') !== false) {
+        $liveForgedCookie = $c;
+        break;
+    }
+}
+assert_test("Live HTTP request with forged X-Forwarded-Proto: https receives cookie without Secure flag",
+    !empty($liveForgedCookie) && stripos($liveForgedCookie, 'Secure') === false);
+
+// =====================================================================
+// 4. FORWARDING HEADERS WHEN PROXY TRUST IS DISABLED (DEFAULT)
+// =====================================================================
+echo "\n4. Forwarding Headers When Proxy Trust is Disabled (Fail Closed)\n";
+
+$untrustedProto = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_PROTO' => 'https'],
+    ['APP_ENV' => 'production', 'TRUST_PROXY_HEADERS' => null],
+    fn() => is_https_request()
 );
-assert_test("get_base_url() returns https://afm2.infinityfreeapp.com in production", $baseUrlHttps === 'https://afm2.infinityfreeapp.com', "Got: " . var_export($baseUrlHttps, true));
+assert_test("Default unconfigured proxy headers: X-Forwarded-Proto is ignored (false)", $untrustedProto === false);
 
-// ---------------------------------------------------------------------
-// 4. Session Cookie Attribute Verification (Live Local Server)
-// ---------------------------------------------------------------------
-echo "\n4. Live Session Cookie Attribute Verification\n";
+$untrustedSsl = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_SSL' => 'on'],
+    ['APP_ENV' => 'production', 'TRUST_PROXY_HEADERS' => 'false'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=false: X-Forwarded-Ssl is ignored (false)", $untrustedSsl === false);
 
+$untrustedPort = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_PORT' => '443'],
+    ['APP_ENV' => 'production', 'TRUST_PROXY_HEADERS' => '0'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=0: X-Forwarded-Port: 443 is ignored (false)", $untrustedPort === false);
+
+$untrustedVisitor = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_CF_VISITOR' => '{"scheme":"https"}'],
+    ['APP_ENV' => 'production', 'TRUST_PROXY_HEADERS' => 'false'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=false: HTTP_CF_VISITOR is ignored (false)", $untrustedVisitor === false);
+
+// =====================================================================
+// 5. FORWARDING HEADERS WHEN PROXY TRUST IS EXPLICITLY ENABLED
+// =====================================================================
+echo "\n5. Forwarding Headers When Proxy Trust is Explicitly Enabled\n";
+
+$trustedProto = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_PROTO' => 'https'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=true: X-Forwarded-Proto: https evaluates to true", $trustedProto === true);
+
+$trustedSsl = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_SSL' => 'on'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=true: X-Forwarded-Ssl: on evaluates to true", $trustedSsl === true);
+
+$trustedPort = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_X_FORWARDED_PORT' => '443'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=true: X-Forwarded-Port: 443 evaluates to true", $trustedPort === true);
+
+$trustedCf = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'afm2.infinityfreeapp.com', 'HTTP_CF_VISITOR' => '{"scheme":"https"}'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Explicit TRUST_PROXY_HEADERS=true: HTTP_CF_VISITOR evaluates to true", $trustedCf === true);
+
+// =====================================================================
+// 6. CONFLICTING OR MALFORMED FORWARDING HEADERS
+// =====================================================================
+echo "\n6. Conflicting or Malformed Forwarding Header Values\n";
+
+$conflictHttpWithPort443 = $runWithEnv(
+    [
+        'HTTPS'                  => null,
+        'SERVER_PORT'            => '80',
+        'HTTP_X_FORWARDED_PROTO' => 'http',
+        'HTTP_X_FORWARDED_PORT'  => '443'
+    ],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Conflicting headers: X-Forwarded-Proto: http with X-Forwarded-Port: 443 returns false", $conflictHttpWithPort443 === false);
+
+$multiHopHttpFirst = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_X_FORWARDED_PROTO' => 'http, https'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Multi-hop header with plain HTTP first ('http, https') returns false", $multiHopHttpFirst === false);
+
+$multiHopHttpsFirst = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_X_FORWARDED_PROTO' => 'https, http'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Multi-hop header with HTTPS first ('https, http') returns true", $multiHopHttpsFirst === true);
+
+$malformedProto = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_X_FORWARDED_PROTO' => 'ftp://bad'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Malformed X-Forwarded-Proto ('ftp://bad') returns false", $malformedProto === false);
+
+$malformedJsonVisitor = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_CF_VISITOR' => '{malformed_json'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("Malformed JSON in HTTP_CF_VISITOR returns false", $malformedJsonVisitor === false);
+
+$visitorSchemeHttp = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_CF_VISITOR' => '{"scheme":"http"}'],
+    ['TRUST_PROXY_HEADERS' => 'true'],
+    fn() => is_https_request()
+);
+assert_test("HTTP_CF_VISITOR with scheme: http returns false", $visitorSchemeHttp === false);
+
+// =====================================================================
+// 7. APACHE INTEGRATION & .HTACCESS NORMALIZATION CHECK
+// =====================================================================
+echo "\n7. Apache Integration & .htaccess Audit\n";
+
+$rootHtaccess = file_get_contents(dirname(__DIR__) . '/.htaccess') ?: '';
+$publicHtaccess = file_get_contents(dirname(__DIR__) . '/public/.htaccess') ?: '';
+
+$rootHasSetEnvIf = stripos($rootHtaccess, 'SetEnvIf X-Forwarded-Proto') !== false;
+$publicHasSetEnvIf = stripos($publicHtaccess, 'SetEnvIf X-Forwarded-Proto') !== false;
+
+assert_test("Root .htaccess does NOT contain unconditional SetEnvIf X-Forwarded-Proto", !$rootHasSetEnvIf);
+assert_test("Public .htaccess does NOT contain unconditional SetEnvIf X-Forwarded-Proto", !$publicHasSetEnvIf);
+
+// Check if Apache daemon is actively running and bound to an integration port
+$apacheStatus = trim((string)@shell_exec("pgrep -x 'apache2' || pgrep -x 'httpd'"));
+if (!empty($apacheStatus)) {
+    echo "  [INFO] Apache process detected (PID: {$apacheStatus}), but AFM#2 dev server runs on PHP-CLI.\n";
+    echo "  [INFO] Apache .htaccess integration: verified statically (SetEnvIf bypass removed).\n";
+} else {
+    echo "  [UNTESTED] Live Apache HTTP integration is unavailable on this host (CLI environment uses php -S).\n";
+    echo "             Static audit confirms unconditional SetEnvIf bypass is completely eliminated.\n";
+}
+
+// =====================================================================
+// 8. COOKIE ATTRIBUTES ON VERIFIED HTTPS AND LOCAL HTTP
+// =====================================================================
+echo "\n8. Cookie Attributes on Verified HTTPS and Local HTTP\n";
+
+// Explicit overrides
+$explicitCookieTrue = $runWithEnv(['HTTPS' => null], ['SESSION_COOKIE_SECURE' => 'true'], fn() => is_session_cookie_secure());
+assert_test("Explicit SESSION_COOKIE_SECURE=true forces Secure cookie (true)", $explicitCookieTrue === true);
+
+$explicitCookieFalse = $runWithEnv(['HTTPS' => 'on'], ['SESSION_COOKIE_SECURE' => 'false'], fn() => is_session_cookie_secure());
+assert_test("Explicit SESSION_COOKIE_SECURE=false forces non-secure cookie (false)", $explicitCookieFalse === false);
+
+$forceHttpsReq = $runWithEnv([], ['FORCE_HTTPS' => 'true'], fn() => is_https_request());
+assert_test("Explicit FORCE_HTTPS=true forces is_https_request to true", $forceHttpsReq === true);
+
+$forceHttpsFalse = $runWithEnv(['HTTPS' => 'on'], ['FORCE_HTTPS' => 'false'], fn() => is_https_request());
+assert_test("Explicit FORCE_HTTPS=false forces is_https_request to false", $forceHttpsFalse === false);
+
+// Live local server cookie inspection
 $loginHeadRes = test_http("http://127.0.0.1:8080/login.php", 'GET');
 $cookieHeader = '';
 foreach ($loginHeadRes['cookies'] as $c) {
@@ -266,27 +396,26 @@ foreach ($loginHeadRes['cookies'] as $c) {
         break;
     }
 }
-
-assert_test("Server emits AFM2_SESSID cookie", !empty($cookieHeader));
+assert_test("Live server emits AFM2_SESSID cookie", !empty($cookieHeader));
 assert_test("Cookie specifies HttpOnly attribute", stripos($cookieHeader, 'HttpOnly') !== false);
 assert_test("Cookie specifies SameSite=Lax attribute", stripos($cookieHeader, 'SameSite=Lax') !== false);
 assert_test("Cookie specifies Path=/ attribute", stripos($cookieHeader, 'Path=/') !== false);
 assert_test("Local development cookie omits Secure flag to prevent browser drop", stripos($cookieHeader, 'Secure') === false);
 
-// ---------------------------------------------------------------------
-// 5. Authentication Lifecycle and Batch A Fail-Closed Integrity Check
-// ---------------------------------------------------------------------
-echo "\n5. Authentication Lifecycle & Batch A Regression Verification\n";
+// =====================================================================
+// 9. AUTHENTICATION LIFECYCLE & LOGOUT INVALIDATION
+// =====================================================================
+echo "\n9. Authentication Lifecycle & Logout Invalidation\n";
 
-// Clear rate limits for clean test run
 clear_rate_limits();
 
-// Legitimate Login
+// Extract CSRF token
 preg_match('/<input[^>]+name="csrf_token"[^>]+value="([^"]+)"/i', $loginHeadRes['body'], $mToken);
 $csrfToken = $mToken[1] ?? '';
 preg_match('/(AFM2_SESSID=[^;]+)/i', $cookieHeader, $mc);
 $sessionCookie = $mc[1] ?? '';
 
+// Legitimate Login
 $loginRes = test_http(
     "http://127.0.0.1:8080/login.php",
     'POST',
@@ -321,20 +450,95 @@ assert_test("Authenticated request to library.php succeeds (HTTP 200)", $authLib
 $logoutRes = test_http("http://127.0.0.1:8080/logout.php", 'GET', null, ['Cookie' => $sessionCookie]);
 assert_test("Logout executes and redirects (HTTP 302)", $logoutRes['status'] === 302);
 
+// Verify cookie invalidation header in logout response
+$logoutCookieHeader = '';
+foreach ($logoutRes['cookies'] as $c) {
+    if (stripos($c, 'AFM2_SESSID=') !== false) {
+        $logoutCookieHeader = $c;
+        break;
+    }
+}
+assert_test("Logout emits expired Set-Cookie header", !empty($logoutCookieHeader) && (stripos($logoutCookieHeader, 'Max-Age=0') !== false || stripos($logoutCookieHeader, '1970') !== false || stripos($logoutCookieHeader, 'deleted') !== false));
+assert_test("Logout Set-Cookie preserves Path=/", stripos($logoutCookieHeader, 'Path=/') !== false);
+assert_test("Logout Set-Cookie preserves SameSite=Lax", stripos($logoutCookieHeader, 'SameSite=Lax') !== false);
+
 // Post-logout request is denied
 $postLogout = test_http("http://127.0.0.1:8080/index.php", 'GET', null, ['Cookie' => $sessionCookie]);
-assert_test("Subsequent request with logged-out cookie is rejected (HTTP 302 -> login.php)", $postLogout['status'] === 302);
+assert_test("Subsequent request with invalidated session cookie is rejected (HTTP 302 -> login.php)", $postLogout['status'] === 302);
 
-// Batch A Integrity Check: Non-existent user ID does NOT auto-associate with user 1
+// =====================================================================
+// 10. BATCH A FAIL-CLOSED BEHAVIOR FOR INVALID USER SESSIONS
+// =====================================================================
+echo "\n10. Batch A Fail-Closed Integrity Verification\n";
+
 $ghostSessionRes = $runWithEnv([], [], function() {
     $_SESSION['afm_user_id'] = 99999999;
     return get_current_user_id();
 });
 assert_test("Batch A invariant: Nonexistent user ID fails closed (returns null)", $ghostSessionRes === null);
 
-// ---------------------------------------------------------------------
+$stringSessionRes = $runWithEnv([], [], function() {
+    $_SESSION['afm_user_id'] = 'malicious_non_integer';
+    return get_current_user_id();
+});
+assert_test("Batch A invariant: Non-numeric user ID fails closed (returns null)", $stringSessionRes === null);
+
+// =====================================================================
+// 11. BASE-URL SCHEME AND HOST HANDLING
+// =====================================================================
+echo "\n11. Base-URL Scheme and Host Validation\n";
+
+// Plain HTTP base URL
+$baseUrlHttp = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '8080', 'HTTP_HOST' => '127.0.0.1:8080'],
+    ['APP_ENV' => 'development'],
+    fn() => get_base_url()
+);
+assert_test("get_base_url() returns http://127.0.0.1:8080 in local dev", $baseUrlHttp === 'http://127.0.0.1:8080');
+
+// HTTPS base URL via direct TLS
+$baseUrlHttps = $runWithEnv(
+    ['HTTPS' => 'on', 'SERVER_PORT' => '443', 'HTTP_HOST' => 'afm2.infinityfreeapp.com'],
+    ['APP_ENV' => 'production'],
+    fn() => get_base_url()
+);
+assert_test("get_base_url() returns https://afm2.infinityfreeapp.com under direct HTTPS", $baseUrlHttps === 'https://afm2.infinityfreeapp.com');
+
+// Canonical APP_URL override
+$baseUrlAppUrl = $runWithEnv(
+    ['HTTPS' => null, 'HTTP_HOST' => 'internal-origin.local'],
+    ['APP_URL' => 'https://custom.afm2.com/'],
+    fn() => get_base_url()
+);
+assert_test("get_base_url() honors canonical APP_URL override (https://custom.afm2.com)", $baseUrlAppUrl === 'https://custom.afm2.com');
+
+// Host header injection resistance: CRLF injection
+$baseUrlCrlf = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => "evil.com\r\nX-Injected: yes"],
+    [],
+    fn() => get_base_url()
+);
+assert_test("Host with CRLF injection is rejected and falls back to localhost", $baseUrlCrlf === 'http://localhost');
+
+// Host header injection resistance: HTML injection
+$baseUrlHtml = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'evil.com<script>alert(1)</script>'],
+    [],
+    fn() => get_base_url()
+);
+assert_test("Host with HTML tags is rejected and falls back to localhost", $baseUrlHtml === 'http://localhost');
+
+// Host header injection resistance: Path traversal
+$baseUrlSlash = $runWithEnv(
+    ['HTTPS' => null, 'SERVER_PORT' => '80', 'HTTP_HOST' => 'evil.com/path/traversal'],
+    [],
+    fn() => get_base_url()
+);
+assert_test("Host with path traversal is rejected and falls back to localhost", $baseUrlSlash === 'http://localhost');
+
+// =====================================================================
 // SUMMARY
-// ---------------------------------------------------------------------
+// =====================================================================
 echo "\n======================================================================\n";
 echo " BATCH B TEST EXECUTION SUMMARY\n";
 echo "======================================================================\n";
