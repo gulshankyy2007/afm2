@@ -65,6 +65,7 @@ function test_http(string $url, string $method = 'GET', ?string $body = null, ar
 
     $statusCode = 0;
     $parsedHeaders = [];
+    $headerCounts = [];
     $cookies = [];
 
     foreach ($responseHeaders as $idx => $line) {
@@ -76,6 +77,7 @@ function test_http(string $url, string $method = 'GET', ?string $body = null, ar
         if (count($parts) === 2) {
             $hName = strtolower(trim($parts[0]));
             $hVal = trim($parts[1]);
+            $headerCounts[$hName] = ($headerCounts[$hName] ?? 0) + 1;
             if ($hName === 'set-cookie') {
                 $cookies[] = $hVal;
             } else {
@@ -85,10 +87,12 @@ function test_http(string $url, string $method = 'GET', ?string $body = null, ar
     }
 
     return [
-        'status'  => $statusCode,
-        'headers' => $parsedHeaders,
-        'cookies' => $cookies,
-        'body'    => (string)$responseBody
+        'status'        => $statusCode,
+        'headers'       => $parsedHeaders,
+        'header_counts' => $headerCounts,
+        'raw_headers'   => $responseHeaders,
+        'cookies'       => $cookies,
+        'body'          => (string)$responseBody
     ];
 }
 
@@ -176,20 +180,51 @@ for ($u = 1; $u <= 15; $u++) {
 $ipThrottled = is_rate_limited('yet_another_user_99');
 assert_test("3. Multiple usernames attempted from one source trigger IP-level threshold (15 attempts)", $ipThrottled);
 
-// 4. One username attempted from multiple sources (Account threshold)
+// 4a. Target account receiving repeated failures from multiple simulated sources DOES NOT lock out legitimate user from clean IP (Anti-DoS)
 clear_rate_limits('*');
 $origEnv = $_ENV['TRUST_PROXY_HEADERS'] ?? null;
 $_ENV['TRUST_PROXY_HEADERS'] = 'true';
 putenv('TRUST_PROXY_HEADERS=true');
 
+// Attacker simulates 25 distributed source IPs attempting 'adminuser'
 for ($s = 1; $s <= 25; $s++) {
     $_SERVER['HTTP_X_FORWARDED_FOR'] = "203.0.113.{$s}";
-    record_failed_login('victim_admin');
+    record_failed_login('adminuser');
 }
-// Check from a 26th fresh IP
+
+// Check from a clean, legitimate client IP (203.0.113.250)
 $_SERVER['HTTP_X_FORWARDED_FOR'] = "203.0.113.250";
-$accountThrottled = is_rate_limited('victim_admin');
-assert_test("4. One username targeted across multiple sources triggers global account soft-lock (25 attempts)", $accountThrottled);
+$legitUserBlocked = is_rate_limited('adminuser');
+assert_test("4a. Multi-source attack against target account does NOT lock out legitimate user from clean IP (Anti-DoS)", !$legitUserBlocked);
+
+// 4b. Legitimate login attempt succeeds even after target account received 25 failures from other sources
+$cleanLoginResult = attempt_login('adminuser', 'SecurePassword2026!');
+assert_test("4b. Legitimate login succeeds after target account received 25 failed attempts from distinct attacker IPs", $cleanLoginResult['success'] === true);
+
+// 4c. Verify that an attacker IP that reached 5 failures for 'adminuser' is blocked
+$_SERVER['HTTP_X_FORWARDED_FOR'] = "203.0.113.1";
+for ($a = 0; $a < 5; $a++) {
+    record_failed_login('adminuser');
+}
+$attackerThrottled = is_rate_limited('adminuser');
+assert_test("4c. Attacker IP reaching composite limit (5 attempts on target account) is throttled", $attackerThrottled);
+
+// 4d. Single source attempting multiple accounts is throttled at IP threshold (15 attempts)
+clear_rate_limits('*');
+$_SERVER['HTTP_X_FORWARDED_FOR'] = "198.51.100.99";
+for ($m = 1; $m <= 15; $m++) {
+    record_failed_login("account_{$m}");
+}
+$multiAccountThrottled = is_rate_limited("account_999");
+assert_test("4d. Single source attempting multiple accounts is throttled at IP threshold (15 attempts)", $multiAccountThrottled);
+
+// 4e. Verify recovery after configured time window (15 minutes)
+clear_rate_limits('*');
+$_SERVER['HTTP_X_FORWARDED_FOR'] = "198.51.100.88";
+$pdo->exec("INSERT INTO `login_rate_limits` (`ip_address`, `attempted_at`) VALUES ('198.51.100.88', NOW() - INTERVAL 16 MINUTE)");
+$recovered = !is_rate_limited('any_user');
+$remaining = (int)$pdo->query("SELECT COUNT(*) FROM `login_rate_limits` WHERE `ip_address` = '198.51.100.88'")->fetchColumn();
+assert_test("4e. Rate limit counters expire and recover after configured 15-minute window", $recovered && $remaining === 0);
 
 // Restore proxy environment
 if ($origEnv !== null) {
@@ -294,13 +329,44 @@ $loginRes = test_http("http://127.0.0.1:8080/login.php", 'POST', http_build_quer
 $attemptsAfterSuccess = (int)$pdo->query("SELECT COUNT(*) FROM `login_rate_limits`")->fetchColumn();
 assert_test("10. Successful login purges rate limit bucket for user and source", $attemptsBeforeSuccess > 0 && $attemptsAfterSuccess === 0);
 
-// 11. Storage/database failures fail closed to session defense-in-depth tracking
-$subCode = '$_ENV["DB_NAME"] = "nonexistent_db"; require "config/config.php"; session_start(); $_SESSION["afm_fallback_login_attempts"] = 5; $_SESSION["afm_fallback_login_time"] = time(); require "includes/auth.php"; echo is_rate_limited("testuser") ? "LOCKED" : "OPEN";';
-$dbFailCmd = 'php -r ' . escapeshellarg($subCode) . ' 2>/dev/null';
-$dbFailOutput = trim((string)shell_exec($dbFailCmd));
+// 11. Storage & database failure handling modes
+// Mode 1: Rate-limit storage failure while user lookup remains available
+$pdo->exec("RENAME TABLE `login_rate_limits` TO `login_rate_limits_tmp_verify`");
 
-$sessionFallbackTriggered = ($dbFailOutput === 'LOCKED');
-assert_test("11. Fail-closed session fallback protects authentication if database is unreachable", $sessionFallbackTriggered);
+try {
+    // 11a: Within the session, failed attempts increment session fallback and block after 5 attempts
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['afm_fallback_login_attempts'] = 5;
+    $_SESSION['afm_fallback_login_time'] = time();
+
+    $mode1SessionBlocked = is_rate_limited('adminuser');
+    assert_test("11a. Rate-limit storage failure: In-session fallback triggers lockout after 5 failed attempts", $mode1SessionBlocked);
+
+    // 11b: Session-only tracking limitation: Creating a new session resets fallback tracking (documented limitation)
+    $_SESSION = [];
+    $mode1SessionBypassed = !is_rate_limited('adminuser');
+    assert_test("11b. Rate-limit storage failure: New session resets session-only fallback (documented limitation)", $mode1SessionBypassed);
+
+    // 11c: Legitimate user login availability: Correct credentials succeed even when rate-limit storage fails
+    $mode1LegitLogin = attempt_login('adminuser', 'SecurePassword2026!');
+    assert_test("11c. Rate-limit storage failure: User lookup remains available and legitimate login succeeds", $mode1LegitLogin['success'] === true);
+} finally {
+    $pdo->exec("RENAME TABLE `login_rate_limits_tmp_verify` TO `login_rate_limits`");
+}
+
+// Mode 2: General database failure that also prevents credential verification
+$subCodeGeneralDbFail = '$_ENV["DB_NAME"] = "nonexistent_db"; require "config/config.php"; require "includes/auth.php"; $res = attempt_login("adminuser", "SecurePassword2026!"); echo json_encode($res);';
+$dbFailCmd = 'php -r ' . escapeshellarg($subCodeGeneralDbFail) . ' 2>/dev/null';
+$dbFailOutput = json_decode(trim((string)shell_exec($dbFailCmd)), true);
+
+$mode2GeneralDbSafe = (
+    is_array($dbFailOutput)
+    && ($dbFailOutput['success'] ?? true) === false
+    && ($dbFailOutput['error'] ?? '') === 'An unexpected error occurred during login.'
+);
+assert_test("11d. General database failure: Fails closed safely with generic error and zero secret/stack leakage", $mode2GeneralDbSafe);
 
 // 12. Plaintext credential and secret protection
 $errorLogContent = '';
@@ -370,40 +436,34 @@ foreach ($cspDirectives as $dName => $dPassed) {
 }
 assert_test("16. Content Security Policy contains all required AFM#2 directives and excludes unsafe-eval", $allDirectivesValid);
 
-// 17. HSTS is NOT emitted for plain HTTP responses
+// 17a. HSTS is NOT emitted for plain HTTP responses
 $hasHstsOverHttp = isset($h['strict-transport-security']);
-assert_test("17. Strict-Transport-Security (HSTS) is NOT emitted for plain HTTP responses", !$hasHstsOverHttp);
+assert_test("17a. Strict-Transport-Security (HSTS) is NOT emitted for plain HTTP responses", !$hasHstsOverHttp);
 
-// 18. HSTS is conditionally emitted when connection is verified HTTPS
-$simHttpsHeaders = function(): array {
-    $origServer = $_SERVER;
-    $_SERVER['HTTPS'] = 'on';
-    $_SERVER['SERVER_PORT'] = '443';
+// 17b. FORCE_HTTPS=true does NOT cause plain HTTP response to emit HSTS (RFC 6797 §7.2 compliance)
+$subCodeHstsForce = 'putenv("FORCE_HTTPS=true"); $_ENV["FORCE_HTTPS"] = "true"; require "config/config.php"; echo has_verified_https_transport() ? "VERIFIED" : "UNVERIFIED";';
+$hstsForceOut = trim((string)shell_exec('php -r ' . escapeshellarg($subCodeHstsForce) . ' 2>/dev/null'));
+assert_test("17b. FORCE_HTTPS=true alone does NOT satisfy verified HTTPS transport or emit HSTS (RFC 6797 §7.2)", $hstsForceOut === 'UNVERIFIED');
 
-    // Capture headers via PHP CLI simulation
-    ob_start();
-    send_security_headers();
-    ob_end_clean();
+// 17c. Spoofed forwarding headers without proxy trust do NOT emit HSTS
+$subCodeHstsSpoof = '$_SERVER["HTTP_X_FORWARDED_PROTO"] = "https"; require "config/config.php"; echo has_verified_https_transport() ? "VERIFIED" : "UNVERIFIED";';
+$hstsSpoofOut = trim((string)shell_exec('php -r ' . escapeshellarg($subCodeHstsSpoof) . ' 2>/dev/null'));
+assert_test("17c. Spoofed forwarding headers without TRUST_PROXY_HEADERS do NOT verify transport or emit HSTS", $hstsSpoofOut === 'UNVERIFIED');
 
-    $sent = [];
-    if (function_exists('headers_list')) {
-        $sent = headers_list();
-    }
+// 18a. Direct TLS signal ($_SERVER['HTTPS'] = 'on') satisfies transport verification for HSTS
+$subCodeHstsOn = '$_SERVER["HTTPS"] = "on"; require "config/config.php"; echo has_verified_https_transport() ? "VERIFIED" : "UNVERIFIED";';
+$hstsOnOut = trim((string)shell_exec('php -r ' . escapeshellarg($subCodeHstsOn) . ' 2>/dev/null'));
+assert_test("18a. Direct TLS signal (HTTPS='on') verifies transport and enables HSTS emission", $hstsOnOut === 'VERIFIED');
 
-    $_SERVER = $origServer;
-    return $sent;
-};
+// 18b. Direct TLS port (SERVER_PORT = 443) satisfies transport verification for HSTS
+$subCodeHstsPort = '$_SERVER["SERVER_PORT"] = 443; require "config/config.php"; echo has_verified_https_transport() ? "VERIFIED" : "UNVERIFIED";';
+$hstsPortOut = trim((string)shell_exec('php -r ' . escapeshellarg($subCodeHstsPort) . ' 2>/dev/null'));
+assert_test("18b. Direct TLS port (SERVER_PORT=443) verifies transport and enables HSTS emission", $hstsPortOut === 'VERIFIED');
 
-// In CLI, send_security_headers() can be invoked directly; verify logic
-$hstsLogicValid = false;
-$origServer = $_SERVER;
-$_SERVER['HTTPS'] = 'on';
-if (is_https_request()) {
-    $hstsLogicValid = true;
-}
-$_SERVER = $origServer;
-
-assert_test("18. HSTS logic strictly gates Strict-Transport-Security header to verified HTTPS requests", $hstsLogicValid);
+// 18c. Trusted proxy forwarding headers (TRUST_PROXY_HEADERS=true) satisfy transport verification for HSTS
+$subCodeHstsTrusted = 'putenv("TRUST_PROXY_HEADERS=true"); $_ENV["TRUST_PROXY_HEADERS"] = "true"; $_SERVER["HTTP_X_FORWARDED_PROTO"] = "https"; require "config/config.php"; echo has_verified_https_transport() ? "VERIFIED" : "UNVERIFIED";';
+$hstsTrustedOut = trim((string)shell_exec('php -r ' . escapeshellarg($subCodeHstsTrusted) . ' 2>/dev/null'));
+assert_test("18c. Forwarding headers with TRUST_PROXY_HEADERS=true verify transport and enable HSTS emission", $hstsTrustedOut === 'VERIFIED');
 
 // 19. Permissions-Policy does not disable features required by AFM#2
 $permStr = $h['permissions-policy'] ?? '';
@@ -422,7 +482,49 @@ $pubHasHeaders = (strpos($pubHtaccess, 'Header set X-Content-Type-Options "nosni
     && strpos($pubHtaccess, 'Header set Content-Security-Policy') !== false
     && strpos($pubHtaccess, 'Header set Permissions-Policy') !== false);
 
-assert_test("20. Apache mod_headers configuration in root and public .htaccess matches PHP security headers without duplication", $rootHasHeaders && $pubHasHeaders);
+assert_test("20. Apache mod_headers configuration in root and public .htaccess matches PHP security headers", $rootHasHeaders && $pubHasHeaders);
+
+// 21. Live HTTP response on HTML endpoint has strictly ZERO duplicate headers
+$hc = $loginRes['header_counts'];
+$noDupesHtml = (
+    ($hc['content-security-policy'] ?? 0) === 1
+    && ($hc['x-frame-options'] ?? 0) === 1
+    && ($hc['x-content-type-options'] ?? 0) === 1
+    && ($hc['referrer-policy'] ?? 0) === 1
+    && ($hc['permissions-policy'] ?? 0) === 1
+    && ($hc['strict-transport-security'] ?? 0) === 0
+);
+assert_test("21. Live HTTP response on login.php contains strictly ZERO duplicate security headers", $noDupesHtml, "CSP count: " . ($hc['content-security-policy'] ?? 0));
+
+// 22. Live HTTP redirect response (HTTP 302) has strictly ZERO duplicate headers
+$rhc = $redirRes['header_counts'];
+$noDupesRedir = (
+    ($rhc['content-security-policy'] ?? 0) === 1
+    && ($rhc['x-frame-options'] ?? 0) === 1
+    && ($rhc['x-content-type-options'] ?? 0) === 1
+    && ($rhc['referrer-policy'] ?? 0) === 1
+    && ($rhc['permissions-policy'] ?? 0) === 1
+);
+assert_test("22. Live HTTP redirect response (index.php 302) contains strictly ZERO duplicate security headers", $noDupesRedir);
+
+// 23. Live HTTP API error response (HTTP 401) has strictly ZERO duplicate headers
+$ahc = $unauthApiRes['header_counts'];
+$noDupesApi = (
+    ($ahc['content-security-policy'] ?? 0) === 1
+    && ($ahc['x-frame-options'] ?? 0) === 1
+    && ($ahc['x-content-type-options'] ?? 0) === 1
+    && ($ahc['referrer-policy'] ?? 0) === 1
+    && ($ahc['permissions-policy'] ?? 0) === 1
+);
+assert_test("23. Live HTTP API error response (api.php 401) contains strictly ZERO duplicate security headers", $noDupesApi);
+
+// 24. Framing and CSP compatibility: frame-ancestors 'self' and X-Frame-Options SAMEORIGIN non-conflicting, with unsafe-inline preserved
+$cspFrameAncestors = strpos($cspStr, "frame-ancestors 'self'") !== false;
+$xFrameSameOrigin = ($h['x-frame-options'] ?? '') === 'SAMEORIGIN';
+$cspHasUnsafeInline = strpos($cspStr, "'unsafe-inline'") !== false;
+$cspNoUnsafeEval = strpos($cspStr, "'unsafe-eval'") === false;
+
+assert_test("24. CSP frame-ancestors and X-Frame-Options are non-conflicting, with unsafe-inline preserved and unsafe-eval omitted", $cspFrameAncestors && $xFrameSameOrigin && $cspHasUnsafeInline && $cspNoUnsafeEval);
 
 // =====================================================================
 // SECTION 3: POST-FLIGHT CATALOGUE INVARIANTS

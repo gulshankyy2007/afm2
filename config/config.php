@@ -67,26 +67,15 @@ if (APP_ENV === 'development') {
 }
 
 /**
- * Detect whether the current request is securely transmitted over HTTPS.
- * Accounts for direct TLS connections and explicitly trusted reverse proxies.
+ * Detect whether the current request transport is verified HTTPS.
+ * Requires actual cryptographic TLS transport evidence or explicit trusted-proxy forwarding attestation.
  *
- * Strict trust boundary rules:
- * 1. Explicit HTTPS override: FORCE_HTTPS env value.
- * 2. Direct TLS connection signals: $_SERVER['HTTPS'] === 'on', port 443, or REQUEST_SCHEME === 'https'.
- *    These server-level signals cannot be spoofed by client HTTP headers.
- * 3. Reverse-proxy forwarding headers (HTTP_X_FORWARDED_PROTO, HTTP_X_FORWARDED_SSL, etc.):
- *    Evaluated ONLY when TRUST_PROXY_HEADERS is explicitly set to true.
- *    Forwarding headers are NEVER trusted by default (even in production) because untrusted
- *    clients could supply forged headers unless an infrastructure guarantee strips/overwrites them.
+ * Distinct security semantic:
+ * Unlike is_https_request(), this helper is NEVER overridden by FORCE_HTTPS because RFC 6797 Section 7.2
+ * strictly prohibits emitting Strict-Transport-Security (HSTS) over plain HTTP.
  */
-function is_https_request(): bool {
-    // 1. Explicit environment enforcement override
-    $forceHttps = env('FORCE_HTTPS');
-    if ($forceHttps !== null) {
-        return filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN);
-    }
-
-    // 2. Direct TLS connection signals (authoritative server-level indicators)
+function has_verified_https_transport(): bool {
+    // 1. Direct TLS connection signals (authoritative server-level indicators)
     if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
         return true;
     }
@@ -97,7 +86,7 @@ function is_https_request(): bool {
         return true;
     }
 
-    // 3. Reverse-proxy forwarding headers (evaluated ONLY when proxy trust is explicitly enabled)
+    // 2. Reverse-proxy forwarding headers (evaluated ONLY when proxy trust is explicitly enabled)
     $trustProxy = filter_var(env('TRUST_PROXY_HEADERS', false), FILTER_VALIDATE_BOOLEAN);
     if ($trustProxy) {
         // If X-Forwarded-Proto is supplied, it is the primary protocol signal
@@ -122,6 +111,25 @@ function is_https_request(): bool {
     }
 
     return false;
+}
+
+/**
+ * Detect whether the current request should be treated as HTTPS for application logic
+ * (e.g. canonical base URL generation and default session cookie flags).
+ *
+ * Strict trust boundary rules:
+ * 1. Explicit HTTPS override: FORCE_HTTPS env value.
+ * 2. Fallback to verified cryptographic transport: has_verified_https_transport().
+ */
+function is_https_request(): bool {
+    // 1. Explicit environment enforcement override (e.g. for URL generation)
+    $forceHttps = env('FORCE_HTTPS');
+    if ($forceHttps !== null) {
+        return filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    // 2. Verified transport
+    return has_verified_https_transport();
 }
 
 /**
@@ -209,8 +217,10 @@ function send_security_headers(): void {
         . "frame-ancestors 'self';";
     header("Content-Security-Policy: {$csp}", true);
 
-    // 6. Strict-Transport-Security (HSTS) - ONLY when connection is verified HTTPS
-    if (is_https_request()) {
+    // 6. Strict-Transport-Security (HSTS) - ONLY when connection transport is verified HTTPS
+    // RFC 6797 Section 7.2: An HTTP host MUST NOT send HSTS over non-secure transport.
+    // FORCE_HTTPS config alone does NOT permit HSTS emission on a plain-HTTP response.
+    if (has_verified_https_transport()) {
         header('Strict-Transport-Security: max-age=31536000', true);
     }
 }

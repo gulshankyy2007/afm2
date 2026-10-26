@@ -161,11 +161,11 @@ function get_rate_limit_keys(string $ip, ?string $username = null): array {
 }
 
 /**
- * Check login rate limiting using dual-bucket throttling (source IP + composite account/IP + global account).
+ * Check login rate limiting using multi-bucket throttling (source IP + composite IP/user + anonymous IP).
  * - Composite bucket (specific IP + specific user): max 5 attempts in 15 minutes.
  * - Anonymous bucket (unassociated failures from this IP): max 5 attempts in 15 minutes.
  * - Source IP bucket (any user from this IP): max 15 attempts in 15 minutes.
- * - Account bucket (specific user from any source): max 25 attempts in 15 minutes (soft lockout).
+ * - Account-wide hard lockout is excluded to prevent unauthenticated Account Lockout Denial of Service (DoS).
  * - If $username is null, checks source IP with backwards-compatible threshold of 5 attempts.
  * - Fails closed to session-level defense-in-depth tracking if the database is unavailable.
  *
@@ -227,18 +227,11 @@ function is_rate_limited(?string $username = null): bool {
             return true;
         }
 
-        // 5. Check target account limit (25 attempts across all sources globally)
-        if ($keys['account'] !== null) {
-            $stmt = $pdo->prepare("
-                SELECT COUNT(*) FROM `login_rate_limits`
-                WHERE `ip_address` = :act_key
-                  AND `attempted_at` >= (NOW() - INTERVAL 15 MINUTE)
-            ");
-            $stmt->execute([':act_key' => $keys['account']]);
-            if ((int)$stmt->fetchColumn() >= 25) {
-                return true;
-            }
-        }
+        // Account-wide hard lockout is deliberately excluded here to prevent unauthenticated
+        // Account Lockout Denial of Service (DoS) attacks. Legitimate users from distinct IPs
+        // are not blocked by external failed attempts against their username.
+        // Effective brute-force protection is enforced via per-IP composite throttling (5 attempts/IP),
+        // source IP throttling (15 attempts/IP), and slow bcrypt verification (~300ms/attempt).
 
         return false;
     } catch (Exception $e) {
