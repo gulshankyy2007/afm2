@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
+require_once dirname(__DIR__) . '/includes/import_helper.php';
 
 require_auth();
 
@@ -44,19 +45,19 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     foreach ($historicalData as $stage) {
         foreach ($stage['results'] as $row) {
             fputcsv($output, [
-                $stage['round_name'],
-                $row['rank_position'],
-                $row['title'],
-                $row['artist'],
-                $row['total'],
-                $row['emotion'],
-                $row['replayability'],
-                $row['melody'],
-                $row['vocals'],
-                $row['lyrics'],
-                strtoupper($row['result']),
-                $row['reason'],
-                $row['decided_at']
+                sanitize_csv_cell($stage['round_name']),
+                sanitize_csv_cell($row['rank_position'], true),
+                sanitize_csv_cell($row['title']),
+                sanitize_csv_cell($row['artist']),
+                sanitize_csv_cell($row['total'], true),
+                sanitize_csv_cell($row['emotion'], true),
+                sanitize_csv_cell($row['replayability'], true),
+                sanitize_csv_cell($row['melody'], true),
+                sanitize_csv_cell($row['vocals'], true),
+                sanitize_csv_cell($row['lyrics'], true),
+                sanitize_csv_cell(strtoupper((string)($row['result'] ?? ''))),
+                sanitize_csv_cell($row['reason']),
+                sanitize_csv_cell($row['decided_at'])
             ]);
         }
     }

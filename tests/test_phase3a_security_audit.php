@@ -339,7 +339,7 @@ if (isset($csvLines[1])) {
     }
 }
 
-assert_test("VULNERABILITY CONFIRMED: CSV export renders unescaped formula triggers (=, +, -, @)", $hasUnescapedFormula);
+assert_test("FINDING-03 RESOLVED: CSV export prepends apostrophe quote to neutralize formula triggers (=, +, -, @)", !$hasUnescapedFormula);
 if ($hasUnescapedFormula) {
     record_finding(
         'FINDING-03',

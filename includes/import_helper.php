@@ -456,21 +456,100 @@ function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus 
 }
 
 /**
+ * Sanitize a cell value to prevent CSV Formula Injection (DDE) in spreadsheet applications.
+ *
+ * Spreadsheet applications (Excel, LibreOffice Calc, Google Sheets) interpret cells starting
+ * with formula trigger characters (=, +, -, @, \t, \r, \n, %, |) as executable formulas or commands.
+ * This function neutralizes formula injection by prepending a single apostrophe quote (')
+ * to untrusted string values that trigger formula parsing, even when preceded by leading
+ * whitespace or control characters.
+ *
+ * Scope & Intended Usage:
+ * - Untrusted text fields (Song Titles, Artist Names, Reasons, Stage Names, User Input): Always sanitized.
+ * - Header cells: Static, trusted field names defined in source code; not modified.
+ * - Intentionally numeric fields: Pass $isNumeric = true. Valid integer and decimal numbers
+ *   (e.g. -5, 42, 3.14) are preserved without an apostrophe, while malicious formulas (e.g. -cmd|'...)
+ *   are safely escaped.
+ *
+ * Trade-offs and Spreadsheet Behaviors:
+ * - Microsoft Excel & LibreOffice Calc: The leading apostrophe instructs the application to
+ *   treat the cell as literal text; the apostrophe itself is suppressed in the spreadsheet grid.
+ * - Google Sheets: The cell is safely treated as text without executing formulas; the leading
+ *   apostrophe may be visible in the raw cell editor view.
+ * - Data Integrity: The underlying MySQL database values are NEVER mutated. Sanitization is
+ *   applied strictly at export serialization time.
+ * - Quoting vs Formula Mitigation: RFC 4180 CSV double-quoting ("...") protects CSV syntax,
+ *   but spreadsheet software strips quotes before formula parsing. The single-quote prefix
+ *   mitigates spreadsheet formula execution directly.
+ *
+ * @param mixed $value The raw cell value to sanitize.
+ * @param bool $isNumeric Whether this column is strictly numeric (e.g. integer rank, score).
+ *                        If true and the value matches a valid number (e.g. -5, 42, 3.14),
+ *                        it is preserved without an apostrophe prefix.
+ * @return string The sanitized cell string safe for CSV emission via fputcsv().
+ */
+function sanitize_csv_cell($value, bool $isNumeric = false): string {
+    if ($value === null) {
+        return '';
+    }
+
+    // Native PHP integer and float primitives are strictly numbers and cannot execute formulas
+    if (is_int($value) || is_float($value)) {
+        return (string)$value;
+    }
+
+    $str = (string)$value;
+    if ($str === '') {
+        return '';
+    }
+
+    // If explicitly marked as numeric column and the value is a valid numeric string (e.g. "-5", "42", "3.14")
+    if ($isNumeric && is_numeric($str) && preg_match('/^-?\d+(\.\d+)?$/', trim($str))) {
+        return trim($str);
+    }
+
+    // Check if original string starts with a control character or tab/CR/LF
+    $firstChar = $str[0];
+    if (in_array($firstChar, ["\t", "\r", "\n", "\0", "\x0B"], true)) {
+        return "'" . $str;
+    }
+
+    // Check if string (after stripping leading whitespace and control characters) starts with a formula trigger:
+    // '=', '+', '-', '@', '%', '|'
+    $trimmed = ltrim($str, " \t\n\r\0\x0B");
+    if ($trimmed !== '') {
+        $firstTrimmed = $trimmed[0];
+        if (in_array($firstTrimmed, ['=', '+', '-', '@', '%', '|'], true)) {
+            return "'" . $str;
+        }
+    }
+
+    return $str;
+}
+
+/**
+ * Alias for sanitize_csv_cell for semantic clarity
+ */
+function escape_csv_cell($value, bool $isNumeric = false): string {
+    return sanitize_csv_cell($value, $isNumeric);
+}
+
+/**
  * Generate CSV rejection and review report for skipped/invalid records
  */
 function generate_rejection_csv_report(array $rejectedRows): string {
     $output = fopen('php://temp', 'r+');
     
-    // Header
+    // Header (Static trusted labels)
     fputcsv($output, ['CSV Line', 'Song Title', 'Artist', 'Classification', 'Reason / Safeguard Notes'], ',', '"', '\\');
 
     foreach ($rejectedRows as $r) {
         fputcsv($output, [
-            $r['line_num'] ?? '-',
-            $r['raw_title'] ?? ($r['title'] ?? ''),
-            $r['raw_artist'] ?? ($r['artist'] ?? ''),
-            $r['status'] ?? 'skipped',
-            $r['reason'] ?? 'Skipped by user during import review'
+            sanitize_csv_cell($r['line_num'] ?? '-', true),
+            sanitize_csv_cell($r['raw_title'] ?? ($r['title'] ?? '')),
+            sanitize_csv_cell($r['raw_artist'] ?? ($r['artist'] ?? '')),
+            sanitize_csv_cell($r['status'] ?? 'skipped'),
+            sanitize_csv_cell($r['reason'] ?? 'Skipped by user during import review')
         ], ',', '"', '\\');
     }
 
@@ -480,3 +559,4 @@ function generate_rejection_csv_report(array $rejectedRows): string {
 
     return $csvContent;
 }
+
