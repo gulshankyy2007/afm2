@@ -356,14 +356,14 @@ $simSessionFallback = function() use ($pdo) {
 };
 
 $fallbackUserId = $simSessionFallback();
-$hasSessionAutoAssociate = ($fallbackUserId !== null && $fallbackUserId !== 99999999);
-assert_test("VULNERABILITY CONFIRMED: get_current_user_id() automatically associates invalid sessions with first user", $hasSessionAutoAssociate, "Resolved ID: {$fallbackUserId}");
-if ($hasSessionAutoAssociate) {
+$sessionSecure = ($fallbackUserId === null);
+assert_test("FINDING-04 RESOLVED: get_current_user_id() fails closed and rejects invalid session", $sessionSecure, "Resolved ID: " . var_export($fallbackUserId, true));
+if (!$sessionSecure) {
     record_finding(
         'FINDING-04',
         'Insecure Session Auto-Association Fallback in get_current_user_id()',
         'Low',
-        'includes/auth.php lines 52-60 queries the first user from app_users and binds an invalid/unrecognized session to user ID 1 instead of destroying the session and demanding re-authentication.'
+        'includes/auth.php queries the first user from app_users and binds an invalid/unrecognized session to user ID 1 instead of destroying the session and demanding re-authentication.'
     );
 }
 

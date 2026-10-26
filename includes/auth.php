@@ -22,6 +22,10 @@ function get_current_user_id(): ?int {
     }
 
     $rawId = (int)$_SESSION['afm_user_id'];
+    if ($rawId <= 0) {
+        return null;
+    }
+
     static $verifiedCache = [];
     if (isset($verifiedCache[$rawId])) {
         return $verifiedCache[$rawId];
@@ -37,32 +41,12 @@ function get_current_user_id(): ?int {
             return $verifiedCache[$rawId];
         }
 
-        // If user_id changed (e.g. after database reseed or migration test), self-heal using session username
-        if (!empty($_SESSION['afm_username'])) {
-            $stmtUser = $pdo->prepare("SELECT `user_id`, `username` FROM `app_users` WHERE `username` = :uname LIMIT 1");
-            $stmtUser->execute([':uname' => $_SESSION['afm_username']]);
-            $userRow = $stmtUser->fetch();
-            if ($userRow) {
-                $_SESSION['afm_user_id'] = (int)$userRow['user_id'];
-                $verifiedCache[$rawId] = (int)$userRow['user_id'];
-                return (int)$userRow['user_id'];
-            }
-        }
-
-        // Check if there is an active account in the system to auto-associate with
-        $singleUserStmt = $pdo->query("SELECT `user_id`, `username` FROM `app_users` ORDER BY `user_id` ASC LIMIT 1");
-        $singleUser = $singleUserStmt->fetch();
-        if ($singleUser) {
-            $_SESSION['afm_user_id'] = (int)$singleUser['user_id'];
-            $_SESSION['afm_username'] = $singleUser['username'];
-            $verifiedCache[$rawId] = (int)$singleUser['user_id'];
-            return (int)$singleUser['user_id'];
-        }
-
-        // Truly invalid session
+        // Unrecognized, deleted, or invalid user ID: fail closed
         return null;
     } catch (Exception $e) {
-        return $rawId;
+        error_log("AFM2 get_current_user_id database error: " . $e->getMessage());
+        // Fail closed on database errors
+        return null;
     }
 }
 
@@ -77,6 +61,9 @@ function is_authenticated(): bool {
  * Get current username
  */
 function get_current_username(): ?string {
+    if (!is_authenticated()) {
+        return null;
+    }
     return $_SESSION['afm_username'] ?? null;
 }
 
