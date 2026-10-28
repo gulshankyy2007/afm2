@@ -1,6 +1,13 @@
 <?php
 /**
  * AFM#2 - Authentication & Session Security
+ * Modular Multi-Method Authentication Architecture:
+ * - Username/Email & Password verification
+ * - Google Sign-In (OAuth 2.0 / OpenID Connect)
+ * - Passkeys using WebAuthn (FIDO2)
+ * - Administrator-only user provisioning & invitations
+ * 
+ * Strictly preserves existing user IDs, session cookies, rate limits, and catalogue data.
  */
 
 if (!defined('AFM_APP')) {
@@ -14,7 +21,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 /**
- * Get current user ID (with database verification and session self-healing)
+ * Get current user ID (with database verification, active status check, and session self-healing)
  */
 function get_current_user_id(): ?int {
     if (empty($_SESSION['afm_user_id'])) {
@@ -33,11 +40,17 @@ function get_current_user_id(): ?int {
 
     try {
         $pdo = get_db_connection();
-        $stmt = $pdo->prepare("SELECT `user_id`, `username` FROM `app_users` WHERE `user_id` = :uid LIMIT 1");
+        $stmt = $pdo->prepare("SELECT `user_id`, `username`, `role`, `is_active` FROM `app_users` WHERE `user_id` = :uid LIMIT 1");
         $stmt->execute([':uid' => $rawId]);
         $row = $stmt->fetch();
         if ($row) {
+            // If user is disabled, immediately fail closed and invalidate session
+            if ((int)$row['is_active'] !== 1) {
+                $_SESSION = [];
+                return null;
+            }
             $verifiedCache[$rawId] = (int)$row['user_id'];
+            $_SESSION['afm_role'] = $row['role'] ?? 'user';
             return $verifiedCache[$rawId];
         }
 
@@ -68,6 +81,23 @@ function get_current_username(): ?string {
 }
 
 /**
+ * Get current user's role ('admin' or 'user')
+ */
+function get_current_user_role(): ?string {
+    if (!is_authenticated()) {
+        return null;
+    }
+    return $_SESSION['afm_role'] ?? 'user';
+}
+
+/**
+ * Check if current user is an administrator
+ */
+function is_admin(): bool {
+    return is_authenticated() && get_current_user_role() === 'admin';
+}
+
+/**
  * Require authentication for protected pages; redirect to login or return 401
  */
 function require_auth(bool $isApi = false): void {
@@ -81,6 +111,41 @@ function require_auth(bool $isApi = false): void {
         
         $loginUrl = 'login.php';
         header("Location: {$loginUrl}");
+        exit;
+    }
+}
+
+/**
+ * Require administrator role; return 403 or redirect
+ */
+function require_admin(bool $isApi = false): void {
+    require_auth($isApi);
+    if (!is_admin()) {
+        if ($isApi) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Administrative privileges required.']);
+            exit;
+        }
+
+        http_response_code(403);
+        ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>403 Forbidden — AFM#2</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:sans-serif;background:var(--bg-primary,#121214);color:var(--text-primary,#e4e4e7);">
+    <div style="text-align:center;padding:2rem;max-width:480px;background:var(--bg-surface,#18181b);border:1px solid var(--border-color,#27272a);border-radius:8px;">
+        <h2 style="margin-top:0;color:var(--danger,#ef4444);">403 Forbidden</h2>
+        <p style="color:var(--text-secondary,#a1a1aa);margin:1rem 0;">You do not have administrative privileges to access this area.</p>
+        <p><a href="index.php" style="color:var(--accent,#f59e0b);text-decoration:none;font-weight:600;">Return to Journal</a></p>
+    </div>
+</body>
+</html>
+        <?php
         exit;
     }
 }
@@ -108,7 +173,6 @@ function get_client_ip(): string {
     $trustProxy = filter_var(env('TRUST_PROXY_HEADERS', false), FILTER_VALIDATE_BOOLEAN);
 
     if ($trustProxy) {
-        // Cloudflare connecting IP
         if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
             $cfIp = trim($_SERVER['HTTP_CF_CONNECTING_IP']);
             if (filter_var($cfIp, FILTER_VALIDATE_IP)) {
@@ -116,7 +180,6 @@ function get_client_ip(): string {
             }
         }
 
-        // Standard reverse proxy forwarded header (comma-separated list)
         if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
             foreach ($ips as $candidate) {
@@ -137,11 +200,6 @@ function get_client_ip(): string {
 
 /**
  * Construct rate limit storage keys for IP, composite (IP+user), and account buckets.
- * All keys fit safely within the VARCHAR(45) storage of the login_rate_limits table.
- *
- * @param string $ip Client IP
- * @param string|null $username Optional username attempted
- * @return array{ip: string, composite: ?string, account: ?string}
  */
 function get_rate_limit_keys(string $ip, ?string $username = null): array {
     $keys = [
@@ -161,16 +219,7 @@ function get_rate_limit_keys(string $ip, ?string $username = null): array {
 }
 
 /**
- * Check login rate limiting using multi-bucket throttling (source IP + composite IP/user + anonymous IP).
- * - Composite bucket (specific IP + specific user): max 5 attempts in 15 minutes.
- * - Anonymous bucket (unassociated failures from this IP): max 5 attempts in 15 minutes.
- * - Source IP bucket (any user from this IP): max 15 attempts in 15 minutes.
- * - Account-wide hard lockout is excluded to prevent unauthenticated Account Lockout Denial of Service (DoS).
- * - If $username is null, checks source IP with backwards-compatible threshold of 5 attempts.
- * - Fails closed to session-level defense-in-depth tracking if the database is unavailable.
- *
- * @param string|null $username Username attempted, or null for general IP check
- * @return bool True if rate limited, false otherwise
+ * Check login rate limiting using multi-bucket throttling
  */
 function is_rate_limited(?string $username = null): bool {
     try {
@@ -181,7 +230,7 @@ function is_rate_limited(?string $username = null): bool {
         // Purge expired attempts older than 15 minutes
         $pdo->exec("DELETE FROM `login_rate_limits` WHERE `attempted_at` < (NOW() - INTERVAL 15 MINUTE)");
 
-        // 1. If username is null, check source IP with threshold of 5 attempts (backwards compatibility)
+        // 1. If username is null, check source IP with threshold of 5 attempts
         if ($username === null || trim($username) === '') {
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) FROM `login_rate_limits`
@@ -192,7 +241,7 @@ function is_rate_limited(?string $username = null): bool {
             return (int)$stmt->fetchColumn() >= 5;
         }
 
-        // 2. Check composite limit (most specific: 5 attempts for this IP+username)
+        // 2. Check composite limit (5 attempts for this IP+username)
         if ($keys['composite'] !== null) {
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) FROM `login_rate_limits`
@@ -205,7 +254,7 @@ function is_rate_limited(?string $username = null): bool {
             }
         }
 
-        // 3. Check anonymous failures from this IP (5 unassociated attempts)
+        // 3. Check anonymous failures from this IP (5 attempts)
         $stmt = $pdo->prepare("
             SELECT COUNT(*) FROM `login_rate_limits`
             WHERE `ip_address` = :anon_key
@@ -227,16 +276,9 @@ function is_rate_limited(?string $username = null): bool {
             return true;
         }
 
-        // Account-wide hard lockout is deliberately excluded here to prevent unauthenticated
-        // Account Lockout Denial of Service (DoS) attacks. Legitimate users from distinct IPs
-        // are not blocked by external failed attempts against their username.
-        // Effective brute-force protection is enforced via per-IP composite throttling (5 attempts/IP),
-        // source IP throttling (15 attempts/IP), and slow bcrypt verification (~300ms/attempt).
-
         return false;
     } catch (Exception $e) {
         error_log("AFM2 rate limit check error (failing safe to session fallback): " . $e->getMessage());
-        // Database failure fallback: honor session-level attempt count
         if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['afm_fallback_login_attempts'])) {
             $lastAttemptTime = (int)($_SESSION['afm_fallback_login_time'] ?? 0);
             return (time() - $lastAttemptTime < 900 && (int)$_SESSION['afm_fallback_login_attempts'] >= 5);
@@ -246,13 +288,9 @@ function is_rate_limited(?string $username = null): bool {
 }
 
 /**
- * Record a failed login attempt across source IP, composite, and account buckets.
- * Never logs plaintext passwords, session IDs, or sensitive tokens.
- *
- * @param string|null $username Username attempted, or null
+ * Record a failed login attempt
  */
 function record_failed_login(?string $username = null): void {
-    // Session fallback defense-in-depth tracking
     if (session_status() === PHP_SESSION_ACTIVE) {
         $_SESSION['afm_fallback_login_attempts'] = (int)($_SESSION['afm_fallback_login_attempts'] ?? 0) + 1;
         $_SESSION['afm_fallback_login_time'] = time();
@@ -266,10 +304,10 @@ function record_failed_login(?string $username = null): void {
         $pdo->beginTransaction();
         $stmt = $pdo->prepare("INSERT INTO `login_rate_limits` (`ip_address`) VALUES (:key)");
 
-        // 1. Always record source IP
+        // 1. Source IP
         $stmt->execute([':key' => $keys['ip']]);
 
-        // 2. If username provided, record composite and account keys; otherwise record anonymous failure
+        // 2. Composite and account keys
         if ($keys['composite'] !== null) {
             $stmt->execute([':key' => $keys['composite']]);
             $stmt->execute([':key' => $keys['account']]);
@@ -282,15 +320,12 @@ function record_failed_login(?string $username = null): void {
         if (isset($pdo) && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        // Do not log user passwords or sensitive tokens
         error_log("AFM2 record failed login error: " . $e->getMessage());
     }
 }
 
 /**
- * Clear rate limit records on successful authentication or administrative reset.
- *
- * @param string|null $username Username whose bucket to clear, '*' for full purge, or null for source IP only
+ * Clear rate limit records on successful authentication
  */
 function clear_rate_limits(?string $username = null): void {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -325,8 +360,61 @@ function clear_rate_limits(?string $username = null): void {
 }
 
 /**
- * Initial account setup - creates the single administrator account.
- * Permanently disabled once an account exists.
+ * Common, provider-independent authenticated session establisher.
+ * Called upon successful verification by Password, Google, or WebAuthn.
+ *
+ * @param int $userId Canonical user ID
+ * @return array{success: bool, user_id?: int, username?: string, error?: string}
+ */
+function establish_authenticated_session(int $userId): array {
+    try {
+        $pdo = get_db_connection();
+        $stmt = $pdo->prepare("SELECT `user_id`, `username`, `role`, `is_active` FROM `app_users` WHERE `user_id` = :uid LIMIT 1");
+        $stmt->execute([':uid' => $userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            return ['success' => false, 'error' => 'Account identity could not be resolved.'];
+        }
+
+        if ((int)$user['is_active'] !== 1) {
+            return ['success' => false, 'error' => 'This account has been disabled. Please contact the administrator.'];
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        // Regenerate session ID to prevent session fixation attacks
+        if (!headers_sent()) {
+            session_regenerate_id(true);
+        }
+
+        $_SESSION['afm_user_id'] = (int)$user['user_id'];
+        $_SESSION['afm_username'] = $user['username'];
+        $_SESSION['afm_role'] = $user['role'] ?? 'user';
+
+        // Update last login timestamp
+        $upd = $pdo->prepare("UPDATE `app_users` SET `last_login` = NOW() WHERE `user_id` = :id");
+        $upd->execute([':id' => $user['user_id']]);
+
+        // Clear failed rate limit attempts
+        clear_rate_limits($user['username']);
+
+        return [
+            'success'  => true,
+            'user_id'  => (int)$user['user_id'],
+            'username' => $user['username'],
+        ];
+    } catch (Exception $e) {
+        error_log("AFM2 establish_authenticated_session error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'An unexpected error occurred establishing session.'];
+    }
+}
+
+/**
+ * Initial account setup - creates the primary administrator account.
+ * Permanently disabled once any user account exists.
  */
 function create_initial_account(string $username, string $password): array {
     if (has_users()) {
@@ -347,8 +435,8 @@ function create_initial_account(string $username, string $password): array {
         $hash = password_hash($password, PASSWORD_DEFAULT);
 
         $stmt = $pdo->prepare("
-            INSERT INTO `app_users` (`username`, `password_hash`, `created_at`, `last_login`)
-            VALUES (:username, :hash, NOW(), NOW())
+            INSERT INTO `app_users` (`username`, `password_hash`, `role`, `is_active`, `created_at`, `last_login`)
+            VALUES (:username, :hash, 'admin', 1, NOW(), NOW())
         ");
         $stmt->execute([
             ':username' => $username,
@@ -357,14 +445,8 @@ function create_initial_account(string $username, string $password): array {
 
         $userId = (int)$pdo->lastInsertId();
 
-        // Regenerate session and log in
-        if (!headers_sent()) {
-            session_regenerate_id(true);
-        }
-        $_SESSION['afm_user_id'] = $userId;
-        $_SESSION['afm_username'] = $username;
-
-        return ['success' => true, 'user_id' => $userId];
+        // Establish session
+        return establish_authenticated_session($userId);
     } catch (Exception $e) {
         error_log("AFM2 create_initial_account error: " . $e->getMessage());
         return ['success' => false, 'error' => 'Failed to create account. Please try again.'];
@@ -372,48 +454,60 @@ function create_initial_account(string $username, string $password): array {
 }
 
 /**
- * Authenticate login attempt
+ * Authenticate login attempt using username OR email and password
  */
-function attempt_login(string $username, string $password): array {
-    $trimmedUsername = trim($username);
+function attempt_login(string $identifier, string $password): array {
+    $trimmedIdentifier = trim($identifier);
 
-    if (is_rate_limited($trimmedUsername)) {
+    if (is_rate_limited($trimmedIdentifier)) {
         return [
             'success' => false, 
             'error' => 'Too many failed login attempts. Please wait 15 minutes before trying again.'
         ];
     }
 
-    if (empty($trimmedUsername) || empty($password)) {
-        return ['success' => false, 'error' => 'Username and password are required.'];
+    if (empty($trimmedIdentifier) || empty($password)) {
+        return ['success' => false, 'error' => 'Username/email and password are required.'];
     }
 
     try {
         $pdo = get_db_connection();
-        $stmt = $pdo->prepare("SELECT `user_id`, `username`, `password_hash` FROM `app_users` WHERE `username` = :username LIMIT 1");
-        $stmt->execute([':username' => $trimmedUsername]);
+        $stmt = $pdo->prepare("
+            SELECT `user_id`, `username`, `password_hash`, `role`, `is_active` 
+            FROM `app_users` 
+            WHERE `username` = :uname OR (`email` IS NOT NULL AND `email` = :uemail) 
+            LIMIT 1
+        ");
+        $stmt->execute([':uname' => $trimmedIdentifier, ':uemail' => $trimmedIdentifier]);
         $user = $stmt->fetch();
 
         if (!$user || !password_verify($password, $user['password_hash'])) {
-            record_failed_login($trimmedUsername);
+            record_failed_login($trimmedIdentifier);
             return ['success' => false, 'error' => 'Invalid username or password.'];
         }
 
-        // Login successful: regenerate session ID to prevent session fixation
-        if (!headers_sent()) {
-            session_regenerate_id(true);
+        if ((int)$user['is_active'] !== 1) {
+            return ['success' => false, 'error' => 'This account has been disabled. Please contact the administrator.'];
         }
-        $_SESSION['afm_user_id'] = (int)$user['user_id'];
-        $_SESSION['afm_username'] = $user['username'];
 
-        // Update last login
-        $upd = $pdo->prepare("UPDATE `app_users` SET `last_login` = NOW() WHERE `user_id` = :id");
-        $upd->execute([':id' => $user['user_id']]);
+        // Establish session
+        $sessResult = establish_authenticated_session((int)$user['user_id']);
+        if (!$sessResult['success']) {
+            return $sessResult;
+        }
 
-        // Clear failed rate limit attempts across all buckets for this user & source
-        clear_rate_limits($trimmedUsername);
+        // Automatic password rehash if algorithm cost has changed
+        if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {
+            $newHash = password_hash($password, PASSWORD_DEFAULT);
+            $rehashStmt = $pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash WHERE `user_id` = :uid");
+            $rehashStmt->execute([':hash' => $newHash, ':uid' => $user['user_id']]);
+        }
 
-        return ['success' => true, 'username' => $user['username']];
+        return [
+            'success'  => true,
+            'user_id'  => (int)$user['user_id'],
+            'username' => $user['username']
+        ];
     } catch (Exception $e) {
         error_log("AFM2 attempt_login error: " . $e->getMessage());
         return ['success' => false, 'error' => 'An unexpected error occurred during login.'];
@@ -447,4 +541,285 @@ function logout(): void {
     }
 
     session_destroy();
+}
+
+/**
+ * Get linked authentication methods count and metadata for a user
+ */
+function get_user_auth_methods(int $userId): array {
+    $pdo = get_db_connection();
+
+    // 1. Password check
+    $uStmt = $pdo->prepare("SELECT `password_hash`, `email`, `role`, `username`, `is_active` FROM `app_users` WHERE `user_id` = :uid");
+    $uStmt->execute([':uid' => $userId]);
+    $user = $uStmt->fetch(PDO::FETCH_ASSOC);
+
+    $hasPassword = false;
+    if ($user && !empty($user['password_hash'])) {
+        // Accounts created via external OAuth without password have dummy hash containing OAUTH_ONLY
+        $hasPassword = !str_contains($user['password_hash'], 'OAUTH_ONLY_NO_PASSWORD');
+    }
+
+    // 2. Google identities
+    $gStmt = $pdo->prepare("SELECT `identity_id`, `provider_subject`, `email`, `created_at`, `last_used_at` FROM `user_auth_identities` WHERE `user_id` = :uid AND `provider` = 'google'");
+    $gStmt->execute([':uid' => $userId]);
+    $googleAccounts = $gStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 3. Passkeys
+    $pStmt = $pdo->prepare("SELECT `passkey_id`, `device_name`, `created_at`, `last_used_at` FROM `user_passkeys` WHERE `user_id` = :uid ORDER BY `created_at` DESC");
+    $pStmt->execute([':uid' => $userId]);
+    $passkeys = $pStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $totalMethods = ($hasPassword ? 1 : 0) + count($googleAccounts) + count($passkeys);
+
+    return [
+        'has_password'    => $hasPassword,
+        'google_accounts' => $googleAccounts,
+        'passkeys'        => $passkeys,
+        'total_methods'   => $totalMethods,
+        'user'            => $user,
+    ];
+}
+
+/**
+ * Guard: Prevent removal of the user's last usable authentication method
+ */
+function can_remove_auth_method(int $userId, string $methodToRemove): bool {
+    $methods = get_user_auth_methods($userId);
+
+    if ($methodToRemove === 'password') {
+        // Can only remove password if at least 1 alternative method exists (Google or Passkey)
+        return (count($methods['google_accounts']) + count($methods['passkeys'])) > 0;
+    }
+
+    if ($methodToRemove === 'google') {
+        // Can remove 1 Google account if user has password, another Google account, or a passkey
+        $remaining = ($methods['has_password'] ? 1 : 0) + (count($methods['google_accounts']) - 1) + count($methods['passkeys']);
+        return $remaining > 0;
+    }
+
+    if ($methodToRemove === 'passkey') {
+        // Can remove 1 passkey if user has password, Google, or another passkey
+        $remaining = ($methods['has_password'] ? 1 : 0) + count($methods['google_accounts']) + (count($methods['passkeys']) - 1);
+        return $remaining > 0;
+    }
+
+    return false;
+}
+
+/**
+ * Change or set user password
+ */
+function change_user_password(int $userId, ?string $currentPassword, string $newPassword): array {
+    if (strlen($newPassword) < 8) {
+        return ['success' => false, 'error' => 'New password must be at least 8 characters long.'];
+    }
+
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare("SELECT `password_hash` FROM `app_users` WHERE `user_id` = :uid");
+    $stmt->execute([':uid' => $userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user) {
+        return ['success' => false, 'error' => 'User not found.'];
+    }
+
+    $existingHash = $user['password_hash'];
+    $hasExistingPassword = !empty($existingHash) && !str_contains($existingHash, 'OAUTH_ONLY_NO_PASSWORD');
+
+    if ($hasExistingPassword) {
+        if (empty($currentPassword) || !password_verify($currentPassword, $existingHash)) {
+            return ['success' => false, 'error' => 'Current password is incorrect.'];
+        }
+    }
+
+    $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+    $upd = $pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash WHERE `user_id` = :uid");
+    $upd->execute([':hash' => $newHash, ':uid' => $userId]);
+
+    return ['success' => true];
+}
+
+/**
+ * Administrator action: Reset another user's password directly
+ */
+function admin_reset_user_password(int $targetUserId, string $newPassword, int $actingAdminId): array {
+    $adminRoleStmt = get_db_connection()->prepare("SELECT `role` FROM `app_users` WHERE `user_id` = :uid");
+    $adminRoleStmt->execute([':uid' => $actingAdminId]);
+    if ($adminRoleStmt->fetchColumn() !== 'admin') {
+        return ['success' => false, 'error' => 'Administrative privileges required.'];
+    }
+
+    if (strlen($newPassword) < 8) {
+        return ['success' => false, 'error' => 'Password must be at least 8 characters long.'];
+    }
+
+    $pdo = get_db_connection();
+    $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+    $upd = $pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash WHERE `user_id` = :uid");
+    $upd->execute([':hash' => $newHash, ':uid' => $targetUserId]);
+
+    return ['success' => true];
+}
+
+/**
+ * Administrator action: Enable or disable a user account
+ */
+function set_user_active_status(int $targetUserId, bool $isActive, int $actingAdminId): array {
+    $pdo = get_db_connection();
+
+    $adminStmt = $pdo->prepare("SELECT `role` FROM `app_users` WHERE `user_id` = :uid");
+    $adminStmt->execute([':uid' => $actingAdminId]);
+    if ($adminStmt->fetchColumn() !== 'admin') {
+        return ['success' => false, 'error' => 'Administrative privileges required.'];
+    }
+
+    if ($targetUserId === $actingAdminId && !$isActive) {
+        return ['success' => false, 'error' => 'You cannot disable your own administrator account.'];
+    }
+
+    $upd = $pdo->prepare("UPDATE `app_users` SET `is_active` = :active WHERE `user_id` = :uid");
+    $upd->execute([':active' => $isActive ? 1 : 0, ':uid' => $targetUserId]);
+
+    return ['success' => true];
+}
+
+/**
+ * Administrator action: Create an invitation token for a new user
+ */
+function create_invitation(string $email, string $role, int $adminUserId): array {
+    $cleanEmail = trim($email);
+    if (!filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'error' => 'Invalid email address format.'];
+    }
+
+    $cleanRole = in_array($role, ['admin', 'user'], true) ? $role : 'user';
+
+    $pdo = get_db_connection();
+
+    // Check if user already exists with this email
+    $chk = $pdo->prepare("SELECT `user_id` FROM `app_users` WHERE `email` = :email");
+    $chk->execute([':email' => $cleanEmail]);
+    if ($chk->fetch()) {
+        return ['success' => false, 'error' => 'A user with this email address already exists.'];
+    }
+
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+
+    // Invalidate prior unused invitations for this email
+    $del = $pdo->prepare("DELETE FROM `user_invitations` WHERE `email` = :email AND `used_at` IS NULL");
+    $del->execute([':email' => $cleanEmail]);
+
+    // Insert new invitation valid for 7 days
+    $ins = $pdo->prepare("
+        INSERT INTO `user_invitations` (`email`, `role`, `token_hash`, `created_by`, `expires_at`, `created_at`)
+        VALUES (:email, :role, :th, :creator, NOW() + INTERVAL 7 DAY, NOW())
+    ");
+    $ins->execute([
+        ':email'   => $cleanEmail,
+        ':role'    => $cleanRole,
+        ':th'      => $tokenHash,
+        ':creator' => $adminUserId,
+    ]);
+
+    $inviteUrl = get_base_url() . "/invite.php?token={$token}";
+
+    return [
+        'success'    => true,
+        'token'      => $token,
+        'invite_url' => $inviteUrl,
+        'email'      => $cleanEmail,
+        'role'       => $cleanRole,
+    ];
+}
+
+/**
+ * Validate an invitation token
+ */
+function validate_invitation_token(string $token): ?array {
+    $clean = trim($token);
+    if (empty($clean)) {
+        return null;
+    }
+
+    $tokenHash = hash('sha256', $clean);
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare("
+        SELECT `invitation_id`, `email`, `role`, `created_by`, `expires_at`
+        FROM `user_invitations`
+        WHERE `token_hash` = :th AND `used_at` IS NULL AND `expires_at` > NOW()
+        LIMIT 1
+    ");
+    $stmt->execute([':th' => $tokenHash]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+/**
+ * Accept an invitation and register an account with password
+ */
+function accept_invitation_with_password(string $token, string $username, string $password): array {
+    $invitation = validate_invitation_token($token);
+    if (!$invitation) {
+        return ['success' => false, 'error' => 'Invalid or expired invitation token.'];
+    }
+
+    $cleanUsername = trim($username);
+    if (strlen($cleanUsername) < 3 || strlen($cleanUsername) > 50) {
+        return ['success' => false, 'error' => 'Username must be between 3 and 50 characters.'];
+    }
+    if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $cleanUsername)) {
+        return ['success' => false, 'error' => 'Username may only contain letters, numbers, hyphens, and underscores.'];
+    }
+
+    if (strlen($password) < 8) {
+        return ['success' => false, 'error' => 'Password must be at least 8 characters long.'];
+    }
+
+    $pdo = get_db_connection();
+
+    // Check if username taken
+    $uStmt = $pdo->prepare("SELECT COUNT(*) FROM `app_users` WHERE `username` = :u");
+    $uStmt->execute([':u' => $cleanUsername]);
+    if ((int)$uStmt->fetchColumn() > 0) {
+        return ['success' => false, 'error' => 'That username is already taken. Please choose another.'];
+    }
+
+    // Check if email taken
+    $eStmt = $pdo->prepare("SELECT COUNT(*) FROM `app_users` WHERE `email` = :e");
+    $eStmt->execute([':e' => $invitation['email']]);
+    if ((int)$eStmt->fetchColumn() > 0) {
+        return ['success' => false, 'error' => 'An account is already registered with this email address.'];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $ins = $pdo->prepare("
+            INSERT INTO `app_users` (`username`, `email`, `password_hash`, `role`, `is_active`, `created_at`, `last_login`)
+            VALUES (:u, :e, :hash, :role, 1, NOW(), NOW())
+        ");
+        $ins->execute([
+            ':u'    => $cleanUsername,
+            ':e'    => $invitation['email'],
+            ':hash' => $hash,
+            ':role' => $invitation['role'] ?? 'user',
+        ]);
+        $newUserId = (int)$pdo->lastInsertId();
+
+        // Mark invitation used
+        $upd = $pdo->prepare("UPDATE `user_invitations` SET `used_at` = NOW() WHERE `invitation_id` = :id");
+        $upd->execute([':id' => $invitation['invitation_id']]);
+
+        $pdo->commit();
+
+        // Log in new user
+        return establish_authenticated_session($newUserId);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("AFM2 accept_invitation_with_password error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'Failed to create user account.'];
+    }
 }

@@ -96,6 +96,9 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
                     <li><a href="auditions.php" class="<?= $currentPage === 'auditions.php' ? 'active' : '' ?>" id="navAuditions">Auditions</a></li>
                     <li><a href="tournament.php" class="<?= $currentPage === 'tournament.php' ? 'active' : '' ?>" id="navTournament">Tournament</a></li>
                     <li><a href="results.php" class="<?= $currentPage === 'results.php' ? 'active' : '' ?>" id="navResults">Archive</a></li>
+                    <?php if (is_admin()): ?>
+                    <li><a href="users.php" class="<?= $currentPage === 'users.php' ? 'active' : '' ?>" id="navUsers">Users</a></li>
+                    <?php endif; ?>
                 </ul>
 
                 <div class="user-meta">
@@ -103,10 +106,10 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
                         <span class="appearance-icon">🎨</span>
                         <span class="appearance-text">Appearance</span>
                     </button>
-                    <span class="user-pill" title="Signed in as <?= htmlspecialchars($currentUsername ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                    <a href="account.php" class="user-pill" title="Signed in as <?= htmlspecialchars($currentUsername ?? '', ENT_QUOTES, 'UTF-8') ?> — Account Security" style="text-decoration: none;">
                         <span class="status-indicator online"></span>
                         <span class="user-name"><?= htmlspecialchars($currentUsername ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
-                    </span>
+                    </a>
                     <form action="logout.php" method="POST" class="logout-form" style="display:inline;margin:0;">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
                         <button type="submit" class="btn-logout" id="btnLogout" title="Log out of application">Sign Out</button>

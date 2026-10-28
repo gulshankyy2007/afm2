@@ -16,11 +16,9 @@ require_once dirname(__DIR__) . '/includes/artwork_helper.php';
 require_once dirname(__DIR__) . '/includes/duplicate_helper.php';
 require_once dirname(__DIR__) . '/includes/import_helper.php';
 require_once dirname(__DIR__) . '/includes/youtube_matcher.php';
+require_once dirname(__DIR__) . '/includes/webauthn_service.php';
 
 header('Content-Type: application/json; charset=utf-8');
-
-// Require authentication for all API operations
-require_auth(true);
 
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -28,13 +26,21 @@ $method = $_SERVER['REQUEST_METHOD'];
 // Helper to get JSON input
 $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
 
-// Verify CSRF for state-changing POST requests
-if ($method === 'POST') {
-    $submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null);
-    if (!validate_csrf_token($submittedToken)) {
-        http_response_code(403);
-        echo json_encode(['success' => false, 'error' => 'Security token (CSRF) validation failed. Please refresh the page.']);
-        exit;
+// Public unauthenticated actions
+$publicActions = ['webauthn_auth_options', 'webauthn_auth_verify'];
+
+if (!in_array($action, $publicActions, true)) {
+    // Require authentication for all standard API operations
+    require_auth(true);
+
+    // Verify CSRF for state-changing POST requests
+    if ($method === 'POST') {
+        $submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null);
+        if (!validate_csrf_token($submittedToken)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Security token (CSRF) validation failed. Please refresh the page.']);
+            exit;
+        }
     }
 }
 
@@ -985,6 +991,44 @@ switch ($action) {
             'job'     => $job,
             'stats'   => $stats
         ]);
+        break;
+
+    // ==================== WEBAUTHN / PASSKEY ACTIONS ====================
+    case 'webauthn_register_options':
+        $userId = get_current_user_id();
+        $username = get_current_username();
+        $options = WebAuthnService::generate_registration_options($userId, $username);
+        echo json_encode(['success' => true, 'options' => $options]);
+        break;
+
+    case 'webauthn_register_verify':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        $userId = get_current_user_id();
+        $deviceName = trim($input['device_name'] ?? 'Passkey');
+        $credData = $input['credential'] ?? $input;
+        $result = WebAuthnService::verify_registration_response($userId, $credData, $deviceName);
+        echo json_encode($result);
+        break;
+
+    case 'webauthn_auth_options':
+        $username = trim($input['username'] ?? $_GET['username'] ?? '');
+        $options = WebAuthnService::generate_authentication_options($username ?: null);
+        echo json_encode(['success' => true, 'options' => $options]);
+        break;
+
+    case 'webauthn_auth_verify':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        $credData = $input['credential'] ?? $input;
+        $result = WebAuthnService::verify_authentication_response($credData);
+        echo json_encode($result);
         break;
 
     default:
