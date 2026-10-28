@@ -340,6 +340,19 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
 
+    if ($total === 0) {
+        return [
+            'songs'        => [],
+            'total'        => 0,
+            'page'         => $page,
+            'per_page'     => $perPage,
+            'sort'         => $sortBy,
+            'total_pages'  => 1,
+            'has_next'     => false,
+            'has_prev'     => false
+        ];
+    }
+
     // Sorting options (Title ASC/DESC, Artist ASC/DESC, ID ASC/DESC)
     $validSorts = [
         'id_asc'      => 's.`song_id` ASC',
@@ -351,7 +364,7 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
     ];
     $orderClause = $validSorts[$sortBy] ?? $validSorts['id_asc'];
 
-    // Fetch paginated records with discovery and entry info
+    // Fetch paginated records with deferred join for high-performance index pagination
     $dataSql = "
         SELECT 
             s.`song_id`,
@@ -372,15 +385,21 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
             sa.`thumbnail_url` AS `artwork_thumbnail_url`,
             sa.`image_url` AS `artwork_image_url`,
             sa.`source` AS `artwork_source`
-        FROM `songs` s
+        FROM (
+            SELECT s.`song_id`
+            FROM `songs` s
+            LEFT JOIN `song_discovery` sd ON s.`song_id` = sd.`song_id`{$discJoinCond}
+            {$whereSql}
+            ORDER BY {$orderClause}
+            LIMIT :limit OFFSET :offset
+        ) p
+        JOIN `songs` s ON p.`song_id` = s.`song_id`
         LEFT JOIN `song_discovery` sd ON s.`song_id` = sd.`song_id`{$discJoinCond}
         LEFT JOIN `afm_entries` e ON s.`song_id` = e.`song_id`{$entryJoinCond}
         LEFT JOIN `ratings` r1 ON e.`entry_id` = r1.`entry_id` AND r1.`round_id` = 1{$ratingJoinCond}
         LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
         LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
-        {$whereSql}
         ORDER BY {$orderClause}
-        LIMIT :limit OFFSET :offset
     ";
 
     $dataStmt = $pdo->prepare($dataSql);
@@ -507,20 +526,30 @@ function update_song_discovery_status(int $songId, string $status, ?int $userId 
                     $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid2' => $userId]);
                 }
             } else {
-                $ins = $pdo->prepare("
-                    INSERT INTO `song_discovery` (`song_id`, `status`, `reviewed_at`)
-                    VALUES (:id, :status, NOW())
-                    ON DUPLICATE KEY UPDATE `status` = VALUES(`status`), `reviewed_at` = NOW()
-                ");
-                $ins->execute([':id' => $songId, ':status' => $status]);
+                $checkStmt = $pdo->prepare("SELECT `discovery_id` FROM `song_discovery` WHERE `song_id` = :id AND `user_id` IS NULL");
+                $checkStmt->execute([':id' => $songId]);
+                $discId = $checkStmt->fetchColumn();
+
+                if ($discId) {
+                    $upd = $pdo->prepare("UPDATE `song_discovery` SET `status` = :status, `reviewed_at` = NOW() WHERE `discovery_id` = :did");
+                    $upd->execute([':status' => $status, ':did' => $discId]);
+                } else {
+                    $ins = $pdo->prepare("INSERT INTO `song_discovery` (`song_id`, `status`, `reviewed_at`) VALUES (:id, :status, NOW())");
+                    $ins->execute([':id' => $songId, ':status' => $status]);
+                }
 
                 if ($status === 'shortlisted') {
-                    $entryStmt = $pdo->prepare("
-                        INSERT INTO `afm_entries` (`song_id`, `status`)
-                        VALUES (:id, 'auditioning')
-                        ON DUPLICATE KEY UPDATE `status` = 'auditioning'
-                    ");
-                    $entryStmt->execute([':id' => $songId]);
+                    $checkEntry = $pdo->prepare("SELECT `entry_id` FROM `afm_entries` WHERE `song_id` = :id AND `user_id` IS NULL");
+                    $checkEntry->execute([':id' => $songId]);
+                    $entryId = $checkEntry->fetchColumn();
+
+                    if ($entryId) {
+                        $updEntry = $pdo->prepare("UPDATE `afm_entries` SET `status` = 'auditioning' WHERE `entry_id` = :eid");
+                        $updEntry->execute([':eid' => $entryId]);
+                    } else {
+                        $entryStmt = $pdo->prepare("INSERT INTO `afm_entries` (`song_id`, `status`) VALUES (:id, 'auditioning')");
+                        $entryStmt->execute([':id' => $songId]);
+                    }
                 } else {
                     $delEntry = $pdo->prepare("
                         DELETE FROM `afm_entries` 
@@ -1668,6 +1697,43 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
 
     try {
         $pdo->beginTransaction();
+
+        // Concurrency mutex: lock the round status for update within transaction
+        if ($userId !== null) {
+            $lockStmt = $pdo->prepare("
+                SELECT `status` 
+                FROM `user_round_progress` 
+                WHERE `user_id` = :uid AND `round_id` = :rid 
+                FOR UPDATE
+            ");
+            $lockStmt->execute([':uid' => $userId, ':rid' => $fromRoundId]);
+            $currentLockedStatus = $lockStmt->fetchColumn();
+
+            if ($currentLockedStatus === 'completed') {
+                $pdo->rollBack();
+                return [
+                    'success' => false,
+                    'error'   => "'{$fromRound['round_name']}' has already been completed and advanced by a concurrent request."
+                ];
+            }
+        } else {
+            $lockStmt = $pdo->prepare("
+                SELECT `status` 
+                FROM `rounds` 
+                WHERE `round_id` = :rid 
+                FOR UPDATE
+            ");
+            $lockStmt->execute([':rid' => $fromRoundId]);
+            $currentLockedStatus = $lockStmt->fetchColumn();
+
+            if ($currentLockedStatus === 'completed') {
+                $pdo->rollBack();
+                return [
+                    'success' => false,
+                    'error'   => "'{$fromRound['round_name']}' has already been completed and advanced by a concurrent request."
+                ];
+            }
+        }
 
         $rankData = get_round_rankings($fromRoundId, $userId);
         $rankings = $rankData['rankings'];

@@ -1031,12 +1031,29 @@ class YouTubeMatcher {
      */
     public static function process_batch(int $batchSize = 10, array $options = [], ?int $userId = null): array {
         $pdo = get_db_connection();
-        $job = self::get_or_create_active_job($userId);
-        $jobId = (int)$job['job_id'];
 
-        // Mark running
-        $pdo->prepare("UPDATE `youtube_matching_jobs` SET `status` = 'running', `updated_at` = NOW() WHERE `job_id` = :id")
-            ->execute([':id' => $jobId]);
+        // Non-blocking per-user advisory lock to prevent duplicate concurrent batches
+        $lockName = 'afm2_yt_job_user_' . ($userId !== null ? (int)$userId : 'global');
+        $lockStmt = $pdo->prepare("SELECT GET_LOCK(:lock, 0)");
+        $lockStmt->execute([':lock' => $lockName]);
+        if ((int)$lockStmt->fetchColumn() !== 1) {
+            return [
+                'success'     => true,
+                'in_progress' => true,
+                'job'         => self::get_or_create_active_job($userId),
+                'processed'   => 0,
+                'results'     => [],
+                'message'     => 'A YouTube matching batch is currently being processed for this user.'
+            ];
+        }
+
+        try {
+            $job = self::get_or_create_active_job($userId);
+            $jobId = (int)$job['job_id'];
+
+            // Mark running
+            $pdo->prepare("UPDATE `youtube_matching_jobs` SET `status` = 'running', `updated_at` = NOW() WHERE `job_id` = :id")
+                ->execute([':id' => $jobId]);
 
         $lastSongId = (int)$job['last_processed_song_id'];
         $forceReprocess = $options['force'] ?? false;
@@ -1210,14 +1227,17 @@ class YouTubeMatcher {
             $updatedJob['status'] = 'completed';
         }
 
-        return [
-            'success'   => true,
-            'completed' => $isComplete,
-            'job'       => $updatedJob,
-            'processed' => $processedCount,
-            'results'   => $batchResults,
-            'message'   => "Processed {$processedCount} songs."
-        ];
+            return [
+                'success'   => true,
+                'completed' => $isComplete,
+                'job'       => $updatedJob,
+                'processed' => $processedCount,
+                'results'   => $batchResults,
+                'message'   => "Processed {$processedCount} songs."
+            ];
+        } finally {
+            $pdo->prepare("SELECT RELEASE_LOCK(:lock)")->execute([':lock' => $lockName]);
+        }
     }
 
     /**
