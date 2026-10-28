@@ -24,7 +24,7 @@ return function(PDO $pdo): void {
         $pdo->exec("ALTER TABLE `songs` ADD COLUMN `user_id` INT UNSIGNED NULL DEFAULT NULL AFTER `song_id`");
         $pdo->exec("ALTER TABLE `songs` ADD INDEX `idx_songs_user_id` (`user_id`)");
         try {
-            $pdo->exec("ALTER TABLE `songs` ADD CONSTRAINT `fk_songs_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`user_id`) ON DELETE CASCADE");
+            $pdo->exec("ALTER TABLE `songs` ADD CONSTRAINT `fk_songs_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`user_id`) ON DELETE SET NULL");
         } catch (PDOException $e) {
             error_log("Warning: could not add fk_songs_user: " . $e->getMessage());
         }
