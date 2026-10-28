@@ -371,7 +371,7 @@ function parse_and_validate_csv(
  * @param string $defaultDiscoveryStatus 'unreviewed' (default) or 'shortlisted'
  * @return array Import execution metrics
  */
-function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus = 'unreviewed'): array {
+function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus = 'unreviewed', ?int $userId = null): array {
     $pdo = get_db_connection();
 
     if (empty($approvedRows)) {
@@ -387,9 +387,9 @@ function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus 
         ? $defaultDiscoveryStatus 
         : 'unreviewed';
 
-    $insertSong = $pdo->prepare("INSERT INTO `songs` (`title`, `artist`) VALUES (:title, :artist)");
-    $insertDisc = $pdo->prepare("INSERT INTO `song_discovery` (`song_id`, `status`) VALUES (:song_id, :status)");
-    $insertEntry = $pdo->prepare("INSERT INTO `afm_entries` (`song_id`, `status`) VALUES (:song_id, 'auditioning')");
+    $insertSong = $pdo->prepare("INSERT INTO `songs` (`title`, `artist`, `user_id`) VALUES (:title, :artist, :user_id)");
+    $insertDisc = $pdo->prepare("INSERT INTO `song_discovery` (`song_id`, `user_id`, `status`) VALUES (:song_id, :user_id, :status)");
+    $insertEntry = $pdo->prepare("INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`) VALUES (:song_id, :user_id, 'auditioning')");
 
     $addedSongs = [];
     $addedIds = [];
@@ -407,8 +407,9 @@ function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus 
             $artist = ($rawArtist === '' || strcasecmp($rawArtist, 'unknown artist') === 0) ? null : $rawArtist;
 
             $insertSong->execute([
-                ':title'  => $title,
-                ':artist' => $artist
+                ':title'   => $title,
+                ':artist'  => $artist,
+                ':user_id' => $userId
             ]);
 
             $newId = (int)$pdo->lastInsertId();
@@ -423,17 +424,24 @@ function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus 
             if ($validStatus !== 'unreviewed') {
                 $insertDisc->execute([
                     ':song_id' => $newId,
+                    ':user_id' => $userId,
                     ':status'  => $validStatus
                 ]);
 
                 // If shortlisted, automatically enroll into stage 1 auditioning
                 if ($validStatus === 'shortlisted') {
-                    $insertEntry->execute([':song_id' => $newId]);
+                    $insertEntry->execute([
+                        ':song_id' => $newId,
+                        ':user_id' => $userId
+                    ]);
                 }
             }
         }
 
         $pdo->commit();
+        if (function_exists('clear_dashboard_stats_cache')) {
+            clear_dashboard_stats_cache();
+        }
 
         return [
             'success'       => true,

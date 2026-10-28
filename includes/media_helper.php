@@ -184,7 +184,8 @@ function save_song_media(
     string $embedStatus = 'allowed',
     ?string $title = null,
     ?string $channelTitle = null,
-    ?string $userUrl = null
+    ?string $userUrl = null,
+    ?int $userId = null
 ): array {
     $videoId = parse_youtube_id($videoIdOrUrl);
     if (!$videoId) {
@@ -216,12 +217,15 @@ function save_song_media(
 
     $pdo = get_db_connection();
 
-    // Verify song exists
-    $checkSong = $pdo->prepare("SELECT `song_id`, `title`, `artist` FROM `songs` WHERE `song_id` = :id");
+    // Verify song exists and check ownership
+    $checkSong = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id");
     $checkSong->execute([':id' => $songId]);
     $song = $checkSong->fetch();
     if (!$song) {
         return ['success' => false, 'error' => 'Song not found in catalogue.'];
+    }
+    if ($userId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
+        return ['success' => false, 'error' => 'Unauthorized: Cannot modify media for another user\'s song.'];
     }
 
     $resolvedTitle = $title ?: $song['title'];
@@ -317,8 +321,18 @@ function save_song_media(
 /**
  * Remove confirmed media reference
  */
-function remove_song_media(int $songId, string $service = 'youtube'): array {
+function remove_song_media(int $songId, string $service = 'youtube', ?int $userId = null): array {
     $pdo = get_db_connection();
+
+    if ($userId !== null) {
+        $checkSong = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+        $checkSong->execute([':id' => $songId]);
+        $song = $checkSong->fetch();
+        if ($song && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
+            return ['success' => false, 'error' => 'Unauthorized: Cannot remove media for another user\'s song.'];
+        }
+    }
+
     $stmt = $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` = :song_id AND `service` = :service");
     $stmt->execute([':song_id' => $songId, ':service' => $service]);
 
@@ -461,13 +475,23 @@ function resolve_youtube_recording(string $urlOrVideoId, ?int $songId = null): a
 /**
  * Update embed status (e.g. when user reports embedding is blocked by YouTube)
  */
-function update_song_media_embed_status(int $songId, string $embedStatus): array {
+function update_song_media_embed_status(int $songId, string $embedStatus, ?int $userId = null): array {
     $validEmbed = ['allowed', 'blocked', 'unknown'];
     if (!in_array($embedStatus, $validEmbed, true)) {
         return ['success' => false, 'error' => 'Invalid embed status.'];
     }
 
     $pdo = get_db_connection();
+
+    if ($userId !== null) {
+        $checkSong = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+        $checkSong->execute([':id' => $songId]);
+        $song = $checkSong->fetch();
+        if ($song && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
+            return ['success' => false, 'error' => 'Unauthorized: Cannot update embed status for another user\'s song.'];
+        }
+    }
+
     $stmt = $pdo->prepare("
         UPDATE `song_media` 
         SET `embed_status` = :status, `updated_at` = NOW() 
@@ -1084,8 +1108,18 @@ function get_lrclib_lyrics_by_id(int $songId, int $lrclibId): array {
 /**
  * Save or update lyrics preference record in database
  */
-function save_song_lyrics_ref(int $songId, array $data): bool {
+function save_song_lyrics_ref(int $songId, array $data, ?int $userId = null): bool {
     $pdo = get_db_connection();
+
+    if ($userId !== null) {
+        $checkSong = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+        $checkSong->execute([':id' => $songId]);
+        $song = $checkSong->fetch();
+        if ($song && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
+            return false;
+        }
+    }
+
     $stmt = $pdo->prepare("
         INSERT INTO `song_lyrics_ref` 
             (`song_id`, `lrclib_id`, `track_name`, `artist_name`, `album_name`, `duration`, `instrumental`, `has_synced`, `source_url`, `cached_lyrics_plain`, `cached_lyrics_synced`, `status`, `updated_at`)
@@ -1125,8 +1159,18 @@ function save_song_lyrics_ref(int $songId, array $data): bool {
 /**
  * Clear cached lyrics for a song (e.g. to re-trigger fresh search)
  */
-function clear_song_lyrics_ref(int $songId): array {
+function clear_song_lyrics_ref(int $songId, ?int $userId = null): array {
     $pdo = get_db_connection();
+
+    if ($userId !== null) {
+        $checkSong = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+        $checkSong->execute([':id' => $songId]);
+        $song = $checkSong->fetch();
+        if ($song && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
+            return ['success' => false, 'error' => 'Unauthorized: Cannot clear lyrics for another user\'s song.'];
+        }
+    }
+
     $stmt = $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` = :id");
     $stmt->execute([':id' => $songId]);
     return ['success' => true];

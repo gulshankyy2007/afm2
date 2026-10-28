@@ -111,8 +111,11 @@ function parse_title_metadata(string $title): array {
  * @param array $filters Options: 'search', 'category', 'status', 'confidence', 'limit', 'offset'
  * @return array ['candidates' => array, 'stats' => array, 'total' => int]
  */
-function detect_duplicate_candidates(array $filters = []): array {
+function detect_duplicate_candidates(array $filters = [], ?int $userId = null): array {
     $pdo = get_db_connection();
+    if ($userId === null && isset($filters['user_id'])) {
+        $userId = (int)$filters['user_id'];
+    }
 
     // 1. Fetch all songs and existing media references (READ-ONLY)
     $sql = "
@@ -120,6 +123,7 @@ function detect_duplicate_candidates(array $filters = []): array {
             s.`song_id`, 
             s.`title`, 
             s.`artist`,
+            s.`user_id`,
             s.`is_consolidated`,
             s.`consolidated_into_id`,
             sm.`video_id` AS `media_video_id`
@@ -166,6 +170,7 @@ function detect_duplicate_candidates(array $filters = []): array {
             'song_id'            => $id,
             'title'              => $title,
             'artist'             => $artist,
+            'user_id'            => $s['user_id'] !== null ? (int)$s['user_id'] : null,
             'is_consolidated'    => (int)($s['is_consolidated'] ?? 0),
             'consolidated_into_id'=> $s['consolidated_into_id'] ? (int)$s['consolidated_into_id'] : null,
             'clean_title'        => $meta['clean_title'],
@@ -203,9 +208,24 @@ function detect_duplicate_candidates(array $filters = []): array {
     $seenPairs = [];
 
     $addCandidate = function(int $idA, int $idB, string $matchType, string $confidence, string $reason) use (
-        &$candidates, &$seenPairs, $parsedSongs, $existingReviews
+        &$candidates, &$seenPairs, $parsedSongs, $existingReviews, $userId
     ) {
         if ($idA === $idB) return;
+        $songA = $parsedSongs[$idA];
+        $songB = $parsedSongs[$idB];
+
+        $uidA = $songA['user_id'];
+        $uidB = $songB['user_id'];
+        // Never allow duplicate pairing across different users
+        if ($uidA !== null && $uidB !== null && $uidA !== $uidB) {
+            return;
+        }
+        if ($userId !== null) {
+            if (($uidA !== null && $uidA !== $userId) || ($uidB !== null && $uidB !== $userId)) {
+                return;
+            }
+        }
+
         $minId = min($idA, $idB);
         $maxId = max($idA, $idB);
         $pairKey = $minId . '_' . $maxId;
@@ -216,8 +236,6 @@ function detect_duplicate_candidates(array $filters = []): array {
         }
         $seenPairs[$pairKey] = true;
 
-        $songA = $parsedSongs[$minId];
-        $songB = $parsedSongs[$maxId];
         $review = $existingReviews[$pairKey] ?? null;
 
         $status = 'unresolved';
@@ -498,6 +516,7 @@ function get_song_full_details(int $songId): ?array {
             s.`title`, 
             COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
             s.`artist` AS `raw_artist`,
+            s.`user_id`,
             s.`is_consolidated`,
             s.`consolidated_into_id`,
             s.`consolidated_at`
@@ -622,6 +641,18 @@ function validate_consolidation_safety(int $canonicalId, int $consolidatedId): a
         return [
             'safe' => false,
             'conflicts' => ["Target song #{$consolidatedId} is already marked as consolidated."],
+            'warnings' => [],
+            'proposed_actions' => []
+        ];
+    }
+
+    // Cross-user isolation check
+    $canonUid = $canon['song']['user_id'] ?? null;
+    $consoUid = $conso['song']['user_id'] ?? null;
+    if ($canonUid !== null && $consoUid !== null && (int)$canonUid !== (int)$consoUid) {
+        return [
+            'safe' => false,
+            'conflicts' => ["Cross-user boundary violation: Song #{$canonicalId} (User #{$canonUid}) and Song #{$consolidatedId} (User #{$consoUid}) belong to different users."],
             'warnings' => [],
             'proposed_actions' => []
         ];
@@ -846,6 +877,18 @@ function save_duplicate_decision(
     }
 
     $pdo = get_db_connection();
+
+    // Verify ownership if userId is provided
+    if ($userId !== null) {
+        $chkStmt = $pdo->prepare("SELECT `song_id`, `user_id` FROM `songs` WHERE `song_id` IN (:a, :b)");
+        $chkStmt->execute([':a' => $minId, ':b' => $maxId]);
+        while ($row = $chkStmt->fetch(PDO::FETCH_ASSOC)) {
+            if ($row['user_id'] !== null && (int)$row['user_id'] !== (int)$userId) {
+                return ['success' => false, 'error' => 'Unauthorized: Cannot review duplicate pair belonging to another user.'];
+            }
+        }
+    }
+
     $pdo->beginTransaction();
 
     try {
@@ -951,12 +994,20 @@ function execute_consolidation(
 
     try {
         // 1. Lock both song rows
-        $lockStmt = $pdo->prepare("SELECT `song_id`, `is_consolidated` FROM `songs` WHERE `song_id` IN (:c, :m) FOR UPDATE");
+        $lockStmt = $pdo->prepare("SELECT `song_id`, `user_id`, `is_consolidated` FROM `songs` WHERE `song_id` IN (:c, :m) FOR UPDATE");
         $lockStmt->execute([':c' => $canonicalId, ':m' => $consolidatedId]);
         $lockedSongs = $lockStmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (count($lockedSongs) < 2) {
             throw new RuntimeException("One or both songs could not be locked or do not exist.");
+        }
+
+        if ($userId !== null) {
+            foreach ($lockedSongs as $ls) {
+                if ($ls['user_id'] !== null && (int)$ls['user_id'] !== (int)$userId) {
+                    throw new RuntimeException("Unauthorized: Cannot consolidate songs belonging to another user.");
+                }
+            }
         }
 
         // 2. Validate safety
