@@ -15,15 +15,27 @@ function run_migrations(): array {
     $logs = [];
 
     // Ensure schema_migrations table exists
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `schema_migrations` (
-            `migration_id` int unsigned NOT NULL AUTO_INCREMENT,
-            `migration_name` varchar(100) NOT NULL,
-            `applied_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (`migration_id`),
-            UNIQUE KEY `uq_migration_name` (`migration_name`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-    ");
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `schema_migrations` (
+                `migration_id` int unsigned NOT NULL AUTO_INCREMENT,
+                `migration_name` varchar(100) NOT NULL,
+                `applied_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`migration_id`),
+                UNIQUE KEY `uq_migration_name` (`migration_name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        ");
+    } catch (PDOException $e) {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `schema_migrations` (
+                `migration_id` int unsigned NOT NULL AUTO_INCREMENT,
+                `migration_name` varchar(100) NOT NULL,
+                `applied_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`migration_id`),
+                UNIQUE KEY `uq_migration_name` (`migration_name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+    }
 
     // Fetch applied migrations
     $stmt = $pdo->query("SELECT `migration_name` FROM `schema_migrations`");

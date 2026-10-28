@@ -5,8 +5,21 @@
  */
 
 return function(PDO $pdo): void {
+    // Helper to safely execute table creation with MariaDB collation fallback
+    $execTable = function(string $sql) use ($pdo) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException $e) {
+            if (str_contains($sql, 'COLLATE=utf8mb4_0900_ai_ci')) {
+                $pdo->exec(str_replace('COLLATE=utf8mb4_0900_ai_ci', '', $sql));
+            } else {
+                throw $e;
+            }
+        }
+    };
+
     // 1. app_users table
-    $pdo->exec("
+    $execTable("
         CREATE TABLE IF NOT EXISTS `app_users` (
             `user_id` int unsigned NOT NULL AUTO_INCREMENT,
             `username` varchar(50) NOT NULL,
@@ -19,7 +32,7 @@ return function(PDO $pdo): void {
     ");
 
     // 2. login_rate_limits table
-    $pdo->exec("
+    $execTable("
         CREATE TABLE IF NOT EXISTS `login_rate_limits` (
             `attempt_id` int unsigned NOT NULL AUTO_INCREMENT,
             `ip_address` varchar(45) NOT NULL,
@@ -30,7 +43,7 @@ return function(PDO $pdo): void {
     ");
 
     // 3. song_discovery table
-    $pdo->exec("
+    $execTable("
         CREATE TABLE IF NOT EXISTS `song_discovery` (
             `song_id` int unsigned NOT NULL,
             `status` enum('shortlisted','passed') NOT NULL,

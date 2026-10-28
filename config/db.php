@@ -35,7 +35,11 @@ function get_db_connection(): PDO {
 
     try {
         $pdo = new PDO($dsn, $user, $pass, $options);
-        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        try {
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        } catch (PDOException $e) {
+            $pdo->exec("SET NAMES utf8mb4");
+        }
     } catch (PDOException $e) {
         // Log detailed error internally
         error_log("AFM2 Database Connection Error: " . $e->getMessage());
