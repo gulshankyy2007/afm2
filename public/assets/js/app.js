@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initScorecards();
     initModals();
     initTournamentAdvancement();
+    initTournamentStageReopening();
     initAuditionMediaAndLyrics();
     initGlobalQuickLyricsModal();
     initAppearanceModal();
@@ -771,17 +772,30 @@ function initModals() {
 }
 
 /**
- * Tournament Stage Advancement Modal & Execution
+ * Tournament Stage Advancement Modal & Execution (Multi-step Manual Qualification & Reordering)
  */
 function initTournamentAdvancement() {
     const advBtn = document.getElementById('btnPreviewAdvancement');
     const modal = document.getElementById('advancementModal');
-    const confirmBtn = document.getElementById('btnConfirmAdvancement');
     const modalBody = document.getElementById('advancementModalBody');
+    const modalFooter = document.getElementById('advancementModalFooter');
+    const modalTitle = document.getElementById('modalTitle');
 
-    if (!advBtn || !modal || !confirmBtn) return;
+    if (!advBtn || !modal || !modalBody || !modalFooter) return;
 
-    let pendingPayload = null;
+    let state = {
+        fromRound: null,
+        nextRound: null,
+        rules: null,
+        candidates: [],
+        selectedIds: new Set(),
+        orderedQualifiers: [],
+        currentStep: 1,
+        activeFilter: 'all',
+        searchQuery: '',
+        sortBy: 'rank',
+        draggedIdx: null
+    };
 
     advBtn.addEventListener('click', async (e) => {
         e.preventDefault();
@@ -789,125 +803,684 @@ function initTournamentAdvancement() {
         if (!fromRoundId) return;
 
         advBtn.disabled = true;
-        if (modalBody) {
-            modalBody.innerHTML = '<div class="text-center p-4">Loading stage advancement preview...</div>';
-        }
+        modalBody.innerHTML = '<div class="text-center p-4">Loading qualification candidates & tournament rules...</div>';
+        modalFooter.innerHTML = '<button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>';
         modal.classList.add('active');
 
         try {
-            const res = await fetch(`api.php?action=preview_advancement&from_round_id=${fromRoundId}`);
+            const res = await fetch(`api.php?action=get_qualification_data&from_round_id=${fromRoundId}`);
             const data = await res.json();
             advBtn.disabled = false;
 
-            if (!data.success) {
-                modalBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(data.error || 'Failed to preview advancement.')}</div>`;
-                confirmBtn.style.display = 'none';
+            if (!data.success || !data.data) {
+                modalBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(data.error || 'Failed to load qualification candidates.')}</div>`;
                 return;
             }
 
-            confirmBtn.style.display = 'inline-block';
-            confirmBtn.disabled = false;
+            const qData = data.data;
+            state.fromRound = qData.from_round;
+            state.nextRound = qData.next_round;
+            state.rules = qData.rules;
+            state.candidates = qData.candidates || [];
+            state.currentStep = 1;
+            state.activeFilter = 'all';
+            state.searchQuery = '';
+            state.sortBy = 'rank';
+            state.selectedIds = new Set();
 
-            const fromRound = data.from_round;
-            const nextRound = data.next_round;
-            const qualifiers = data.qualifiers || [];
-            const eliminated = data.eliminated || [];
+            const defaultTarget = qData.target_count || 1;
+            const completedCandidates = state.candidates.filter(c => c.is_eval_complete);
+            completedCandidates.slice(0, defaultTarget).forEach(c => {
+                state.selectedIds.add(c.entry_id);
+            });
 
-            pendingPayload = {
-                from_round_id: parseInt(fromRound.round_id, 10),
-                qualifier_ids: qualifiers.map(q => parseInt(q.entry_id, 10))
-            };
+            state.orderedQualifiers = completedCandidates.slice(0, defaultTarget);
 
-            let tieWarningHtml = '';
-            if (data.has_boundary_tie && data.boundary_tie) {
-                tieWarningHtml = `
-                    <div class="alert alert-warning mb-3">
-                        <strong>⚠️ Cutoff Boundary Tie Detected</strong>
-                        <p class="text-sm mt-1">${escapeHtml(data.boundary_tie.criteria_tie_break)}</p>
-                    </div>
-                `;
-            }
-
-            let html = `
-                <div class="advancement-summary mb-3">
-                    <p>Advancing from <strong>${escapeHtml(fromRound.round_name)}</strong> to <strong>${escapeHtml(nextRound.round_name)}</strong>.</p>
-                    <div class="stats-pills-row mt-2" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <span class="badge badge-success">Qualifiers: ${qualifiers.length}</span>
-                        <span class="badge badge-danger">Eliminated: ${eliminated.length}</span>
-                        <span class="badge badge-neutral">Target Cutoff: ${data.target_cutoff}</span>
-                    </div>
-                </div>
-                ${tieWarningHtml}
-                <div class="qualifiers-preview-list">
-                    <h4 class="text-sm font-bold text-muted uppercase mb-2">Qualifying Songs (${qualifiers.length})</h4>
-                    <div class="preview-scroll-box" style="max-height: 220px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
-                        <table class="table-compact w-100" style="width: 100%; font-size: 0.85rem;">
-                            <tbody>
-                                ${qualifiers.map(q => `
-                                    <tr style="border-bottom: 1px solid var(--border-subtle);">
-                                        <td style="padding: 4px 8px; width: 35px; font-weight: 700; color: var(--gold);">#${q.calculated_rank}</td>
-                                        <td style="padding: 4px 8px;"><strong>${escapeHtml(q.title)}</strong> <span class="text-muted">— ${escapeHtml(q.artist)}</span></td>
-                                        <td style="padding: 4px 8px; text-align: right; font-weight: 700; color: var(--accent);">${q.total}/50</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <p class="text-xs text-muted mt-3">
-                    Confirming will mark <strong>${escapeHtml(fromRound.round_name)}</strong> as completed, record official rank positions in the archive, and activate <strong>${escapeHtml(nextRound.round_name)}</strong>.
-                </p>
-            `;
-
-            modalBody.innerHTML = html;
+            renderAdvancementModal();
 
         } catch (err) {
             advBtn.disabled = false;
-            console.error('Advancement Preview Error:', err);
-            modalBody.innerHTML = '<div class="alert alert-danger">Network error loading stage advancement preview.</div>';
-            confirmBtn.style.display = 'none';
+            console.error('Qualification Data Fetch Error:', err);
+            modalBody.innerHTML = '<div class="alert alert-danger">Network error loading tournament qualification candidates.</div>';
+        }
+    });
+
+    function renderAdvancementModal() {
+        if (state.currentStep === 1) {
+            renderSelectionStep();
+        } else if (state.currentStep === 2) {
+            renderPreviewAndOrderStep();
+        }
+    }
+
+    function renderSelectionStep() {
+        if (!modalTitle || !modalBody || !modalFooter) return;
+        modalTitle.textContent = `Manual Qualification — ${state.fromRound.round_name} → ${state.nextRound.round_name}`;
+
+        const targetCount = state.rules ? state.rules.target_count : (state.nextRound.target_count || 1);
+        const minEligible = state.rules ? state.rules.min_eligible_participants : (targetCount + 1);
+        const totalEligible = state.candidates.length;
+        const completedCount = state.candidates.filter(c => c.is_eval_complete).length;
+        const incompleteCount = totalEligible - completedCount;
+        const selectedCount = state.selectedIds.size;
+        const remainingNeeded = targetCount - selectedCount;
+
+        const isExactMatch = (selectedCount === targetCount);
+        const isMinMet = (totalEligible >= minEligible);
+        const areEvalsComplete = (incompleteCount === 0);
+        const canProceed = isExactMatch && isMinMet && areEvalsComplete;
+
+        let warningHtml = '';
+        if (!isMinMet) {
+            warningHtml += `
+                <div class="alert alert-danger mb-3">
+                    <strong>⚠️ Eligibility Requirement Not Met:</strong> A minimum of <strong>${minEligible}</strong> eligible participants is required for ${escapeHtml(state.fromRound.round_name)} before advancing to ${escapeHtml(state.nextRound.round_name)}. Currently only <strong>${totalEligible}</strong> participants exist.
+                </div>
+            `;
+        }
+        if (!areEvalsComplete) {
+            warningHtml += `
+                <div class="alert alert-warning mb-3">
+                    <strong>⚠️ Evaluations Incomplete:</strong> All eligible candidates must be fully scored across all 5 criteria before finalizing advancement. <strong>${incompleteCount}</strong> candidate(s) are incomplete or untouched.
+                </div>
+            `;
+        }
+
+        let displayed = state.candidates.slice();
+        if (state.searchQuery.trim() !== '') {
+            const q = state.searchQuery.toLowerCase();
+            displayed = displayed.filter(c => 
+                (c.title && c.title.toLowerCase().includes(q)) || 
+                (c.artist && c.artist.toLowerCase().includes(q))
+            );
+        }
+
+        if (state.activeFilter === 'selected') {
+            displayed = displayed.filter(c => state.selectedIds.has(c.entry_id));
+        } else if (state.activeFilter === 'unselected') {
+            displayed = displayed.filter(c => !state.selectedIds.has(c.entry_id));
+        } else if (state.activeFilter === 'completed') {
+            displayed = displayed.filter(c => c.is_eval_complete);
+        } else if (state.activeFilter === 'incomplete') {
+            displayed = displayed.filter(c => !c.is_eval_complete);
+        }
+
+        displayed.sort((a, b) => {
+            if (state.sortBy === 'rank') return a.calculated_rank - b.calculated_rank;
+            if (state.sortBy === 'total_desc') return b.total - a.total;
+            if (state.sortBy === 'emotion') return b.emotion - a.emotion;
+            if (state.sortBy === 'replay') return b.replayability - a.replayability;
+            if (state.sortBy === 'melody') return b.melody - a.melody;
+            if (state.sortBy === 'vocals') return b.vocals - a.vocals;
+            if (state.sortBy === 'lyrics') return b.lyrics - a.lyrics;
+            if (state.sortBy === 'title') return a.title.localeCompare(b.title);
+            return 0;
+        });
+
+        modalBody.innerHTML = `
+            <div class="advancement-steps-bar">
+                <div class="step-indicator-item active">
+                    <span class="step-indicator-num">1</span>
+                    <span>1. Manual Qualification</span>
+                </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item">
+                    <span class="step-indicator-num">2</span>
+                    <span>2. Preview & Manual Ordering</span>
+                </div>
+            </div>
+
+            <div class="advancement-target-banner">
+                <div class="target-banner-title">
+                    <span>🎯 ${escapeHtml(state.nextRound.round_name)} Target:</span>
+                    <span>Select exactly <strong>${targetCount}</strong> participants to advance</span>
+                </div>
+                <div class="target-banner-counter ${isExactMatch ? 'exact-match' : 'mismatch'}">
+                    <span>${selectedCount} / ${targetCount} Selected</span>
+                    ${isExactMatch ? '✓ Ready' : (selectedCount > targetCount ? `(${selectedCount - targetCount} over limit)` : `(${remainingNeeded} remaining)`)}
+                </div>
+            </div>
+
+            <div class="advancement-stats-strip">
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Total Eligible</span>
+                    <span class="adv-stat-val text-accent">${totalEligible}</span>
+                </div>
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Completed Scores</span>
+                    <span class="adv-stat-val text-success">${completedCount}</span>
+                </div>
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Incomplete</span>
+                    <span class="adv-stat-val ${incompleteCount > 0 ? 'text-danger' : 'text-muted'}">${incompleteCount}</span>
+                </div>
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Min Required</span>
+                    <span class="adv-stat-val text-muted">${minEligible}</span>
+                </div>
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Advancement Target</span>
+                    <span class="adv-stat-val text-gold">${targetCount}</span>
+                </div>
+                <div class="adv-stat-box">
+                    <span class="adv-stat-label">Selected Qualifiers</span>
+                    <span class="adv-stat-val ${isExactMatch ? 'text-success' : 'text-accent'}">${selectedCount}</span>
+                </div>
+            </div>
+
+            ${warningHtml}
+
+            <div class="advancement-toolbar">
+                <div class="adv-filter-tabs">
+                    <button type="button" class="adv-filter-tab ${state.activeFilter === 'all' ? 'active' : ''}" data-filter="all">All (${totalEligible})</button>
+                    <button type="button" class="adv-filter-tab ${state.activeFilter === 'selected' ? 'active' : ''}" data-filter="selected">Selected (${selectedCount})</button>
+                    <button type="button" class="adv-filter-tab ${state.activeFilter === 'unselected' ? 'active' : ''}" data-filter="unselected">Unselected (${totalEligible - selectedCount})</button>
+                    <button type="button" class="adv-filter-tab ${state.activeFilter === 'completed' ? 'active' : ''}" data-filter="completed">Completed (${completedCount})</button>
+                    <button type="button" class="adv-filter-tab ${state.activeFilter === 'incomplete' ? 'active' : ''}" data-filter="incomplete">Incomplete (${incompleteCount})</button>
+                </div>
+                <div class="adv-tools-right">
+                    <input type="text" id="advSearchInput" class="form-input" placeholder="Search songs..." value="${escapeHtml(state.searchQuery)}" style="width: 170px; padding: 0.35rem 0.65rem; font-size: 0.82rem;">
+                    <select id="advSortSelect" class="form-select" style="padding: 0.35rem 0.65rem; font-size: 0.82rem;">
+                        <option value="rank" ${state.sortBy === 'rank' ? 'selected' : ''}>Sort: Advisory Rank</option>
+                        <option value="total_desc" ${state.sortBy === 'total_desc' ? 'selected' : ''}>Sort: Total Score (/50)</option>
+                        <option value="emotion" ${state.sortBy === 'emotion' ? 'selected' : ''}>Sort: Emotion</option>
+                        <option value="replay" ${state.sortBy === 'replay' ? 'selected' : ''}>Sort: Replayability</option>
+                        <option value="melody" ${state.sortBy === 'melody' ? 'selected' : ''}>Sort: Melody</option>
+                        <option value="vocals" ${state.sortBy === 'vocals' ? 'selected' : ''}>Sort: Vocals</option>
+                        <option value="lyrics" ${state.sortBy === 'lyrics' ? 'selected' : ''}>Sort: Lyrics</option>
+                        <option value="title" ${state.sortBy === 'title' ? 'selected' : ''}>Sort: Song Title (A-Z)</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnSelectTopSuggested" title="Select highest ranked completed songs up to target">
+                        ⚡ Select Top ${targetCount} (Suggested)
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnClearSelections">
+                        Deselect All
+                    </button>
+                </div>
+            </div>
+
+            <div class="candidates-table-wrap">
+                <table class="candidates-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 45px; text-align: center;">Select</th>
+                            <th style="width: 55px; text-align: center;">Rank</th>
+                            <th>Song Title & Artist</th>
+                            <th style="width: 65px; text-align: center;">Total</th>
+                            <th style="width: 45px; text-align: center;">Emo</th>
+                            <th style="width: 45px; text-align: center;">Rep</th>
+                            <th style="width: 45px; text-align: center;">Mel</th>
+                            <th style="width: 45px; text-align: center;">Voc</th>
+                            <th style="width: 45px; text-align: center;">Lyr</th>
+                            <th style="width: 100px; text-align: center;">Evaluation</th>
+                            <th style="width: 90px; text-align: center;">Decision</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${displayed.length === 0 ? `
+                            <tr><td colspan="11" class="text-center p-4 text-muted">No candidates matching current filter.</td></tr>
+                        ` : displayed.map(c => {
+                            const isSelected = state.selectedIds.has(c.entry_id);
+                            return `
+                                <tr class="candidate-row ${isSelected ? 'selected-advancing' : ''} ${!c.is_eval_complete ? 'incomplete-eval' : ''}">
+                                    <td class="checkbox-wrap">
+                                        <input 
+                                            type="checkbox" 
+                                            class="custom-adv-checkbox candidate-checkbox" 
+                                            data-entry-id="${c.entry_id}"
+                                            ${isSelected ? 'checked' : ''}
+                                            ${!c.is_eval_complete ? 'disabled title="Cannot advance an incomplete evaluation"' : ''}
+                                        >
+                                    </td>
+                                    <td class="text-center font-mono font-bold text-gold">
+                                        #${c.calculated_rank}
+                                    </td>
+                                    <td>
+                                        <div class="font-bold">${escapeHtml(c.title)}</div>
+                                        <div class="text-xs text-muted">${escapeHtml(c.artist)}</div>
+                                    </td>
+                                    <td class="text-center font-mono font-bold text-accent">
+                                        ${c.is_eval_complete ? `${c.total}/50` : '<span class="text-muted">—</span>'}
+                                    </td>
+                                    <td class="text-center font-mono text-xs">${c.is_eval_complete ? c.emotion : '—'}</td>
+                                    <td class="text-center font-mono text-xs">${c.is_eval_complete ? c.replayability : '—'}</td>
+                                    <td class="text-center font-mono text-xs">${c.is_eval_complete ? c.melody : '—'}</td>
+                                    <td class="text-center font-mono text-xs">${c.is_eval_complete ? c.vocals : '—'}</td>
+                                    <td class="text-center font-mono text-xs">${c.is_eval_complete ? c.lyrics : '—'}</td>
+                                    <td class="text-center">
+                                        ${c.status === 'completed' ? '<span class="badge badge-success text-xs">✓ Complete</span>' : (c.status === 'incomplete' ? '<span class="badge badge-warning text-xs">⚠ Incomplete</span>' : '<span class="badge badge-neutral text-xs">○ Untouched</span>')}
+                                    </td>
+                                    <td class="text-center">
+                                        ${isSelected ? '<span class="badge badge-accent text-xs">Advancing</span>' : '<span class="badge badge-neutral text-xs">Eliminated</span>'}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-xs text-muted mt-2">
+                Scores and rankings are advisory suggestions to aid your decision. You have full discretion to advance lower-scoring favourites or eliminate higher-scoring songs.
+            </p>
+        `;
+
+        modalFooter.innerHTML = `
+            <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+            <button type="button" class="btn btn-accent" id="btnGoToPreview" ${!canProceed ? 'disabled' : ''}>
+                Next: Preview & Order Selection (${selectedCount}/${targetCount}) &rarr;
+            </button>
+        `;
+
+        bindSelectionStepEvents();
+    }
+
+    function bindSelectionStepEvents() {
+        modalBody.querySelectorAll('.adv-filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                state.activeFilter = tab.getAttribute('data-filter') || 'all';
+                renderSelectionStep();
+            });
+        });
+
+        const searchInput = document.getElementById('advSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                state.searchQuery = e.target.value;
+                renderSelectionStep();
+                const newInput = document.getElementById('advSearchInput');
+                if (newInput) {
+                    newInput.focus();
+                    newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+                }
+            });
+        }
+
+        const sortSelect = document.getElementById('advSortSelect');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                state.sortBy = e.target.value;
+                renderSelectionStep();
+            });
+        }
+
+        modalBody.querySelectorAll('.candidate-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const entryId = parseInt(cb.getAttribute('data-entry-id'), 10);
+                if (cb.checked) {
+                    state.selectedIds.add(entryId);
+                } else {
+                    state.selectedIds.delete(entryId);
+                }
+                renderSelectionStep();
+            });
+        });
+
+        const btnSelectTop = document.getElementById('btnSelectTopSuggested');
+        if (btnSelectTop) {
+            btnSelectTop.addEventListener('click', () => {
+                const targetCount = state.rules ? state.rules.target_count : (state.nextRound.target_count || 1);
+                state.selectedIds.clear();
+                const completedCandidates = state.candidates.filter(c => c.is_eval_complete);
+                completedCandidates.slice(0, targetCount).forEach(c => {
+                    state.selectedIds.add(c.entry_id);
+                });
+                renderSelectionStep();
+                showToast(`Selected top ${Math.min(targetCount, completedCandidates.length)} suggested candidates.`, 'info');
+            });
+        }
+
+        const btnClear = document.getElementById('btnClearSelections');
+        if (btnClear) {
+            btnClear.addEventListener('click', () => {
+                state.selectedIds.clear();
+                renderSelectionStep();
+            });
+        }
+
+        const btnNext = document.getElementById('btnGoToPreview');
+        if (btnNext) {
+            btnNext.addEventListener('click', () => {
+                const selectedSet = state.selectedIds;
+                const newOrdered = [];
+                state.orderedQualifiers.forEach(q => {
+                    if (selectedSet.has(q.entry_id)) {
+                        newOrdered.push(q);
+                    }
+                });
+                state.candidates.forEach(c => {
+                    if (selectedSet.has(c.entry_id) && !newOrdered.some(x => x.entry_id === c.entry_id)) {
+                        newOrdered.push(c);
+                    }
+                });
+                state.orderedQualifiers = newOrdered;
+                state.currentStep = 2;
+                renderAdvancementModal();
+            });
+        }
+    }
+
+    function renderPreviewAndOrderStep() {
+        if (!modalTitle || !modalBody || !modalFooter) return;
+        modalTitle.textContent = `Selection Preview & Manual Ordering — ${state.nextRound.round_name}`;
+
+        const targetCount = state.rules ? state.rules.target_count : (state.nextRound.target_count || 1);
+        const selectedCount = state.orderedQualifiers.length;
+        const isExactMatch = (selectedCount === targetCount);
+
+        modalBody.innerHTML = `
+            <div class="advancement-steps-bar">
+                <div class="step-indicator-item completed">
+                    <span class="step-indicator-num">✓</span>
+                    <span>1. Qualification Selected</span>
+                </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item active">
+                    <span class="step-indicator-num">2</span>
+                    <span>2. Preview & Manual Ordering</span>
+                </div>
+            </div>
+
+            <div class="advancement-target-banner">
+                <div class="target-banner-title">
+                    <span>📋 Stage Seeding Order:</span>
+                    <span>Arrange exact position rankings for <strong>${escapeHtml(state.nextRound.round_name)}</strong></span>
+                </div>
+                <div class="target-banner-counter ${isExactMatch ? 'exact-match' : 'mismatch'}">
+                    <span>${selectedCount} / ${targetCount} Songs</span>
+                    ${isExactMatch ? '✓ All Slots Filled' : `(${Math.abs(targetCount - selectedCount)} ${selectedCount < targetCount ? 'remaining slots' : 'slots over target'})`}
+                </div>
+            </div>
+
+            <p class="text-sm text-secondary mb-3">
+                Drag songs using the handle (<span class="drag-handle" style="font-size: 0.9rem;">⋮⋮</span>) or use the <strong>Move Up (▲)</strong> and <strong>Move Down (▼)</strong> buttons to set their explicit seeding order for the next stage.
+                You can remove a song with <strong>✕</strong> and return to selection to pick a replacement.
+            </p>
+
+            <div class="reorderable-preview-container" id="reorderableListContainer">
+                ${state.orderedQualifiers.length === 0 ? `
+                    <div class="text-center p-4 text-muted">No songs selected. Return to step 1 to select candidates.</div>
+                ` : state.orderedQualifiers.map((q, idx) => `
+                    <div class="reorderable-item" draggable="true" data-index="${idx}" data-entry-id="${q.entry_id}">
+                        <div class="drag-handle" title="Drag to reorder">⋮⋮</div>
+                        <div class="pos-badge" title="Position in ${escapeHtml(state.nextRound.round_name)}">#${idx + 1}</div>
+                        <div class="order-actions-col">
+                            <button type="button" class="btn-move-order btn-move-up" data-index="${idx}" ${idx === 0 ? 'disabled' : ''} title="Move Up">▲</button>
+                            <button type="button" class="btn-move-order btn-move-down" data-index="${idx}" ${idx === state.orderedQualifiers.length - 1 ? 'disabled' : ''} title="Move Down">▼</button>
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="font-bold text-truncate">${escapeHtml(q.title)}</div>
+                            <div class="text-xs text-muted text-truncate">${escapeHtml(q.artist)}</div>
+                        </div>
+                        <div class="text-right" style="margin-right: 0.75rem;">
+                            <div class="text-xs font-mono font-bold text-accent">${q.total}/50 Total</div>
+                            <div class="text-xs text-muted">Advisory #${q.calculated_rank}</div>
+                        </div>
+                        <button type="button" class="btn-remove-qualifier" data-entry-id="${q.entry_id}" title="Remove from advancement list">&times;</button>
+                    </div>
+                `).join('')}
+            </div>
+
+            <p class="text-xs text-muted mt-3">
+                * Note: Your manual ordering is authoritative and will be preserved as the official starting sequence and seed in ${escapeHtml(state.nextRound.round_name)}.
+            </p>
+        `;
+
+        modalFooter.innerHTML = `
+            <button type="button" class="btn btn-secondary" id="btnBackToSelection">&larr; Back to Selection</button>
+            <button type="button" class="btn btn-accent" id="btnConfirmFinalAdvancement" ${!isExactMatch ? 'disabled' : ''}>
+                Confirm & Advance Stage ⚡
+            </button>
+        `;
+
+        bindPreviewStepEvents();
+    }
+
+    function bindPreviewStepEvents() {
+        const btnBack = document.getElementById('btnBackToSelection');
+        if (btnBack) {
+            btnBack.addEventListener('click', () => {
+                state.currentStep = 1;
+                renderAdvancementModal();
+            });
+        }
+
+        modalBody.querySelectorAll('.btn-move-up').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (idx > 0) {
+                    const temp = state.orderedQualifiers[idx];
+                    state.orderedQualifiers[idx] = state.orderedQualifiers[idx - 1];
+                    state.orderedQualifiers[idx - 1] = temp;
+                    renderPreviewAndOrderStep();
+                }
+            });
+        });
+
+        modalBody.querySelectorAll('.btn-move-down').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (idx < state.orderedQualifiers.length - 1) {
+                    const temp = state.orderedQualifiers[idx];
+                    state.orderedQualifiers[idx] = state.orderedQualifiers[idx + 1];
+                    state.orderedQualifiers[idx + 1] = temp;
+                    renderPreviewAndOrderStep();
+                }
+            });
+        });
+
+        modalBody.querySelectorAll('.btn-remove-qualifier').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const entryId = parseInt(btn.getAttribute('data-entry-id'), 10);
+                state.selectedIds.delete(entryId);
+                state.orderedQualifiers = state.orderedQualifiers.filter(q => q.entry_id !== entryId);
+                renderPreviewAndOrderStep();
+            });
+        });
+
+        const listContainer = document.getElementById('reorderableListContainer');
+        if (listContainer) {
+            let dragSrcIdx = null;
+
+            listContainer.querySelectorAll('.reorderable-item').forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    dragSrcIdx = parseInt(item.getAttribute('data-index'), 10);
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    item.classList.add('drag-over');
+                });
+
+                item.addEventListener('dragleave', () => {
+                    item.classList.remove('drag-over');
+                });
+
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    item.classList.remove('drag-over');
+                    const dropTargetIdx = parseInt(item.getAttribute('data-index'), 10);
+                    if (dragSrcIdx !== null && dragSrcIdx !== dropTargetIdx) {
+                        const dragged = state.orderedQualifiers.splice(dragSrcIdx, 1)[0];
+                        state.orderedQualifiers.splice(dropTargetIdx, 0, dragged);
+                        renderPreviewAndOrderStep();
+                    }
+                });
+
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('dragging');
+                    listContainer.querySelectorAll('.reorderable-item').forEach(it => it.classList.remove('drag-over'));
+                });
+            });
+        }
+
+        const btnConfirm = document.getElementById('btnConfirmFinalAdvancement');
+        if (btnConfirm) {
+            btnConfirm.addEventListener('click', async () => {
+                const targetCount = state.rules ? state.rules.target_count : (state.nextRound.target_count || 1);
+                if (state.orderedQualifiers.length !== targetCount) {
+                    showToast(`You must advance exactly ${targetCount} songs. Currently ${state.orderedQualifiers.length} are selected.`, 'danger');
+                    return;
+                }
+
+                const confirmed = window.confirm(
+                    `Are you sure you want to advance these ${state.orderedQualifiers.length} songs to ${state.nextRound.round_name} in this exact manual order?\n\nThis will mark ${state.fromRound.round_name} as completed and persist your custom tournament seeding.`
+                );
+                if (!confirmed) return;
+
+                btnConfirm.disabled = true;
+                btnConfirm.textContent = 'Advancing Stage...';
+
+                const qualifierIds = state.orderedQualifiers.map(q => q.entry_id);
+                const manualOrderMap = {};
+                state.orderedQualifiers.forEach((q, idx) => {
+                    manualOrderMap[q.entry_id] = idx + 1;
+                });
+
+                try {
+                    const res = await fetch('api.php?action=commit_advancement', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCsrfToken()
+                        },
+                        body: JSON.stringify({
+                            from_round_id: state.fromRound.round_id,
+                            qualifier_ids: qualifierIds,
+                            manual_order_map: manualOrderMap
+                        })
+                    });
+
+                    const data = await res.json();
+                    btnConfirm.disabled = false;
+                    btnConfirm.textContent = 'Confirm & Advance Stage ⚡';
+
+                    if (!data.success) {
+                        showToast(data.error || 'Failed to advance tournament stage.', 'danger', 5000);
+                        return;
+                    }
+
+                    modal.classList.remove('active');
+                    showToast(data.message || 'Tournament stage advanced successfully!', 'success', 4000);
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1200);
+
+                } catch (err) {
+                    btnConfirm.disabled = false;
+                    btnConfirm.textContent = 'Confirm & Advance Stage ⚡';
+                    console.error('Commit Advancement Error:', err);
+                    showToast('Network error while committing stage advancement.', 'danger');
+                }
+            });
+        }
+    }
+}
+
+/**
+ * Tournament Controlled Stage Reopening
+ */
+function initTournamentStageReopening() {
+    const reopenBtn = document.getElementById('btnReopenStage');
+    const modal = document.getElementById('reopenStageModal');
+    const modalBody = document.getElementById('reopenStageModalBody');
+    const confirmBtn = document.getElementById('btnConfirmReopenStage');
+
+    if (!reopenBtn || !modal || !modalBody || !confirmBtn) return;
+
+    let targetRoundId = null;
+
+    reopenBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        targetRoundId = parseInt(reopenBtn.getAttribute('data-round-id'), 10);
+        if (!targetRoundId) return;
+
+        modalBody.innerHTML = '<div class="text-center p-4">Loading stage details & impact analysis...</div>';
+        confirmBtn.disabled = true;
+        modal.classList.add('active');
+
+        try {
+            const res = await fetch(`api.php?action=get_stage_reopen_info&round_id=${targetRoundId}`);
+            const data = await res.json();
+
+            if (!data.success) {
+                modalBody.innerHTML = `<div class="alert alert-danger">${escapeHtml(data.error || 'Failed to load stage info.')}</div>`;
+                return;
+            }
+
+            confirmBtn.disabled = false;
+            const round = data.round;
+            const subsequent = data.subsequent_rounds || [];
+            const qualifiedCount = data.qualified_count || 0;
+            const eliminatedCount = data.eliminated_count || 0;
+
+            modalBody.innerHTML = `
+                <div class="mb-3">
+                    <p>You are requesting to reopen <strong>${escapeHtml(round.round_name)}</strong>.</p>
+                </div>
+
+                <div class="alert alert-warning mb-3">
+                    <strong>⚠️ What Reopening Does:</strong>
+                    <ul class="text-sm mt-1" style="padding-left: 1.25rem;">
+                        <li>Reverts <strong>${escapeHtml(round.round_name)}</strong> back to <strong>In Progress</strong>.</li>
+                        <li>Past qualification decisions (${qualifiedCount} advanced, ${eliminatedCount} eliminated) will be archived into historical decision records.</li>
+                        ${subsequent.length > 0 ? `<li>Subsequent stages (${subsequent.map(s => escapeHtml(s.round_name)).join(', ')}) will be reset to <strong>Upcoming</strong>.</li>` : ''}
+                        <li><strong>Safe Data Preservation:</strong> All song scores, ratings, and criterion evaluations are safely preserved and will NOT be erased.</li>
+                    </ul>
+                </div>
+
+                <p class="text-sm text-secondary">
+                    After reopening, you can adjust scores in Auditions and re-run the manual qualification and advancement workflow to correct any tournament decisions.
+                </p>
+            `;
+
+        } catch (err) {
+            console.error('Fetch Reopen Info Error:', err);
+            modalBody.innerHTML = '<div class="alert alert-danger">Network error loading stage information.</div>';
         }
     });
 
     confirmBtn.addEventListener('click', async (e) => {
         e.preventDefault();
-        if (!pendingPayload) return;
+        if (!targetRoundId) return;
 
         confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Advancing Stage...';
+        confirmBtn.textContent = 'Reopening Stage...';
 
         try {
-            const res = await fetch('api.php?action=commit_advancement', {
+            const res = await fetch('api.php?action=reopen_stage', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': getCsrfToken()
                 },
-                body: JSON.stringify(pendingPayload)
+                body: JSON.stringify({ round_id: targetRoundId })
             });
 
             const data = await res.json();
             confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm & Advance';
+            confirmBtn.textContent = 'Confirm & Reopen Stage';
 
             if (!data.success) {
-                showToast(data.error || 'Failed to advance tournament stage.', 'danger');
+                showToast(data.error || 'Failed to reopen stage.', 'danger', 5000);
                 return;
             }
 
             modal.classList.remove('active');
-            showToast(data.message || 'Tournament stage advanced successfully!', 'success', 4000);
+            showToast(data.message || 'Stage reopened successfully!', 'success', 4000);
 
-            // Reload page to reflect new stage state
             setTimeout(() => {
                 window.location.reload();
-            }, 1200);
+            }, 1000);
 
         } catch (err) {
             confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm & Advance';
-            console.error('Commit Advancement Error:', err);
-            showToast('Network error while committing tournament advancement.', 'danger');
+            confirmBtn.textContent = 'Confirm & Reopen Stage';
+            console.error('Reopen Stage Error:', err);
+            showToast('Network error while reopening stage.', 'danger');
         }
     });
 }

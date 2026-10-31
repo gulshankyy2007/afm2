@@ -1378,27 +1378,64 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
         ];
     }
 
-    // SAFEGUARD 2: Check if song has an active audition score
+    // SAFEGUARD 2: Check if song has an active audition score in an in-progress stage
     $checkActiveScore = $pdo->prepare("
         SELECT COUNT(*) 
         FROM `ratings` r 
         JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` 
+        JOIN `rounds` rnd ON r.`round_id` = rnd.`round_id`
+        LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = rnd.`round_id`
         WHERE e.`song_id` = :id 
-          AND (r.`user_id` = :uid OR (r.`user_id` IS NULL AND :uid_g = 995))
+          AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g = 995))
+          AND COALESCE(urp.`status`, rnd.`status`) = 'in_progress'
           AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)
     ");
-    $checkActiveScore->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+    $checkActiveScore->execute([':id' => $songId, ':uid1' => $userId, ':uid2' => $userId, ':uid_g' => $userId]);
     $hasActiveScore = ((int)$checkActiveScore->fetchColumn() > 0);
     if ($hasActiveScore) {
         return [
             'success' => false,
             'blocked' => true,
             'reason'  => 'scored',
-            'error'   => "Cannot delete \"{$song['title']}\": This song has an active audition score. Please reset or clear its score first before deleting."
+            'error'   => "Cannot delete \"{$song['title']}\": This song has an active audition score in an ongoing tournament stage. Please reset or clear its score first before deleting."
         ];
     }
 
-    // SAFEGUARD 3: Check if song is referenced by completed tournament history
+    // SAFEGUARD 3: Check if song is an active participant in an ongoing or upcoming tournament stage
+    $checkActiveParticipant = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM `round_results` rr 
+        JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` 
+        JOIN `rounds` r ON rr.`round_id` = r.`round_id`
+        LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = r.`round_id`
+        LEFT JOIN `rounds` next_r ON next_r.`sequence_no` = r.`sequence_no` + 1
+        LEFT JOIN `user_round_progress` next_urp ON next_urp.`user_id` = :uid2 AND next_urp.`round_id` = next_r.`round_id`
+        WHERE e.`song_id` = :id 
+          AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g = 995))
+          AND rr.`result` IN ('qualified', 'winner')
+          AND (
+              COALESCE(urp.`status`, r.`status`) = 'in_progress'
+              OR (next_r.`round_id` IS NOT NULL AND COALESCE(next_urp.`status`, next_r.`status`) IN ('in_progress', 'upcoming'))
+          )
+    ");
+    $checkActiveParticipant->execute([
+        ':id'   => $songId,
+        ':uid1' => $userId,
+        ':uid2' => $userId,
+        ':uid3' => $userId,
+        ':uid_g'=> $userId
+    ]);
+    $isActiveParticipant = ((int)$checkActiveParticipant->fetchColumn() > 0);
+    if ($isActiveParticipant) {
+        return [
+            'success' => false,
+            'blocked' => true,
+            'reason'  => 'active_participant',
+            'error'   => "Cannot delete \"{$song['title']}\": This song is an active participant in an ongoing or upcoming tournament stage. Eliminate the participant or reset the stage before deleting."
+        ];
+    }
+
+    // Check if song is referenced by completed historical tournament records
     $checkResults = $pdo->prepare("
         SELECT COUNT(*) 
         FROM `round_results` rr 
@@ -1408,20 +1445,11 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
     ");
     $checkResults->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
     $hasTournamentHistory = ((int)$checkResults->fetchColumn() > 0);
-    if ($hasTournamentHistory) {
-        return [
-            'success' => false,
-            'blocked' => true,
-            'reason'  => 'tournament_history',
-            'error'   => "Cannot delete \"{$song['title']}\": This song is referenced in your completed tournament history and cannot be deleted without compromising tournament integrity."
-        ];
-    }
 
-    // Once cleaned up (unshortlisted, unscored, no historical tournament results): permanently delete
     try {
         $pdo->beginTransaction();
 
-        // Remove auxiliary song assets and references
+        // Remove auxiliary song assets and user-scoped data
         $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` = :id")->execute([':id' => $songId]);
         $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` = :id")->execute([':id' => $songId]);
         $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` = :id")->execute([':id' => $songId]);
@@ -1431,26 +1459,57 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
                 ->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
         } catch (\Throwable $e) {}
 
-        // Remove unscored competition entries & discovery records
-        $delEntry = $pdo->prepare("DELETE FROM `afm_entries` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))");
-        $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
-
+        // Remove discovery records
         $delDisc = $pdo->prepare("DELETE FROM `song_discovery` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))");
         $delDisc->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
 
-        $delSong = $pdo->prepare("DELETE FROM `songs` WHERE `song_id` = :id AND `user_id` = :uid");
-        $delSong->execute([':id' => $songId, ':uid' => $userId]);
+        if ($hasTournamentHistory) {
+            // Populate immutable snapshot in round_results before soft-deleting from active catalogue
+            $pdo->prepare("
+                UPDATE `round_results` rr
+                JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id`
+                JOIN `songs` s ON e.`song_id` = s.`song_id`
+                LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = rr.`round_id`
+                SET 
+                    rr.`song_title` = COALESCE(rr.`song_title`, s.`title`),
+                    rr.`song_artist` = COALESCE(rr.`song_artist`, s.`artist`),
+                    rr.`score_total` = COALESCE(rr.`score_total`, rt.`total`)
+                WHERE s.`song_id` = :id
+            ")->execute([':id' => $songId]);
 
-        $pdo->commit();
-        clear_dashboard_stats_cache();
+            // Soft-delete: removes from active catalogue, search, library, and candidate pool while preserving historical records
+            $softDel = $pdo->prepare("UPDATE `songs` SET `deleted_at` = NOW() WHERE `song_id` = :id AND `user_id` = :uid");
+            $softDel->execute([':id' => $songId, ':uid' => $userId]);
 
-        return [
-            'success'  => true,
-            'song_id'  => $songId,
-            'title'    => $song['title'],
-            'archived' => false,
-            'message'  => "Song #{$songId} (\"{$song['title']}\") was permanently deleted from your catalogue."
-        ];
+            $pdo->commit();
+            clear_dashboard_stats_cache();
+
+            return [
+                'success'  => true,
+                'song_id'  => $songId,
+                'title'    => $song['title'],
+                'archived' => true,
+                'message'  => "Song #{$songId} (\"{$song['title']}\") was removed from your active catalogue. Its historical tournament records remain preserved."
+            ];
+        } else {
+            // Clean songs without tournament history: permanently delete afm_entries and songs row
+            $delEntry = $pdo->prepare("DELETE FROM `afm_entries` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))");
+            $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+
+            $delSong = $pdo->prepare("DELETE FROM `songs` WHERE `song_id` = :id AND `user_id` = :uid");
+            $delSong->execute([':id' => $songId, ':uid' => $userId]);
+
+            $pdo->commit();
+            clear_dashboard_stats_cache();
+
+            return [
+                'success'  => true,
+                'song_id'  => $songId,
+                'title'    => $song['title'],
+                'archived' => false,
+                'message'  => "Song #{$songId} (\"{$song['title']}\") was permanently deleted from your catalogue."
+            ];
+        }
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -1544,22 +1603,40 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
     $checkBlockedStmt = $pdo->prepare("
         SELECT 
             (SELECT COUNT(*) FROM `song_discovery` sd WHERE sd.`song_id` = :id1 AND (sd.`user_id` = :uid1 OR (sd.`user_id` IS NULL AND :uid_g1 = 995)) AND sd.`status` = 'shortlisted') AS is_shortlisted,
-            (SELECT COUNT(*) FROM `ratings` r JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id2 AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g2 = 995)) AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)) AS active_ratings_count,
-            (SELECT COUNT(*) FROM `round_results` rr JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id3 AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g3 = 995))) AS results_count
+            (SELECT COUNT(*) FROM `ratings` r JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` JOIN `rounds` rnd ON r.`round_id` = rnd.`round_id` LEFT JOIN `user_round_progress` urp_sc ON urp_sc.`user_id` = :uid_sc1 AND urp_sc.`round_id` = rnd.`round_id` WHERE e.`song_id` = :id2 AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g2 = 995)) AND COALESCE(urp_sc.`status`, rnd.`status`) = 'in_progress' AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)) AS active_ratings_count,
+            (SELECT COUNT(*) 
+             FROM `round_results` rr 
+             JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` 
+             JOIN `rounds` r ON rr.`round_id` = r.`round_id`
+             LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid3 AND urp.`round_id` = r.`round_id`
+             LEFT JOIN `rounds` next_r ON next_r.`sequence_no` = r.`sequence_no` + 1
+             LEFT JOIN `user_round_progress` next_urp ON next_urp.`user_id` = :uid4 AND next_urp.`round_id` = next_r.`round_id`
+             WHERE e.`song_id` = :id3 
+               AND (rr.`user_id` = :uid5 OR (rr.`user_id` IS NULL AND :uid_g3 = 995))
+               AND rr.`result` IN ('qualified', 'winner')
+               AND (
+                   COALESCE(urp.`status`, r.`status`) = 'in_progress'
+                   OR (next_r.`round_id` IS NOT NULL AND COALESCE(next_urp.`status`, next_r.`status`) IN ('in_progress', 'upcoming'))
+               )
+            ) AS is_active_participant,
+            (SELECT COUNT(*) FROM `round_results` rr JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id4 AND (rr.`user_id` = :uid6 OR (rr.`user_id` IS NULL AND :uid_g4 = 995))) AS results_count
     ");
 
     $hardDeleteIds = [];
+    $archivedIds = [];
 
     foreach ($foundSongs as $id => $song) {
         $checkBlockedStmt->execute([
             ':id1' => $id, ':uid1' => $userId, ':uid_g1' => $userId,
-            ':id2' => $id, ':uid2' => $userId, ':uid_g2' => $userId,
-            ':id3' => $id, ':uid3' => $userId, ':uid_g3' => $userId
+            ':id2' => $id, ':uid_sc1' => $userId, ':uid2' => $userId, ':uid_g2' => $userId,
+            ':id3' => $id, ':uid3' => $userId, ':uid4' => $userId, ':uid5' => $userId, ':uid_g3' => $userId,
+            ':id4' => $id, ':uid6' => $userId, ':uid_g4' => $userId
         ]);
         $hist = $checkBlockedStmt->fetch(PDO::FETCH_ASSOC);
-        $isShortlisted = (int)($hist['is_shortlisted'] ?? 0);
-        $ratingsCount  = (int)($hist['active_ratings_count'] ?? 0);
-        $resultsCount  = (int)($hist['results_count'] ?? 0);
+        $isShortlisted        = (int)($hist['is_shortlisted'] ?? 0);
+        $ratingsCount         = (int)($hist['active_ratings_count'] ?? 0);
+        $isActiveParticipant  = (int)($hist['is_active_participant'] ?? 0);
+        $resultsCount         = (int)($hist['results_count'] ?? 0);
 
         if ($isShortlisted > 0) {
             $blockedSongs[] = [
@@ -1575,26 +1652,30 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
                 'artist'  => $song['artist'],
                 'reason'  => 'Has active audition score. Reset score first.'
             ];
-        } elseif ($resultsCount > 0) {
+        } elseif ($isActiveParticipant > 0) {
             $blockedSongs[] = [
                 'song_id' => $id,
                 'title'   => $song['title'],
                 'artist'  => $song['artist'],
-                'reason'  => 'Referenced in completed tournament history.'
+                'reason'  => 'Active participant in an ongoing or upcoming tournament stage.'
             ];
+        } elseif ($resultsCount > 0) {
+            $archivedIds[] = $id;
         } else {
             $hardDeleteIds[] = $id;
         }
     }
 
-    if (empty($hardDeleteIds)) {
+    if (empty($hardDeleteIds) && empty($archivedIds)) {
         return [
             'success'       => false,
             'blocked'       => true,
-            'error'         => 'All selected songs were blocked from deletion due to active shortlist, audition scores, or tournament history.',
+            'error'         => 'All selected songs were blocked from deletion due to active shortlist, audition scores, or tournament stage participation.',
             'deleted_count' => 0,
+            'archived_count'=> 0,
             'blocked_count' => count($blockedSongs),
             'deleted_ids'   => [],
+            'archived_ids'  => [],
             'blocked_songs' => $blockedSongs
         ];
     }
@@ -1602,46 +1683,79 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
     try {
         $pdo->beginTransaction();
 
-        $delInClause = implode(',', array_fill(0, count($hardDeleteIds), '?'));
-        $params = array_merge([$userId], $hardDeleteIds);
-        $rawSongParams = $hardDeleteIds;
+        $allAffectedIds = array_merge($hardDeleteIds, $archivedIds);
+        $allInClause = implode(',', array_fill(0, count($allAffectedIds), '?'));
+        $allParams = array_merge([$userId], $allAffectedIds);
 
-        // Clean auxiliary tables
-        $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
-        $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
-        $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
-        $pdo->prepare("DELETE FROM `song_youtube_candidates` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
+        // Clean auxiliary tables for all affected songs
+        $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` IN ($allInClause)")->execute($allAffectedIds);
+        $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` IN ($allInClause)")->execute($allAffectedIds);
+        $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` IN ($allInClause)")->execute($allAffectedIds);
+        $pdo->prepare("DELETE FROM `song_youtube_candidates` WHERE `song_id` IN ($allInClause)")->execute($allAffectedIds);
         try {
-            $pdo->prepare("DELETE FROM `user_song_lyrics` WHERE `user_id` = ? AND `song_id` IN ($delInClause)")->execute($params);
+            $pdo->prepare("DELETE FROM `user_song_lyrics` WHERE `user_id` = ? AND `song_id` IN ($allInClause)")->execute($allParams);
         } catch (\Throwable $e) {}
 
-        $delEntries = $pdo->prepare("DELETE FROM `afm_entries` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
-        $delEntries->execute($params);
+        $delDisc = $pdo->prepare("DELETE FROM `song_discovery` WHERE `user_id` = ? AND `song_id` IN ($allInClause)");
+        $delDisc->execute($allParams);
 
-        $delDisc = $pdo->prepare("DELETE FROM `song_discovery` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
-        $delDisc->execute($params);
+        // 1. Handle historical songs: populate snapshots and soft-delete from active catalogue
+        if (!empty($archivedIds)) {
+            $archInClause = implode(',', array_fill(0, count($archivedIds), '?'));
+            $pdo->prepare("
+                UPDATE `round_results` rr
+                JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id`
+                JOIN `songs` s ON e.`song_id` = s.`song_id`
+                LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = rr.`round_id`
+                SET 
+                    rr.`song_title` = COALESCE(rr.`song_title`, s.`title`),
+                    rr.`song_artist` = COALESCE(rr.`song_artist`, s.`artist`),
+                    rr.`score_total` = COALESCE(rr.`score_total`, rt.`total`)
+                WHERE s.`song_id` IN ($archInClause)
+            ")->execute($archivedIds);
 
-        $delSongs = $pdo->prepare("DELETE FROM `songs` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
-        $delSongs->execute($params);
+            $archParams = array_merge([$userId], $archivedIds);
+            $pdo->prepare("UPDATE `songs` SET `deleted_at` = NOW() WHERE `user_id` = ? AND `song_id` IN ($archInClause)")
+                ->execute($archParams);
+        }
+
+        // 2. Handle clean songs: permanently hard-delete afm_entries and songs rows
+        if (!empty($hardDeleteIds)) {
+            $hardInClause = implode(',', array_fill(0, count($hardDeleteIds), '?'));
+            $hardParams = array_merge([$userId], $hardDeleteIds);
+
+            $pdo->prepare("DELETE FROM `afm_entries` WHERE `user_id` = ? AND `song_id` IN ($hardInClause)")->execute($hardParams);
+            $pdo->prepare("DELETE FROM `songs` WHERE `user_id` = ? AND `song_id` IN ($hardInClause)")->execute($hardParams);
+        }
 
         $pdo->commit();
         clear_dashboard_stats_cache();
 
-        $deletedCount = count($hardDeleteIds);
-        $blockedCount = count($blockedSongs);
+        $deletedCount  = count($hardDeleteIds);
+        $archivedCount = count($archivedIds);
+        $blockedCount  = count($blockedSongs);
 
-        $msg = "Successfully deleted {$deletedCount} song(s) from your catalogue.";
+        $msgParts = [];
+        if ($deletedCount > 0) {
+            $msgParts[] = "{$deletedCount} song(s) permanently deleted";
+        }
+        if ($archivedCount > 0) {
+            $msgParts[] = "{$archivedCount} song(s) removed from active catalogue (historical records preserved)";
+        }
+        $msg = implode(', ', $msgParts) . ".";
         if ($blockedCount > 0) {
-            $msg .= " ({$blockedCount} song(s) were blocked due to active shortlist, scores, or tournament history).";
+            $msg .= " ({$blockedCount} song(s) were blocked due to active dependencies).";
         }
 
         return [
-            'success'       => true,
-            'deleted_count' => $deletedCount,
-            'blocked_count' => $blockedCount,
-            'deleted_ids'   => $hardDeleteIds,
-            'blocked_songs' => $blockedSongs,
-            'message'       => $msg
+            'success'        => true,
+            'deleted_count'  => $deletedCount,
+            'archived_count' => $archivedCount,
+            'blocked_count'  => $blockedCount,
+            'deleted_ids'    => $hardDeleteIds,
+            'archived_ids'   => $archivedIds,
+            'blocked_songs'  => $blockedSongs,
+            'message'        => $msg
         ];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -2162,115 +2276,345 @@ function get_round_rankings(int $roundId, ?int $userId = null): array {
 }
 
 /**
- * Preview tournament stage qualification & cutoff analysis
+ * Stage Advancement Target & Minimum Eligibility Rules Definition
+ * 
+ * Flow:
+ * - Formal Auditions (1) -> Top 200 (2): Target 200, Min Eligible 201
+ * - Top 200 (2) -> Top 100 (3): Target 100, Min Eligible 101
+ * - Top 100 (3) -> Top 50 (4): Target 50, Min Eligible 51
+ * - Top 50 (4) -> Top 20 (5): Target 20, Min Eligible 21
+ * - Top 20 (5) -> Top 10 (6): Target 10, Min Eligible 11
+ * - Top 10 (6) -> Finals (7): Target 1, Min Eligible 2
  */
-function preview_stage_advancement(int $fromRoundId, ?int $userId = null): array {
-    $pdo = get_db_connection();
+function get_stage_advancement_rules(int $fromSequenceNo): array {
+    $rules = [
+        1 => ['target' => 200, 'min_eligible' => 201, 'target_count' => 200, 'min_eligible_participants' => 201, 'name' => 'Top 200', 'from_name' => 'Formal Auditions'],
+        2 => ['target' => 100, 'min_eligible' => 101, 'target_count' => 100, 'min_eligible_participants' => 101, 'name' => 'Top 100', 'from_name' => 'Top 200'],
+        3 => ['target' => 50,  'min_eligible' => 51,  'target_count' => 50,  'min_eligible_participants' => 51,  'name' => 'Top 50',  'from_name' => 'Top 100'],
+        4 => ['target' => 20,  'min_eligible' => 21,  'target_count' => 20,  'min_eligible_participants' => 21,  'name' => 'Top 20',  'from_name' => 'Top 50'],
+        5 => ['target' => 10,  'min_eligible' => 11,  'target_count' => 10,  'min_eligible_participants' => 11,  'name' => 'Top 10',  'from_name' => 'Top 20'],
+        6 => ['target' => 1,   'min_eligible' => 2,   'target_count' => 1,   'min_eligible_participants' => 2,   'name' => 'Finals',  'from_name' => 'Top 10'],
+    ];
+    return $rules[$fromSequenceNo] ?? ['target' => 1, 'min_eligible' => 2, 'target_count' => 1, 'min_eligible_participants' => 2, 'name' => 'Next Stage', 'from_name' => 'Current Stage'];
+}
 
-    // Fetch from round and next round
-    $fromStmt = $pdo->prepare("SELECT * FROM `rounds` WHERE `round_id` = :id");
-    $fromStmt->execute([':id' => $fromRoundId]);
-    $fromRound = $fromStmt->fetch();
+/**
+ * Fetch all eligible stage participants with evaluation statuses and advisory rankings
+ */
+function get_stage_qualification_candidates(int $fromRoundId, ?int $userId = null): array {
+    $pdo = get_db_connection();
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+
+    $fromRound = get_round_by_id($fromRoundId, $userId);
     if (!$fromRound) {
         return ['success' => false, 'error' => 'Current round not found.'];
     }
 
-    if ($userId !== null) {
-        $urpStmt = $pdo->prepare("SELECT `status` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :r_id");
-        $urpStmt->execute([':uid' => $userId, ':r_id' => $fromRoundId]);
-        $urpStatus = $urpStmt->fetchColumn();
-        if ($urpStatus) {
-            $fromRound['status'] = $urpStatus;
-        }
-    }
+    $seq = (int)$fromRound['sequence_no'];
+    $rules = get_stage_advancement_rules($seq);
 
     $nextStmt = $pdo->prepare("SELECT * FROM `rounds` WHERE `sequence_no` = :seq");
-    $nextStmt->execute([':seq' => $fromRound['sequence_no'] + 1]);
-    $nextRound = $nextStmt->fetch();
+    $nextStmt->execute([':seq' => $seq + 1]);
+    $nextRound = $nextStmt->fetch(PDO::FETCH_ASSOC);
+    if ($nextRound && $userId !== null) {
+        $nextRound = get_round_by_id((int)$nextRound['round_id'], $userId) ?? $nextRound;
+    }
+
+    $delSqlS = song_deleted_sql('s', $pdo);
+    $userScopeE = ($userId !== null) ? song_user_scope_sql($userId, 'e', $pdo) : '1=1';
+    $userScopeS = ($userId !== null) ? song_user_scope_sql($userId, 's', $pdo) : '1=1';
+
+    $sdUserJoin = ($userId !== null)
+        ? (($userId === 995) ? "AND (sd.`user_id` = 995 OR sd.`user_id` IS NULL)" : "AND sd.`user_id` = :uid_sd")
+        : "";
+    $rUserJoin = ($userId !== null)
+        ? (($userId === 995) ? "AND (r.`user_id` = 995 OR r.`user_id` IS NULL)" : "AND r.`user_id` = :uid_r")
+        : "";
+    $rrUserJoin = ($userId !== null)
+        ? (($userId === 995) ? "AND (rr.`user_id` = 995 OR rr.`user_id` IS NULL)" : "AND rr.`user_id` = :uid_rr")
+        : "";
+
+    if ($seq === 1) {
+        $params = [
+            ':round_id_r'  => $fromRoundId,
+            ':round_id_rr' => $fromRoundId,
+        ];
+        if ($userId !== null && $userId !== 995) {
+            $params[':uid_sd'] = $userId;
+            $params[':uid_r']  = $userId;
+            $params[':uid_rr'] = $userId;
+        }
+
+        // Stage 1: Eligible participants are all songs shortlisted in discovery candidate pool
+        $sql = "
+            SELECT 
+                e.`entry_id`,
+                s.`song_id`,
+                s.`title`,
+                COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
+                r.`rating_id`,
+                r.`melody`,
+                r.`lyrics`,
+                r.`vocals`,
+                r.`emotion`,
+                r.`replayability`,
+                r.`total`,
+                CASE 
+                    WHEN r.`melody` IS NOT NULL AND r.`lyrics` IS NOT NULL AND r.`vocals` IS NOT NULL 
+                         AND r.`emotion` IS NOT NULL AND r.`replayability` IS NOT NULL THEN 'completed'
+                    WHEN r.`rating_id` IS NOT NULL AND (
+                         r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL 
+                         OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL
+                    ) THEN 'incomplete'
+                    ELSE 'untouched'
+                END AS `eval_status`,
+                rr.`result` AS `saved_result`,
+                rr.`rank_position` AS `saved_rank`,
+                rr.`manual_order` AS `saved_manual_order`
+            FROM `afm_entries` e
+            JOIN `songs` s ON e.`song_id` = s.`song_id`
+            JOIN `song_discovery` sd ON s.`song_id` = sd.`song_id` AND sd.`status` = 'shortlisted' {$sdUserJoin}
+            LEFT JOIN `ratings` r ON e.`entry_id` = r.`entry_id` AND r.`round_id` = :round_id_r {$rUserJoin}
+            LEFT JOIN `round_results` rr ON e.`entry_id` = rr.`entry_id` AND rr.`round_id` = :round_id_rr {$rrUserJoin}
+            WHERE {$userScopeE} AND {$userScopeS} AND {$delSqlS}
+              AND s.`is_consolidated` = 0
+              AND e.`status` != 'excluded'
+        ";
+    } else {
+        // Subsequent Stages: Eligible participants are songs that qualified from the preceding stage
+        $prevRoundStmt = $pdo->prepare("SELECT `round_id` FROM `rounds` WHERE `sequence_no` = :prev_seq");
+        $prevRoundStmt->execute([':prev_seq' => $seq - 1]);
+        $prevRoundId = (int)$prevRoundStmt->fetchColumn();
+
+        $prevRrUserJoin = ($userId !== null)
+            ? (($userId === 995) ? "AND (prev_rr.`user_id` = 995 OR prev_rr.`user_id` IS NULL)" : "AND prev_rr.`user_id` = :uid_prev_rr")
+            : "";
+
+        $params = [
+            ':prev_round_id' => $prevRoundId,
+            ':round_id_r'    => $fromRoundId,
+            ':round_id_rr'   => $fromRoundId,
+        ];
+        if ($userId !== null && $userId !== 995) {
+            $params[':uid_prev_rr'] = $userId;
+            $params[':uid_r']       = $userId;
+            $params[':uid_rr']      = $userId;
+        }
+
+        $sql = "
+            SELECT 
+                e.`entry_id`,
+                s.`song_id`,
+                s.`title`,
+                COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
+                r.`rating_id`,
+                r.`melody`,
+                r.`lyrics`,
+                r.`vocals`,
+                r.`emotion`,
+                r.`replayability`,
+                r.`total`,
+                CASE 
+                    WHEN r.`melody` IS NOT NULL AND r.`lyrics` IS NOT NULL AND r.`vocals` IS NOT NULL 
+                         AND r.`emotion` IS NOT NULL AND r.`replayability` IS NOT NULL THEN 'completed'
+                    WHEN r.`rating_id` IS NOT NULL AND (
+                         r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL 
+                         OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL
+                    ) THEN 'incomplete'
+                    ELSE 'untouched'
+                END AS `eval_status`,
+                rr.`result` AS `saved_result`,
+                rr.`rank_position` AS `saved_rank`,
+                rr.`manual_order` AS `saved_manual_order`,
+                prev_rr.`rank_position` AS `seed_rank`,
+                prev_rr.`manual_order` AS `seed_manual_order`
+            FROM `afm_entries` e
+            JOIN `round_results` prev_rr ON e.`entry_id` = prev_rr.`entry_id` 
+                 AND prev_rr.`round_id` = :prev_round_id 
+                 AND prev_rr.`result` IN ('qualified', 'winner')
+                 {$prevRrUserJoin}
+            JOIN `songs` s ON e.`song_id` = s.`song_id`
+            LEFT JOIN `ratings` r ON e.`entry_id` = r.`entry_id` AND r.`round_id` = :round_id_r {$rUserJoin}
+            LEFT JOIN `round_results` rr ON e.`entry_id` = rr.`entry_id` AND rr.`round_id` = :round_id_rr {$rrUserJoin}
+            WHERE {$userScopeE} AND {$userScopeS} AND {$delSqlS}
+              AND s.`is_consolidated` = 0
+        ";
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Compute Advisory Rankings strictly adhering to the 5 official criteria tie-breakers:
+    // Total DESC -> Emotion DESC -> Replayability DESC -> Melody DESC -> Vocals DESC -> Lyrics DESC -> entry_id ASC
+    usort($rows, function ($a, $b) {
+        $aCompleted = ($a['eval_status'] === 'completed');
+        $bCompleted = ($b['eval_status'] === 'completed');
+        if ($aCompleted !== $bCompleted) {
+            return $aCompleted ? -1 : 1;
+        }
+
+        if ($aCompleted && $bCompleted) {
+            $totalDiff = (int)$b['total'] - (int)$a['total'];
+            if ($totalDiff !== 0) return $totalDiff;
+
+            $emotionDiff = (int)$b['emotion'] - (int)$a['emotion'];
+            if ($emotionDiff !== 0) return $emotionDiff;
+
+            $replayDiff = (int)$b['replayability'] - (int)$a['replayability'];
+            if ($replayDiff !== 0) return $replayDiff;
+
+            $melodyDiff = (int)$b['melody'] - (int)$a['melody'];
+            if ($melodyDiff !== 0) return $melodyDiff;
+
+            $vocalsDiff = (int)$b['vocals'] - (int)$a['vocals'];
+            if ($vocalsDiff !== 0) return $vocalsDiff;
+
+            $lyricsDiff = (int)$b['lyrics'] - (int)$a['lyrics'];
+            if ($lyricsDiff !== 0) return $lyricsDiff;
+        }
+
+        return (int)$a['entry_id'] - (int)$b['entry_id'];
+    });
+
+    $targetCount = $rules['target'];
+    $minEligible = $rules['min_eligible'];
+    $totalEligible = count($rows);
+    $completedCount = 0;
+    $incompleteCount = 0;
+
+    $candidates = [];
+    $suggestedQualifiers = [];
+
+    foreach ($rows as $idx => $row) {
+        $rank = $idx + 1;
+        $row['suggested_rank'] = $rank;
+        $row['calculated_rank'] = $rank;
+        $row['is_eval_complete'] = ($row['eval_status'] === 'completed');
+        $row['status'] = $row['eval_status'];
+        $row['is_suggested'] = ($row['eval_status'] === 'completed' && $rank <= $targetCount);
+
+        if ($row['eval_status'] === 'completed') {
+            $completedCount++;
+            if ($rank <= $targetCount) {
+                $suggestedQualifiers[] = $row;
+            }
+        } else {
+            $incompleteCount++;
+        }
+        $candidates[] = $row;
+    }
+
+    $blockingReasons = [];
+    if ($totalEligible < $minEligible) {
+        $blockingReasons[] = "{$fromRound['round_name']} requires at least {$minEligible} eligible participants before advancing (current eligible: {$totalEligible}).";
+    }
+    if ($incompleteCount > 0) {
+        $blockingReasons[] = "All eligible participants must have completed evaluations before finalizing the stage ({$incompleteCount} incomplete or untouched).";
+    }
+
+    $canAdvance = empty($blockingReasons) && ($fromRound['status'] === 'in_progress');
+
+    return [
+        'success'               => true,
+        'from_round'            => $fromRound,
+        'next_round'            => $nextRound,
+        'rules'                 => $rules,
+        'target_count'          => $targetCount,
+        'min_eligible_required' => $minEligible,
+        'total_eligible'        => $totalEligible,
+        'completed_evaluations' => $completedCount,
+        'incomplete_evaluations'=> $incompleteCount,
+        'can_advance'           => $canAdvance,
+        'blocking_reasons'      => $blockingReasons,
+        'candidates'            => $candidates,
+        'suggested_qualifiers'  => $suggestedQualifiers
+    ];
+}
+
+/**
+ * Preview tournament stage qualification & cutoff analysis
+ */
+function preview_stage_advancement(int $fromRoundId, ?int $userId = null): array {
+    $candData = get_stage_qualification_candidates($fromRoundId, $userId);
+    if (!$candData['success']) {
+        return $candData;
+    }
+
+    $fromRound = $candData['from_round'];
+    $nextRound = $candData['next_round'];
     if (!$nextRound) {
         return ['success' => false, 'error' => 'This is the final stage. No subsequent round exists.'];
     }
 
-    if ($userId !== null) {
-        $urpNext = $pdo->prepare("SELECT `status` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :r_id");
-        $urpNext->execute([':uid' => $userId, ':r_id' => $nextRound['round_id']]);
-        $urpNextStatus = $urpNext->fetchColumn();
-        if ($urpNextStatus) {
-            $nextRound['status'] = $urpNextStatus;
-        }
-    }
-
-    $rankData = get_round_rankings($fromRoundId, $userId);
-    $rankings = $rankData['rankings'];
-    $totalCompleted = count($rankings);
-
-    if ($totalCompleted === 0) {
-        return [
-            'success' => false, 
-            'error'   => "No completed scorecards found for '{$fromRound['round_name']}'. Scores must be completed before advancing."
-        ];
-    }
-
-    // Target cutoff: for advancing to next round, target count is defined on next round
-    $targetCutoff = (int)$nextRound['target_count'];
-    if ($targetCutoff <= 0) {
-        $targetCutoff = 10;
-    }
-
-    // Graceful workflow if fewer than target count qualify
-    $effectiveCutoff = min($totalCompleted, $targetCutoff);
-
-    $qualifiers = array_slice($rankings, 0, $effectiveCutoff);
-    $eliminated = array_slice($rankings, $effectiveCutoff);
-
-    // Detect ties at the cutoff boundary
-    $cutoffSong = $qualifiers[$effectiveCutoff - 1] ?? null;
-    $firstOutSong = $eliminated[0] ?? null;
+    $targetCutoff = $candData['target_count'];
+    $qualifiers = $candData['suggested_qualifiers'];
+    $eliminated = array_slice($candData['candidates'], count($qualifiers));
 
     $hasBoundaryTie = false;
     $boundaryTieDetails = null;
 
-    if ($cutoffSong && $firstOutSong) {
-        if ($cutoffSong['total'] === $firstOutSong['total']) {
+    if (!empty($qualifiers) && !empty($eliminated)) {
+        $cutoffSong = end($qualifiers);
+        $firstOut = reset($eliminated);
+        if ($cutoffSong && $firstOut && isset($cutoffSong['total'], $firstOut['total']) && $cutoffSong['total'] === $firstOut['total']) {
             $hasBoundaryTie = true;
             $boundaryTieDetails = [
                 'tied_total'        => $cutoffSong['total'],
                 'cutoff_song_title' => $cutoffSong['title'],
-                'first_out_title'   => $firstOutSong['title'],
-                'criteria_tie_break'=> "Cutoff tie resolved by secondary criteria: Emotion ({$cutoffSong['emotion']} vs {$firstOutSong['emotion']}), Replayability ({$cutoffSong['replayability']} vs {$firstOutSong['replayability']}), Melody ({$cutoffSong['melody']} vs {$firstOutSong['melody']})."
+                'first_out_title'   => $firstOut['title'],
+                'criteria_tie_break'=> "Cutoff tie resolved by advisory tie-breakers: Emotion ({$cutoffSong['emotion']} vs {$firstOut['emotion']}), Replayability ({$cutoffSong['replayability']} vs {$firstOut['replayability']}), Melody ({$cutoffSong['melody']} vs {$firstOut['melody']})."
             ];
         }
     }
 
     return [
-        'success'           => true,
-        'from_round'        => $fromRound,
-        'next_round'        => $nextRound,
-        'total_completed'   => $totalCompleted,
-        'target_cutoff'     => $targetCutoff,
-        'effective_cutoff'  => $effectiveCutoff,
-        'qualifiers'        => $qualifiers,
-        'eliminated'        => $eliminated,
-        'has_boundary_tie'  => $hasBoundaryTie,
-        'boundary_tie'      => $boundaryTieDetails
+        'success'               => true,
+        'from_round'            => $fromRound,
+        'next_round'            => $nextRound,
+        'rules'                 => $candData['rules'],
+        'total_eligible'        => $candData['total_eligible'],
+        'total_completed'       => $candData['completed_evaluations'],
+        'incomplete_evaluations'=> $candData['incomplete_evaluations'],
+        'target_cutoff'         => $targetCutoff,
+        'min_eligible_required' => $candData['min_eligible_required'],
+        'can_advance'           => $candData['can_advance'],
+        'blocking_reasons'      => $candData['blocking_reasons'],
+        'candidates'            => $candData['candidates'],
+        'qualifiers'            => $qualifiers,
+        'eliminated'            => $eliminated,
+        'has_boundary_tie'      => $hasBoundaryTie,
+        'boundary_tie'          => $boundaryTieDetails
     ];
 }
 
 /**
- * Commit stage advancement (transactional, with double-advancement protection)
+ * Commit stage advancement (transactional, with double-advancement protection and manual ordering persistence)
  */
-function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?int $userId = null): array {
+function commit_stage_advancement(
+    int $fromRoundId, 
+    array $qualifierEntryIds, 
+    ?int $userId = null,
+    ?array $manualOrderMap = null
+): array {
     $pdo = get_db_connection();
-
-    $preview = preview_stage_advancement($fromRoundId, $userId);
-    if (!$preview['success']) {
-        return $preview;
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
     }
 
-    $fromRound = $preview['from_round'];
-    $nextRound = $preview['next_round'];
+    $candData = get_stage_qualification_candidates($fromRoundId, $userId);
+    if (!$candData['success']) {
+        return $candData;
+    }
 
-    // Protection against advancing if already completed
+    $fromRound = $candData['from_round'];
+    $nextRound = $candData['next_round'];
+    if (!$nextRound) {
+        return ['success' => false, 'error' => 'This is the final stage. No subsequent round exists.'];
+    }
+
     if ($fromRound['status'] === 'completed') {
         return [
             'success' => false, 
@@ -2278,17 +2622,54 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
         ];
     }
 
+    // Strict Rule Validation: Minimum participants required
+    if ($candData['total_eligible'] < $candData['min_eligible_required']) {
+        return [
+            'success' => false,
+            'error'   => "Cannot advance: {$fromRound['round_name']} requires at least {$candData['min_eligible_required']} eligible participants before advancing (current: {$candData['total_eligible']})."
+        ];
+    }
+
+    // Strict Rule Validation: All eligible participants must have completed evaluations
+    if ($candData['incomplete_evaluations'] > 0) {
+        return [
+            'success' => false,
+            'error'   => "Cannot advance: All eligible participants must be fully evaluated before finalizing the stage ({$candData['incomplete_evaluations']} incomplete or untouched evaluations remaining)."
+        ];
+    }
+
+    // Strict Rule Validation: Exact advancement target count
+    $cleanQualifierIds = array_values(array_unique(array_map('intval', $qualifierEntryIds)));
+    $targetCount = (int)$candData['target_count'];
+
+    if (count($cleanQualifierIds) !== $targetCount) {
+        return [
+            'success' => false,
+            'error'   => "Advancement target requires exactly {$targetCount} participants (received: " . count($cleanQualifierIds) . ")."
+        ];
+    }
+
+    // Strict Rule Validation: Eligibility of every selected song
+    $eligibleEntryMap = [];
+    foreach ($candData['candidates'] as $c) {
+        $eligibleEntryMap[(int)$c['entry_id']] = $c;
+    }
+
+    foreach ($cleanQualifierIds as $qid) {
+        if (!isset($eligibleEntryMap[$qid])) {
+            return [
+                'success' => false,
+                'error'   => "Invalid participant selection: Entry ID {$qid} is not an eligible participant in {$fromRound['round_name']}."
+            ];
+        }
+    }
+
     try {
         $pdo->beginTransaction();
 
-        // Concurrency mutex: lock the round status for update within transaction
+        // Mutex concurrency lock
         if ($userId !== null) {
-            $lockStmt = $pdo->prepare("
-                SELECT `status` 
-                FROM `user_round_progress` 
-                WHERE `user_id` = :uid AND `round_id` = :rid 
-                FOR UPDATE
-            ");
+            $lockStmt = $pdo->prepare("SELECT `status` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :rid FOR UPDATE");
             $lockStmt->execute([':uid' => $userId, ':rid' => $fromRoundId]);
             $currentLockedStatus = $lockStmt->fetchColumn();
 
@@ -2300,12 +2681,7 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
                 ];
             }
         } else {
-            $lockStmt = $pdo->prepare("
-                SELECT `status` 
-                FROM `rounds` 
-                WHERE `round_id` = :rid 
-                FOR UPDATE
-            ");
+            $lockStmt = $pdo->prepare("SELECT `status` FROM `rounds` WHERE `round_id` = :rid FOR UPDATE");
             $lockStmt->execute([':rid' => $fromRoundId]);
             $currentLockedStatus = $lockStmt->fetchColumn();
 
@@ -2318,17 +2694,18 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
             }
         }
 
-        $rankData = get_round_rankings($fromRoundId, $userId);
-        $rankings = $rankData['rankings'];
-
-        // Prepare insert into round_results
+        // Prepare insert into round_results with snapshot and manual order columns
         $resStmt = $pdo->prepare("
             INSERT INTO `round_results` (
                 `entry_id`, 
                 `round_id`, 
                 `user_id`,
                 `result`, 
-                `rank_position`, 
+                `rank_position`,
+                `manual_order`,
+                `song_title`,
+                `song_artist`,
+                `score_total`,
                 `reason`, 
                 `decided_at`
             )
@@ -2337,13 +2714,21 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
                 :round_id, 
                 :user_id,
                 :result, 
-                :rank_position, 
+                :rank_position,
+                :manual_order,
+                :song_title,
+                :song_artist,
+                :score_total,
                 :reason, 
                 NOW()
             )
             ON DUPLICATE KEY UPDATE
                 `result`        = VALUES(`result`),
                 `rank_position` = VALUES(`rank_position`),
+                `manual_order`  = VALUES(`manual_order`),
+                `song_title`    = VALUES(`song_title`),
+                `song_artist`   = VALUES(`song_artist`),
+                `score_total`   = VALUES(`score_total`),
                 `reason`        = VALUES(`reason`),
                 `user_id`       = COALESCE(`round_results`.`user_id`, VALUES(`user_id`)),
                 `decided_at`    = NOW()
@@ -2351,31 +2736,48 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
 
         $isFinalStage = ((int)$nextRound['sequence_no'] === 7 || (int)$nextRound['target_count'] === 1);
 
-        foreach ($rankings as $row) {
-            $entryId = (int)$row['entry_id'];
-            $isQualified = in_array($entryId, $qualifierEntryIds, true);
+        foreach ($candData['candidates'] as $cand) {
+            $eid = (int)$cand['entry_id'];
+            $isQualified = in_array($eid, $cleanQualifierIds, true);
+
+            $manualOrder = null;
+            if ($isQualified) {
+                // Determine 1-indexed position in user's manually arranged order
+                if (is_array($manualOrderMap) && isset($manualOrderMap[$eid])) {
+                    $manualOrder = (int)$manualOrderMap[$eid];
+                } else {
+                    $pos = array_search($eid, $cleanQualifierIds, true);
+                    $manualOrder = ($pos !== false) ? ($pos + 1) : null;
+                }
+            }
 
             $result = $isQualified ? 'qualified' : 'eliminated';
-            if ($isQualified && $isFinalStage && $row['calculated_rank'] === 1) {
+            if ($isQualified && $isFinalStage && $manualOrder === 1) {
                 $result = 'winner';
             }
 
-            $reason = $isQualified 
-                ? "Qualified to {$nextRound['round_name']} with score {$row['total']}/50 (Rank #{$row['calculated_rank']})"
-                : "Eliminated in {$fromRound['round_name']} with score {$row['total']}/50 (Rank #{$row['calculated_rank']})";
+            $rankPosition = $isQualified ? $manualOrder : $cand['suggested_rank'];
+
+            $scoreDisplay = ($cand['total'] !== null) ? "{$cand['total']}/50" : 'unscored';
+            $reason = $isQualified
+                ? "Qualified to {$nextRound['round_name']} (Manual Seed #{$manualOrder}) with score {$scoreDisplay}"
+                : "Eliminated in {$fromRound['round_name']} with score {$scoreDisplay} (Rank #{$cand['suggested_rank']})";
 
             $resStmt->execute([
-                ':entry_id'      => $entryId,
+                ':entry_id'      => $eid,
                 ':round_id'      => $fromRoundId,
                 ':user_id'       => $userId,
                 ':result'        => $result,
-                ':rank_position' => $row['calculated_rank'],
+                ':rank_position' => $rankPosition,
+                ':manual_order'  => $manualOrder,
+                ':song_title'    => $cand['title'],
+                ':song_artist'   => $cand['artist'],
+                ':score_total'   => $cand['total'],
                 ':reason'        => $reason
             ]);
         }
 
         if ($userId !== null) {
-            // Update per-user progression
             $progStmt = $pdo->prepare("
                 INSERT INTO `user_round_progress` (`user_id`, `round_id`, `status`, `completed_at`, `updated_at`)
                 VALUES (:uid, :from_id, 'completed', NOW(), NOW())
@@ -2390,32 +2792,23 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
             ");
             $progNext->execute([':uid' => $userId, ':next_id' => $nextRound['round_id']]);
         } else {
-            // Mark current round as completed
-            $updFrom = $pdo->prepare("
-                UPDATE `rounds` 
-                SET `status` = 'completed', `completed_at` = NOW() 
-                WHERE `round_id` = :id
-            ");
+            $updFrom = $pdo->prepare("UPDATE `rounds` SET `status` = 'completed', `completed_at` = NOW() WHERE `round_id` = :id");
             $updFrom->execute([':id' => $fromRoundId]);
 
-            // Activate next round
-            $updNext = $pdo->prepare("
-                UPDATE `rounds` 
-                SET `status` = 'in_progress' 
-                WHERE `round_id` = :id
-            ");
+            $updNext = $pdo->prepare("UPDATE `rounds` SET `status` = 'in_progress' WHERE `round_id` = :id");
             $updNext->execute([':id' => $nextRound['round_id']]);
         }
 
         $pdo->commit();
+        clear_dashboard_stats_cache();
 
         return [
-            'success'         => true,
-            'message'         => "Successfully advanced {$fromRound['round_name']} to {$nextRound['round_name']}.",
-            'from_round'      => $fromRound['round_name'],
-            'next_round'      => $nextRound['round_name'],
-            'qualifiers_count'=> count($qualifierEntryIds),
-            'eliminated_count'=> count($rankings) - count($qualifierEntryIds)
+            'success'          => true,
+            'message'          => "Successfully advanced {$fromRound['round_name']} to {$nextRound['round_name']}.",
+            'from_round'       => $fromRound['round_name'],
+            'next_round'       => $nextRound['round_name'],
+            'qualifiers_count' => count($cleanQualifierIds),
+            'eliminated_count' => count($candData['candidates']) - count($cleanQualifierIds)
         ];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -2424,6 +2817,204 @@ function commit_stage_advancement(int $fromRoundId, array $qualifierEntryIds, ?i
         error_log("AFM2 commit_stage_advancement error: " . $e->getMessage());
         return ['success' => false, 'error' => 'Failed to commit tournament advancement: ' . $e->getMessage()];
     }
+}
+
+/**
+ * Controlled Stage Reopening
+ * Reopens a completed stage, archives previous decisions to round_results_history,
+ * and sets subsequent stages to upcoming while preserving all criteria scorecards.
+ */
+function reopen_tournament_stage(int $roundId, ?int $userId = null): array {
+    $pdo = get_db_connection();
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+
+    $round = get_round_by_id($roundId, $userId);
+    if (!$round) {
+        return ['success' => false, 'error' => 'Stage not found.'];
+    }
+
+    if ($round['status'] !== 'completed') {
+        return ['success' => false, 'error' => "Only completed stages can be reopened (current stage status: '{$round['status']}')."];
+    }
+
+    $seq = (int)$round['sequence_no'];
+
+    try {
+        $pdo->beginTransaction();
+
+        // Concurrency mutex
+        if ($userId !== null) {
+            $lockStmt = $pdo->prepare("SELECT `status` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :rid FOR UPDATE");
+            $lockStmt->execute([':uid' => $userId, ':rid' => $roundId]);
+        } else {
+            $lockStmt = $pdo->prepare("SELECT `status` FROM `rounds` WHERE `round_id` = :rid FOR UPDATE");
+            $lockStmt->execute([':rid' => $roundId]);
+        }
+
+        // Determine next history iteration number
+        $userScopeH = ($userId !== null) ? "WHERE `user_id` = :uid AND `round_id` = :rid" : "WHERE `round_id` = :rid";
+        $iterStmt = $pdo->prepare("SELECT COALESCE(MAX(`iteration`), 0) + 1 FROM `round_results_history` {$userScopeH}");
+        $iterParams = [':rid' => $roundId];
+        if ($userId !== null) {
+            $iterParams[':uid'] = $userId;
+        }
+        $iterStmt->execute($iterParams);
+        $nextIteration = (int)$iterStmt->fetchColumn();
+
+        // Archive current decisions into round_results_history before deleting
+        $userScopeRr = ($userId !== null)
+            ? (($userId === 995) ? "AND (rr.`user_id` = 995 OR rr.`user_id` IS NULL)" : "AND rr.`user_id` = :uid_rr")
+            : "";
+        $archiveParams = [
+            ':rid'  => $roundId,
+            ':iter' => $nextIteration
+        ];
+        if ($userId !== null) {
+            $archiveParams[':uid_target'] = $userId;
+            if ($userId !== 995) {
+                $archiveParams[':uid_rr'] = $userId;
+            }
+        }
+
+        $archiveSql = "
+            INSERT INTO `round_results_history` (
+                `round_id`, 
+                `user_id`, 
+                `iteration`, 
+                `entry_id`, 
+                `song_id`,
+                `song_title`, 
+                `song_artist`, 
+                `result`, 
+                `rank_position`, 
+                `manual_order`,
+                `score_total`, 
+                `reason`, 
+                `decided_at`, 
+                `reopened_at`
+            )
+            SELECT 
+                rr.`round_id`, 
+                COALESCE(rr.`user_id`, :uid_target), 
+                :iter, 
+                rr.`entry_id`, 
+                e.`song_id`,
+                COALESCE(rr.`song_title`, s.`title`, 'Archived Song'),
+                COALESCE(rr.`song_artist`, s.`artist`, 'Unknown Artist'),
+                rr.`result`, 
+                rr.`rank_position`, 
+                rr.`manual_order`,
+                COALESCE(rr.`score_total`, rt.`total`),
+                rr.`reason`, 
+                rr.`decided_at`, 
+                NOW()
+            FROM `round_results` rr
+            JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id`
+            LEFT JOIN `songs` s ON e.`song_id` = s.`song_id`
+            LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = rr.`round_id`
+            WHERE rr.`round_id` = :rid {$userScopeRr}
+        ";
+        $archiveStmt = $pdo->prepare($archiveSql);
+        $archiveStmt->execute($archiveParams);
+
+        // Delete active decisions for this round
+        $delRrUser = ($userId !== null)
+            ? (($userId === 995) ? "AND (`user_id` = 995 OR `user_id` IS NULL)" : "AND `user_id` = :uid")
+            : "";
+        $delRrParams = [':rid' => $roundId];
+        if ($userId !== null && $userId !== 995) {
+            $delRrParams[':uid'] = $userId;
+        }
+        $pdo->prepare("DELETE FROM `round_results` WHERE `round_id` = :rid {$delRrUser}")->execute($delRrParams);
+
+        // Update stage status: set target stage back to 'in_progress', subsequent stages to 'upcoming'
+        if ($userId !== null) {
+            $pdo->prepare("
+                UPDATE `user_round_progress` 
+                SET `status` = 'in_progress', `completed_at` = NULL, `updated_at` = NOW() 
+                WHERE `user_id` = :uid AND `round_id` = :rid
+            ")->execute([':uid' => $userId, ':rid' => $roundId]);
+
+            $pdo->prepare("
+                UPDATE `user_round_progress` urp
+                JOIN `rounds` r ON urp.`round_id` = r.`round_id`
+                SET urp.`status` = 'upcoming', urp.`completed_at` = NULL, urp.`updated_at` = NOW()
+                WHERE urp.`user_id` = :uid AND r.`sequence_no` > :seq
+            ")->execute([':uid' => $userId, ':seq' => $seq]);
+        } else {
+            $pdo->prepare("UPDATE `rounds` SET `status` = 'in_progress', `completed_at` = NULL WHERE `round_id` = :rid")
+                ->execute([':rid' => $roundId]);
+            $pdo->prepare("UPDATE `rounds` SET `status` = 'upcoming', `completed_at` = NULL WHERE `sequence_no` > :seq")
+                ->execute([':seq' => $seq]);
+        }
+
+        $pdo->commit();
+        clear_dashboard_stats_cache();
+
+        return [
+            'success'        => true,
+            'message'        => "Stage '{$round['round_name']}' has been reopened successfully. Historical records preserved in revision #{$nextIteration}.",
+            'round_id'       => $roundId,
+            'round_name'     => $round['round_name'],
+            'history_iteration' => $nextIteration
+        ];
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("AFM2 reopen_tournament_stage error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'Failed to reopen tournament stage: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Get stage reopen metadata and affected stages summary
+ */
+function get_stage_reopen_info(int $roundId, ?int $userId = null): array {
+    $pdo = get_db_connection();
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+
+    $round = get_round_by_id($roundId, $userId);
+    if (!$round) {
+        return ['success' => false, 'error' => 'Stage not found.'];
+    }
+
+    $seq = (int)$round['sequence_no'];
+
+    // Find subsequent rounds that will be affected
+    $subStmt = $pdo->prepare("SELECT `round_id`, `round_name`, `sequence_no`, `status` FROM `rounds` WHERE `sequence_no` > :seq ORDER BY `sequence_no` ASC");
+    $subStmt->execute([':seq' => $seq]);
+    $affectedRounds = $subStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Current qualifications count
+    $userScopeRr = ($userId !== null)
+        ? (($userId === 995) ? "AND (`user_id` = 995 OR `user_id` IS NULL)" : "AND `user_id` = :uid")
+        : "";
+    $countParams = [':rid' => $roundId];
+    if ($userId !== null && $userId !== 995) {
+        $countParams[':uid'] = $userId;
+    }
+    $resCountStmt = $pdo->prepare("
+        SELECT 
+            SUM(CASE WHEN `result` IN ('qualified', 'winner') THEN 1 ELSE 0 END) AS qualified_count,
+            SUM(CASE WHEN `result` = 'eliminated' THEN 1 ELSE 0 END) AS eliminated_count
+        FROM `round_results`
+        WHERE `round_id` = :rid {$userScopeRr}
+    ");
+    $resCountStmt->execute($countParams);
+    $counts = $resCountStmt->fetch(PDO::FETCH_ASSOC);
+
+    return [
+        'success'          => true,
+        'round'            => $round,
+        'qualified_count'  => (int)($counts['qualified_count'] ?? 0),
+        'eliminated_count' => (int)($counts['eliminated_count'] ?? 0),
+        'affected_stages'  => array_column($affectedRounds, 'round_name')
+    ];
 }
 
 /**
@@ -2437,10 +3028,10 @@ function get_historical_results(?int $userId = null): array {
     $ratingJoinCondition = "";
     if ($userId !== null) {
         if ($userId === 995) {
-            $whereSql = "WHERE (rr.`user_id` = 995 OR rr.`user_id` IS NULL) AND (e.`user_id` = 995 OR e.`user_id` IS NULL) AND (s.`user_id` = 995 OR s.`user_id` IS NULL)";
+            $whereSql = "WHERE (rr.`user_id` = 995 OR rr.`user_id` IS NULL) AND (e.`user_id` = 995 OR e.`user_id` IS NULL) AND (s.`user_id` = 995 OR s.`user_id` IS NULL OR s.`song_id` IS NULL)";
             $ratingJoinCondition = "AND (rt.`user_id` = 995 OR rt.`user_id` IS NULL)";
         } else {
-            $whereSql = "WHERE rr.`user_id` = :uid AND e.`user_id` = :uid_e AND s.`user_id` = :uid_s";
+            $whereSql = "WHERE rr.`user_id` = :uid AND e.`user_id` = :uid_e AND (s.`user_id` = :uid_s OR s.`song_id` IS NULL)";
             $params[':uid'] = $userId;
             $params[':uid_e'] = $userId;
             $params[':uid_s'] = $userId;
@@ -2460,24 +3051,25 @@ function get_historical_results(?int $userId = null): array {
             rr.`entry_id`,
             rr.`result`,
             rr.`rank_position`,
+            rr.`manual_order`,
             rr.`reason`,
             rr.`decided_at`,
-            s.`song_id`,
-            s.`title`,
-            COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
-            rt.`melody`,
-            rt.`lyrics`,
-            rt.`vocals`,
-            rt.`emotion`,
-            rt.`replayability`,
-            rt.`total`
+            e.`song_id`,
+            COALESCE(s.`title`, rr.`song_title`, 'Archived Song') AS `title`,
+            COALESCE(s.`artist`, rr.`song_artist`, 'Unknown Artist') AS `artist`,
+            COALESCE(rt.`melody`, 0) AS `melody`,
+            COALESCE(rt.`lyrics`, 0) AS `lyrics`,
+            COALESCE(rt.`vocals`, 0) AS `vocals`,
+            COALESCE(rt.`emotion`, 0) AS `emotion`,
+            COALESCE(rt.`replayability`, 0) AS `replayability`,
+            COALESCE(rt.`total`, rr.`score_total`, 0) AS `total`
         FROM `round_results` rr
         JOIN `rounds` r ON rr.`round_id` = r.`round_id`
         JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id`
-        JOIN `songs` s ON e.`song_id` = s.`song_id`
+        LEFT JOIN `songs` s ON e.`song_id` = s.`song_id`
         LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = r.`round_id` {$ratingJoinCondition}
         {$whereSql}
-        ORDER BY r.`sequence_no` ASC, rr.`rank_position` ASC
+        ORDER BY r.`sequence_no` ASC, COALESCE(rr.`manual_order`, rr.`rank_position`) ASC
     ");
 
     $stmt->execute($params);

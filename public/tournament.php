@@ -58,14 +58,25 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <a href="auditions.php?round_id=<?= (int)$selectedRoundId ?>" class="btn btn-secondary">
                 <span class="btn-icon">🎧</span> Score Entries
             </a>
-            <?php if ($isInProgress && $nextRound && $totalCompleted > 0): ?>
+            <?php if ($isCompleted): ?>
+                <button 
+                    type="button" 
+                    class="btn btn-secondary" 
+                    id="btnReopenStage" 
+                    data-round-id="<?= (int)$selectedRoundId ?>"
+                    data-round-name="<?= htmlspecialchars($currentRound['round_name'], ENT_QUOTES, 'UTF-8') ?>"
+                >
+                    <span class="btn-icon">↺</span> Reopen Stage
+                </button>
+            <?php endif; ?>
+            <?php if ($isInProgress && $nextRound): ?>
                 <button 
                     type="button" 
                     class="btn btn-accent" 
                     id="btnPreviewAdvancement" 
                     data-from-round-id="<?= (int)$selectedRoundId ?>"
                 >
-                    <span class="btn-icon">⚡</span> Preview & Advance to <?= htmlspecialchars($nextRound['round_name'], ENT_QUOTES, 'UTF-8') ?>
+                    <span class="btn-icon">⚡</span> Manual Qualification & Advance to <?= htmlspecialchars($nextRound['round_name'], ENT_QUOTES, 'UTF-8') ?>
                 </button>
             <?php endif; ?>
         </div>
@@ -281,19 +292,43 @@ require_once dirname(__DIR__) . '/includes/header.php';
     <?php endif; ?>
 </div>
 
-<!-- Tournament Advancement Preview & Commit Modal -->
+<!-- Tournament Manual Qualification & Advancement Modal -->
 <div class="modal-overlay" id="advancementModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-content">
+    <div class="modal-content modal-advancement">
         <div class="modal-header">
-            <h3 class="modal-title" id="modalTitle">Advance Tournament Stage</h3>
+            <div>
+                <span class="eyebrow-tag"><span class="eyebrow-dot"></span> Manual Qualification & Advancement Console</span>
+                <h3 class="modal-title" id="modalTitle">Advance Tournament Stage</h3>
+            </div>
             <button type="button" class="modal-close" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body" id="advancementModalBody">
-            <div class="text-center p-3">Loading stage advancement preview...</div>
+            <div class="text-center p-4">Loading qualification candidates...</div>
+        </div>
+        <div class="modal-footer" id="advancementModalFooter">
+            <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tournament Controlled Stage Reopening Modal -->
+<div class="modal-overlay" id="reopenStageModal" role="dialog" aria-modal="true" aria-labelledby="reopenModalTitle">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div>
+                <span class="badge badge-warning">Stage Management</span>
+                <h3 class="modal-title" id="reopenModalTitle">Reopen Tournament Stage</h3>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body" id="reopenStageModalBody">
+            <div class="text-center p-4">Loading stage details...</div>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
-            <button type="button" class="btn btn-accent" id="btnConfirmAdvancement">Confirm & Advance</button>
+            <button type="button" class="btn btn-danger" id="btnConfirmReopenStage">
+                <span class="btn-icon">↺</span> Confirm & Reopen Stage
+            </button>
         </div>
     </div>
 </div>

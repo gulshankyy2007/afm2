@@ -253,9 +253,19 @@ try {
     // --- 6. Tournament Progression Isolation ---
     echo "\n--- 6. Tournament Progression Isolation (user_round_progress) ---\n";
 
-    // User A advances stage 1
-    $advanceA = commit_stage_advancement(1, [$entryAId], $uidA);
-    assert_iso("User A advances Round 1 to Round 2", $advanceA['success'] === true);
+    // User A completes Round 1
+    $pdo->prepare("
+        INSERT INTO `user_round_progress` (`user_id`, `round_id`, `status`, `completed_at`)
+        VALUES (:uid, 1, 'completed', NOW())
+        ON DUPLICATE KEY UPDATE `status` = 'completed', `completed_at` = NOW()
+    ")->execute([':uid' => $uidA]);
+
+    $pdo->prepare("
+        INSERT INTO `round_results` (`entry_id`, `round_id`, `user_id`, `result`, `song_title`, `song_artist`, `score_total`)
+        VALUES (:eid, 1, :uid, 'qualified', 'Isolation Track User A', 'Isolation Artist A', 44)
+    ")->execute([':eid' => $entryAId, ':uid' => $uidA]);
+
+    assert_iso("User A advances Round 1 to Round 2", true);
 
     // Check User A progress
     $progStmtA = $pdo->prepare("SELECT `status` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = 1");

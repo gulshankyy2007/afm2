@@ -161,6 +161,18 @@ switch ($action) {
         echo json_encode($result);
         break;
 
+    case 'get_qualification_data':
+        $fromRoundId = isset($_GET['from_round_id']) ? (int)$_GET['from_round_id'] : 0;
+        if ($fromRoundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+
+        $data = get_stage_qualification_candidates($fromRoundId, $currentUserId);
+        echo json_encode(['success' => true, 'data' => $data]);
+        break;
+
     case 'preview_advancement':
         $fromRoundId = isset($_GET['from_round_id']) ? (int)$_GET['from_round_id'] : 0;
         if ($fromRoundId <= 0) {
@@ -184,6 +196,9 @@ switch ($action) {
         $qualifiers  = isset($input['qualifier_ids']) && is_array($input['qualifier_ids']) 
             ? array_map('intval', $input['qualifier_ids']) 
             : [];
+        $manualOrderMap = isset($input['manual_order_map']) && is_array($input['manual_order_map'])
+            ? $input['manual_order_map']
+            : null;
 
         if ($fromRoundId <= 0 || empty($qualifiers)) {
             http_response_code(400);
@@ -191,7 +206,40 @@ switch ($action) {
             exit;
         }
 
-        $res = commit_stage_advancement($fromRoundId, $qualifiers, $currentUserId);
+        $res = commit_stage_advancement($fromRoundId, $qualifiers, $currentUserId, $manualOrderMap);
+        if (!$res['success']) {
+            http_response_code(400);
+        }
+        echo json_encode($res);
+        break;
+
+    case 'get_stage_reopen_info':
+        $roundId = isset($_GET['round_id']) ? (int)$_GET['round_id'] : 0;
+        if ($roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+        $info = get_stage_reopen_info($roundId, $currentUserId);
+        echo json_encode($info);
+        break;
+
+    case 'reopen_stage':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        $roundId = isset($input['round_id']) ? (int)$input['round_id'] : 0;
+        if ($roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+        $res = reopen_tournament_stage($roundId, $currentUserId);
+        if (!$res['success']) {
+            http_response_code(400);
+        }
         echo json_encode($res);
         break;
 
