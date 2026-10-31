@@ -315,19 +315,6 @@
                         try {
                             $footerTrackCount = get_catalogue_song_count();
                         } catch (\Throwable $e) {}
-                    } elseif (function_exists('get_dashboard_stats')) {
-                        try {
-                            $footerStats = get_dashboard_stats();
-                            $footerTrackCount = $footerStats['total_songs'] ?? null;
-                        } catch (\Throwable $e) {}
-                    }
-                    if ($footerTrackCount === null && function_exists('get_db_connection')) {
-                        try {
-                            $countCol = get_db_connection()->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
-                            if ($countCol !== false && $countCol !== null) {
-                                $footerTrackCount = (int)$countCol;
-                            }
-                        } catch (\Throwable $e) {}
                     }
                     ?>
                     <?php if (is_authenticated() && $footerTrackCount !== null && $footerTrackCount > 0): ?>

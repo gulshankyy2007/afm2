@@ -379,7 +379,11 @@ function song_user_scope_sql(int $userId, string $tableAlias = '', ?PDO $pdo = n
  * Uses cached dashboard stats if available, or executes a single fast COUNT query.
  * Returns null if the database query fails, avoiding fabricated fallback counts.
  */
-function get_catalogue_song_count(?int $userId = null, bool $forceRefresh = false): ?int {
+function get_catalogue_song_count(int|bool|null $userId = null, bool $forceRefresh = false): ?int {
+    if (is_bool($userId)) {
+        $forceRefresh = $userId;
+        $userId = null;
+    }
     if ($userId === null && is_authenticated()) {
         $userId = get_current_user_id();
     }
@@ -519,8 +523,9 @@ function get_dashboard_stats(?int $userId = null, bool $forceRefresh = false): a
     }
 
     // Unscoped / Global (e.g. for existing CLI test suites)
+    $delSql = song_deleted_sql('', $pdo);
     // Total catalogue count
-    $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
 
     // Discovery review counts
     $stmt = $pdo->query("
