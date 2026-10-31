@@ -725,10 +725,10 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
     $validSorts = [
         'id_asc'      => 's.`song_id` ASC',
         'id_desc'     => 's.`song_id` DESC',
-        'title_asc'   => 's.`title` ASC, (s.`artist` IS NULL OR TRIM(s.`artist`) = \'\') ASC, s.`artist` ASC, s.`song_id` ASC',
-        'title_desc'  => 's.`title` DESC, (s.`artist` IS NULL OR TRIM(s.`artist`) = \'\') ASC, s.`artist` ASC, s.`song_id` ASC',
-        'artist_asc'  => '(s.`artist` IS NULL OR TRIM(s.`artist`) = \'\') ASC, s.`artist` ASC, s.`title` ASC, s.`song_id` ASC',
-        'artist_desc' => '(s.`artist` IS NULL OR TRIM(s.`artist`) = \'\') ASC, s.`artist` DESC, s.`title` ASC, s.`song_id` ASC'
+        'title_asc'   => 's.`title` ASC, (s.`artist` IS NULL) ASC, s.`artist` ASC, s.`song_id` ASC',
+        'title_desc'  => 's.`title` DESC, (s.`artist` IS NULL) ASC, s.`artist` ASC, s.`song_id` ASC',
+        'artist_asc'  => '(s.`artist` IS NULL) ASC, s.`artist` ASC, s.`title` ASC, s.`song_id` ASC',
+        'artist_desc' => '(s.`artist` IS NULL) ASC, s.`artist` DESC, s.`title` ASC, s.`song_id` ASC'
     ];
     $orderClause = $validSorts[$sortBy] ?? $validSorts['id_asc'];
 
