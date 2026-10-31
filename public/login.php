@@ -73,6 +73,7 @@ $pageTitle = 'Sign In — AFM#2';
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
     <link rel="stylesheet" href="assets/css/style.css?v=3.6">
+    <link rel="stylesheet" href="assets/css/mobile.css?v=3.6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">

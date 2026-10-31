@@ -69,8 +69,11 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
     <?php
     $styleFile = dirname(__DIR__) . '/public/assets/css/style.css';
     $styleVer = '4.1.' . (file_exists($styleFile) ? filemtime($styleFile) : '20261029');
+    $mobileFile = dirname(__DIR__) . '/public/assets/css/mobile.css';
+    $mobileVer = '4.1.' . (file_exists($mobileFile) ? filemtime($mobileFile) : '20261029');
     ?>
     <link rel="stylesheet" href="assets/css/style.css?v=<?= $styleVer ?>">
+    <link rel="stylesheet" href="assets/css/mobile.css?v=<?= $mobileVer ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">

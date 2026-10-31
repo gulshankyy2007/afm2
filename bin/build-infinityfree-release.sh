@@ -36,6 +36,9 @@ if command -v npx >/dev/null 2>&1; then
     if [ -f "${STAGE_DIR}/public/assets/css/style.css" ]; then
         npx -y esbuild "${STAGE_DIR}/public/assets/css/style.css" --minify --outfile="${STAGE_DIR}/public/assets/css/style.css" --allow-overwrite
     fi
+    if [ -f "${STAGE_DIR}/public/assets/css/mobile.css" ]; then
+        npx -y esbuild "${STAGE_DIR}/public/assets/css/mobile.css" --minify --outfile="${STAGE_DIR}/public/assets/css/mobile.css" --allow-overwrite
+    fi
     if [ -f "${STAGE_DIR}/public/assets/js/app.js" ]; then
         npx -y esbuild "${STAGE_DIR}/public/assets/js/app.js" --minify --outfile="${STAGE_DIR}/public/assets/js/app.js" --allow-overwrite
         node -c "${STAGE_DIR}/public/assets/js/app.js"
