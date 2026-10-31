@@ -237,7 +237,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                     <?php endif; ?>
 
                     <tr class="rank-row <?= $isQualifiedZone ? 'zone-qualifier' : ($isBelowCutoff ? 'zone-eliminated' : '') ?>">
-                        <td class="col-rank">
+                        <td class="col-rank" data-label="Rank">
                             <div class="rank-badge <?= $rank <= 3 ? 'rank-podium rank-' . $rank : '' ?>">
                                 <?php if ($rank === 1): ?>🥇 #1
                                 <?php elseif ($rank === 2): ?>🥈 #2
@@ -246,7 +246,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 <?php endif; ?>
                             </div>
                         </td>
-                        <td class="col-song">
+                        <td class="col-song" data-label="Song">
                             <div class="song-meta">
                                 <span class="song-title font-bold"><?= htmlspecialchars($row['title'], ENT_QUOTES, 'UTF-8') ?></span>
                                 <span class="song-artist text-muted"><?= htmlspecialchars($row['artist'], ENT_QUOTES, 'UTF-8') ?></span>
@@ -257,27 +257,27 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 <?php endif; ?>
                             </div>
                         </td>
-                        <td class="col-total text-center">
+                        <td class="col-total text-center" data-label="Total Score">
                             <div class="score-total-pill font-mono font-bold">
                                 <?= (int)$row['total'] ?> <span class="text-xs text-muted">/50</span>
                             </div>
                         </td>
-                        <td class="col-criteria text-center font-mono <?= (int)$row['emotion'] >= 9 ? 'high-score' : '' ?>">
+                        <td class="col-criteria text-center font-mono <?= (int)$row['emotion'] >= 9 ? 'high-score' : '' ?>" data-label="Emotion">
                             <?= (int)$row['emotion'] ?>
                         </td>
-                        <td class="col-criteria text-center font-mono <?= (int)$row['replayability'] >= 9 ? 'high-score' : '' ?>">
+                        <td class="col-criteria text-center font-mono <?= (int)$row['replayability'] >= 9 ? 'high-score' : '' ?>" data-label="Replayability">
                             <?= (int)$row['replayability'] ?>
                         </td>
-                        <td class="col-criteria text-center font-mono">
+                        <td class="col-criteria text-center font-mono" data-label="Melody">
                             <?= (int)$row['melody'] ?>
                         </td>
-                        <td class="col-criteria text-center font-mono">
+                        <td class="col-criteria text-center font-mono" data-label="Vocals">
                             <?= (int)$row['vocals'] ?>
                         </td>
-                        <td class="col-criteria text-center font-mono">
+                        <td class="col-criteria text-center font-mono" data-label="Lyrics">
                             <?= (int)$row['lyrics'] ?>
                         </td>
-                        <td class="col-status text-center">
+                        <td class="col-status text-center" data-label="Status">
                             <?php if ($row['result'] === 'winner'): ?>
                                 <span class="badge badge-gold">🏆 Champion</span>
                             <?php elseif ($row['result'] === 'qualified'): ?>

@@ -474,7 +474,26 @@ input[type="reset"],
         justify-content: center;
     }
 
-    /* Tournament Progression Stage Stepper */
+    /* Tournament Progression: Stage Stepper & Stage Cards */
+    .stage-nav-card {
+        padding: 0.85rem !important;
+    }
+
+    .stage-nav-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    .stage-nav-badge-group {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
     .stage-stepper {
         display: flex;
         overflow-x: auto;
@@ -484,28 +503,122 @@ input[type="reset"],
         scrollbar-width: thin;
     }
 
-    .stage-pill {
+    .step-item {
         flex: 0 0 auto;
+        min-width: 140px;
         min-height: 44px;
-        padding: 0.5rem 0.85rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm, 6px);
     }
 
-    /* Manual Qualification Wizard Modal (Near Full-Screen on Mobile) */
+    .stage-banner-inner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+
+    .stage-stats-strip {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
+
+    /* Tournament: Leaderboard Table Card View */
+    .leaderboard-table tbody tr.rank-row {
+        display: block;
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md, 8px);
+        padding: 0.85rem;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1));
+    }
+
+    .leaderboard-table thead {
+        display: none;
+    }
+
+    .leaderboard-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.45rem 0;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+    }
+
+    .leaderboard-table td:last-child {
+        border-bottom: none;
+        padding-top: 0.5rem;
+    }
+
+    .leaderboard-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+
+    .leaderboard-table td.col-song {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .leaderboard-table td.col-song::before {
+        margin-bottom: 0.25rem;
+    }
+
+    .leaderboard-table tr.cutoff-divider-row {
+        display: block;
+        margin: 1rem 0;
+    }
+
+    .leaderboard-table tr.cutoff-divider-row td.cutoff-divider-cell {
+        display: block;
+        padding: 0;
+        border: none;
+    }
+
+    .cutoff-indicator {
+        flex-direction: column !important;
+        gap: 0.35rem !important;
+        text-align: center !important;
+    }
+
+    .cutoff-line {
+        display: none !important;
+    }
+
+    .cutoff-badge {
+        white-space: normal !important;
+        font-size: 0.75rem !important;
+        line-height: 1.35 !important;
+        padding: 0.4rem 0.65rem !important;
+    }
+
+    /* Manual Qualification Wizard Modal (Full-Screen on Mobile) */
     .modal-overlay.active {
         padding: 0;
         align-items: flex-start;
     }
 
     .modal-content.modal-advancement {
-        width: 100vw;
-        max-width: 100vw;
-        min-height: 100vh;
-        height: 100%;
-        margin: 0;
-        border-radius: 0;
-        display: flex;
-        flex-direction: column;
-        border: none;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        min-height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        border: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
     }
 
     .modal-advancement .modal-header {
@@ -515,25 +628,28 @@ input[type="reset"],
         background: var(--bg-surface);
         padding: 0.85rem 1rem;
         border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
     }
 
     .modal-advancement .modal-body {
         flex: 1 1 auto;
-        padding: 1rem 0.85rem;
+        padding: 1rem 0.85rem 5rem 0.85rem;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .modal-advancement .modal-footer {
         position: sticky;
         bottom: 0;
-        z-index: 10;
+        z-index: 20;
         background: var(--bg-surface);
         padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom, 1rem));
         border-top: 1px solid var(--border-color);
-        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
-        flex-direction: column;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+        flex-direction: column-reverse;
         align-items: stretch;
         gap: 0.65rem;
+        flex-shrink: 0;
     }
 
     .modal-advancement .modal-footer .wizard-footer-nav {
@@ -568,6 +684,299 @@ input[type="reset"],
     .advancement-steps-bar .step-indicator-item {
         padding: 0.4rem 0.5rem;
         font-size: 0.85rem;
+    }
+
+    /* Wizard Target Banner & Stats Strip */
+    .advancement-target-banner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+        text-align: center !important;
+        padding: 0.85rem !important;
+    }
+
+    .target-banner-title {
+        flex-direction: column !important;
+        gap: 0.25rem !important;
+        font-size: 0.95rem !important;
+    }
+
+    .target-banner-counter {
+        justify-content: center !important;
+        width: 100% !important;
+        font-size: 0.95rem !important;
+    }
+
+    .advancement-stats-strip {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
+
+    .adv-stat-box {
+        padding: 0.5rem 0.65rem !important;
+    }
+
+    .adv-stat-val {
+        font-size: 1rem !important;
+    }
+
+    /* Wizard Toolbar */
+    .advancement-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+
+    .adv-filter-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 0.4rem !important;
+        gap: 0.35rem !important;
+        scrollbar-width: thin !important;
+    }
+
+    .adv-filter-tab {
+        flex: 0 0 auto !important;
+        min-height: 38px !important;
+        white-space: nowrap !important;
+        padding: 0.35rem 0.65rem !important;
+    }
+
+    .adv-tools-right {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+
+    .adv-search-input,
+    .adv-sort-select {
+        width: 100% !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        font-size: 0.9rem !important;
+    }
+
+    .adv-tools-right .btn {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+    }
+
+    /* Candidate Cards (Table to Card Transformation) */
+    .candidates-table-wrap {
+        max-height: none !important;
+        min-height: auto !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .candidates-table thead {
+        display: none !important;
+    }
+
+    .candidates-table tbody tr.candidate-row {
+        display: block !important;
+        background: var(--card-glass-bg, var(--bg-card)) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.85rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1)) !important;
+    }
+
+    .candidates-table tbody tr.candidate-row.selected-advancing {
+        border-left: 4px solid var(--accent) !important;
+        background: rgba(245, 158, 11, 0.08) !important;
+    }
+
+    .candidates-table td {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.45rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)) !important;
+    }
+
+    .candidates-table td:last-child {
+        border-bottom: none !important;
+        padding-top: 0.5rem !important;
+    }
+
+    .candidates-table td.checkbox-wrap {
+        justify-content: flex-start !important;
+        gap: 0.75rem !important;
+        padding-bottom: 0.65rem !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
+    }
+
+    .candidates-table td.checkbox-wrap::after {
+        content: "Select Candidate for Advancement";
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: var(--text-primary);
+    }
+
+    .custom-adv-checkbox {
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+    }
+
+    .candidates-table td.col-title-artist {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Wizard Step 2: Reorderable Preview */
+    .reorderable-preview-container {
+        max-height: none !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .reorderable-item {
+        flex-wrap: wrap !important;
+        padding: 0.85rem !important;
+        gap: 0.65rem !important;
+        border-radius: var(--radius-md, 8px) !important;
+    }
+
+    .order-actions-col {
+        display: flex !important;
+        gap: 0.5rem !important;
+    }
+
+    .btn-move-order {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        font-size: 1.1rem !important;
+        border-radius: var(--radius-sm, 4px) !important;
+    }
+
+    .btn-remove-qualifier {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.4rem !important;
+    }
+
+    /* Wizard Step 3: Review Checklist */
+    .adv-review-tabs {
+        display: flex !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+
+    .adv-review-tab {
+        flex: 1 !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Archive & Results Page (results.php) */
+    .archive-nav-sticky-wrap {
+        position: static !important;
+        padding: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .archive-stage-nav {
+        display: flex !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 0.4rem !important;
+        padding: 0.5rem 0.25rem !important;
+        scrollbar-width: thin !important;
+    }
+
+    .archive-nav-item {
+        flex: 0 0 auto !important;
+        min-height: 44px !important;
+        padding: 0.45rem 0.85rem !important;
+        border-radius: var(--radius-sm, 6px) !important;
+    }
+
+    .archive-controls-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+
+    .archive-search-box,
+    .archive-status-filter {
+        width: 100% !important;
+        min-height: 44px !important;
+    }
+
+    .archive-table thead {
+        display: none !important;
+    }
+
+    .archive-table tbody tr.archive-row {
+        display: block !important;
+        background: var(--card-glass-bg, var(--bg-card)) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.85rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1)) !important;
+    }
+
+    .archive-table td {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.45rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)) !important;
+    }
+
+    .archive-table td:last-child {
+        border-bottom: none !important;
+        padding-top: 0.5rem !important;
+    }
+
+    .archive-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+
+    .archive-table td.col-title-artist {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .archive-stage-card .card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    .stage-collapse-btn {
+        min-height: 40px !important;
+        padding: 0.4rem 0.75rem !important;
     }
 
     /* Floating Bulk Actions Bar */
