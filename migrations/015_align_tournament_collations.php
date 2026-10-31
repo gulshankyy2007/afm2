@@ -11,7 +11,13 @@ if (!defined('AFM_APP')) {
 }
 
 return function (PDO $pdo) {
-    if (has_table('user_round_progress', $pdo)) {
+    if (!function_exists('has_table') && file_exists(dirname(__DIR__) . '/includes/db_helper.php')) {
+        require_once dirname(__DIR__) . '/includes/db_helper.php';
+    }
+
+    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+
+    if (in_array('user_round_progress', $tables, true)) {
         try {
             $pdo->exec("ALTER TABLE `user_round_progress` MODIFY COLUMN `status` ENUM('upcoming', 'in_progress', 'completed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'upcoming'");
         } catch (\Throwable $e) {
@@ -19,7 +25,7 @@ return function (PDO $pdo) {
         }
     }
 
-    if (has_table('rounds', $pdo)) {
+    if (in_array('rounds', $tables, true)) {
         try {
             $pdo->exec("ALTER TABLE `rounds` MODIFY COLUMN `status` ENUM('upcoming', 'in_progress', 'completed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'upcoming'");
         } catch (\Throwable $e) {
