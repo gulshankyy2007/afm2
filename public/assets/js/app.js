@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initArtworkPickerModal();
     initSongManagement();
     initAccessiblePagination();
+    initArchiveStageNavigation();
 });
 
 /**
@@ -850,6 +851,8 @@ function initTournamentAdvancement() {
             renderSelectionStep();
         } else if (state.currentStep === 2) {
             renderPreviewAndOrderStep();
+        } else if (state.currentStep === 3) {
+            renderChecklistStep();
         }
     }
 
@@ -873,15 +876,21 @@ function initTournamentAdvancement() {
         let warningHtml = '';
         if (!isMinMet) {
             warningHtml += `
-                <div class="alert alert-danger mb-3">
-                    <strong>⚠️ Eligibility Requirement Not Met:</strong> A minimum of <strong>${minEligible}</strong> eligible participants is required for ${escapeHtml(state.fromRound.round_name)} before advancing to ${escapeHtml(state.nextRound.round_name)}. Currently only <strong>${totalEligible}</strong> participants exist.
+                <div class="adv-eligibility-warning alert alert-danger mb-3">
+                    <span class="warning-icon">⚠️</span>
+                    <div>
+                        <strong>Eligibility Requirement Not Met:</strong> A minimum of <strong>${minEligible}</strong> eligible participants is required in ${escapeHtml(state.fromRound.round_name)} before selecting ${escapeHtml(state.nextRound.round_name)} (Target: ${targetCount}). Currently only <strong>${totalEligible}</strong> eligible participants exist.
+                    </div>
                 </div>
             `;
         }
         if (!areEvalsComplete) {
             warningHtml += `
-                <div class="alert alert-warning mb-3">
-                    <strong>⚠️ Evaluations Incomplete:</strong> All eligible candidates must be fully scored across all 5 criteria before finalizing advancement. <strong>${incompleteCount}</strong> candidate(s) are incomplete or untouched.
+                <div class="alert alert-warning mb-3" style="display: flex; align-items: flex-start; gap: 0.65rem;">
+                    <span class="warning-icon" style="font-size: 1.25rem; line-height: 1;">⚠️</span>
+                    <div>
+                        <strong>Evaluations Incomplete:</strong> All eligible candidates must be fully scored across all 5 criteria before finalizing advancement. <strong>${incompleteCount}</strong> candidate(s) are incomplete or untouched.
+                    </div>
                 </div>
             `;
         }
@@ -927,6 +936,11 @@ function initTournamentAdvancement() {
                 <div class="step-indicator-item">
                     <span class="step-indicator-num">2</span>
                     <span>2. Preview & Manual Ordering</span>
+                </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item">
+                    <span class="step-indicator-num">3</span>
+                    <span>3. Review & Confirmation</span>
                 </div>
             </div>
 
@@ -979,8 +993,8 @@ function initTournamentAdvancement() {
                     <button type="button" class="adv-filter-tab ${state.activeFilter === 'incomplete' ? 'active' : ''}" data-filter="incomplete">Incomplete (${incompleteCount})</button>
                 </div>
                 <div class="adv-tools-right">
-                    <input type="text" id="advSearchInput" class="form-input" placeholder="Search songs..." value="${escapeHtml(state.searchQuery)}" style="width: 170px; padding: 0.35rem 0.65rem; font-size: 0.82rem;">
-                    <select id="advSortSelect" class="form-select" style="padding: 0.35rem 0.65rem; font-size: 0.82rem;">
+                    <input type="text" id="advSearchInput" class="form-input adv-search-input" placeholder="Search songs..." value="${escapeHtml(state.searchQuery)}">
+                    <select id="advSortSelect" class="form-select adv-sort-select">
                         <option value="rank" ${state.sortBy === 'rank' ? 'selected' : ''}>Sort: Advisory Rank</option>
                         <option value="total_desc" ${state.sortBy === 'total_desc' ? 'selected' : ''}>Sort: Total Score (/50)</option>
                         <option value="emotion" ${state.sortBy === 'emotion' ? 'selected' : ''}>Sort: Emotion</option>
@@ -1005,7 +1019,7 @@ function initTournamentAdvancement() {
                         <tr>
                             <th style="width: 45px; text-align: center;">Select</th>
                             <th style="width: 55px; text-align: center;">Rank</th>
-                            <th>Song Title & Artist</th>
+                            <th class="col-title-artist">Song Title & Artist</th>
                             <th style="width: 65px; text-align: center;">Total</th>
                             <th style="width: 45px; text-align: center;">Emo</th>
                             <th style="width: 45px; text-align: center;">Rep</th>
@@ -1035,9 +1049,9 @@ function initTournamentAdvancement() {
                                     <td class="text-center font-mono font-bold text-gold">
                                         #${c.calculated_rank}
                                     </td>
-                                    <td>
-                                        <div class="font-bold">${escapeHtml(c.title)}</div>
-                                        <div class="text-xs text-muted">${escapeHtml(c.artist)}</div>
+                                    <td class="col-title-artist">
+                                        <div class="candidate-title">${escapeHtml(c.title)}</div>
+                                        <div class="candidate-artist">${escapeHtml(c.artist)}</div>
                                     </td>
                                     <td class="text-center font-mono font-bold text-accent">
                                         ${c.is_eval_complete ? `${c.total}/50` : '<span class="text-muted">—</span>'}
@@ -1178,6 +1192,11 @@ function initTournamentAdvancement() {
                     <span class="step-indicator-num">2</span>
                     <span>2. Preview & Manual Ordering</span>
                 </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item">
+                    <span class="step-indicator-num">3</span>
+                    <span>3. Review & Confirmation</span>
+                </div>
             </div>
 
             <div class="advancement-target-banner">
@@ -1227,8 +1246,8 @@ function initTournamentAdvancement() {
 
         modalFooter.innerHTML = `
             <button type="button" class="btn btn-secondary" id="btnBackToSelection">&larr; Back to Selection</button>
-            <button type="button" class="btn btn-accent" id="btnConfirmFinalAdvancement" ${!isExactMatch ? 'disabled' : ''}>
-                Confirm & Advance Stage ⚡
+            <button type="button" class="btn btn-accent" id="btnGoToChecklist" ${!isExactMatch ? 'disabled' : ''}>
+                Next: Review Confirmation Checklist (${selectedCount}/${targetCount}) &rarr;
             </button>
         `;
 
@@ -1240,6 +1259,15 @@ function initTournamentAdvancement() {
         if (btnBack) {
             btnBack.addEventListener('click', () => {
                 state.currentStep = 1;
+                renderAdvancementModal();
+            });
+        }
+
+        const btnGoToChecklist = document.getElementById('btnGoToChecklist');
+        if (btnGoToChecklist) {
+            btnGoToChecklist.addEventListener('click', () => {
+                state.currentStep = 3;
+                state.checklistReviewTab = 'qualifiers';
                 renderAdvancementModal();
             });
         }
@@ -1315,6 +1343,208 @@ function initTournamentAdvancement() {
                 });
             });
         }
+    }
+
+    function renderChecklistStep() {
+        if (!modalTitle || !modalBody || !modalFooter) return;
+        modalTitle.textContent = `Pre-Finalization Checklist & Review — ${state.fromRound.round_name}`;
+
+        const targetCount = state.rules ? state.rules.target_count : (state.nextRound.target_count || 1);
+        const minEligible = state.rules ? state.rules.min_eligible_participants : (targetCount + 1);
+        const totalEligible = state.candidates.length;
+        const completedCount = state.candidates.filter(c => c.is_eval_complete).length;
+        const selectedCount = state.orderedQualifiers.length;
+
+        const selectedSet = new Set(state.orderedQualifiers.map(q => q.entry_id));
+        const eliminatedCandidates = state.candidates.filter(c => !selectedSet.has(c.entry_id));
+
+        const activeReviewTab = state.checklistReviewTab || 'qualifiers';
+
+        modalBody.innerHTML = `
+            <div class="advancement-steps-bar">
+                <div class="step-indicator-item completed">
+                    <span class="step-indicator-num">✓</span>
+                    <span>1. Qualification Selected</span>
+                </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item completed">
+                    <span class="step-indicator-num">✓</span>
+                    <span>2. Order & Seeding</span>
+                </div>
+                <div class="step-indicator-sep"></div>
+                <div class="step-indicator-item active">
+                    <span class="step-indicator-num">3</span>
+                    <span>3. Review & Confirmation</span>
+                </div>
+            </div>
+
+            <!-- Mandatory Confirmation Checklist -->
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                <h4 style="margin: 0 0 0.75rem 0; font-size: 0.92rem; font-weight: 700; color: var(--text-primary, #fff); display: flex; align-items: center; gap: 0.5rem;">
+                    <span>✓ Final Confirmation Checklist</span>
+                </h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; font-size: 0.82rem;">
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.6rem 0.85rem;">
+                        <span style="color: #10b981; font-weight: 700;">✓ Participant Count:</span>
+                        <div style="color: var(--text-secondary, #a1a1aa); margin-top: 0.15rem;">
+                            ${totalEligible} participants (min required: ${minEligible})
+                        </div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.6rem 0.85rem;">
+                        <span style="color: #10b981; font-weight: 700;">✓ Evaluation Completion:</span>
+                        <div style="color: var(--text-secondary, #a1a1aa); margin-top: 0.15rem;">
+                            100% complete (${completedCount}/${totalEligible} candidates evaluated)
+                        </div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.6rem 0.85rem;">
+                        <span style="color: #10b981; font-weight: 700;">✓ Advancement Target:</span>
+                        <div style="color: var(--text-secondary, #a1a1aa); margin-top: 0.15rem;">
+                            Exact match (${selectedCount} of ${targetCount} selected to advance)
+                        </div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.6rem 0.85rem;">
+                        <span style="color: #10b981; font-weight: 700;">✓ Seeding Sequence:</span>
+                        <div style="color: var(--text-secondary, #a1a1aa); margin-top: 0.15rem;">
+                            Custom manual order arranged (#1 to #${selectedCount})
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Immutability Notice -->
+            <div class="alert alert-warning mb-3" style="font-size: 0.82rem; line-height: 1.45;">
+                <strong>🔒 STAGE FINALIZATION &amp; IMMUTABILITY:</strong>
+                <p style="margin: 0.25rem 0 0 0;">
+                    Once confirmed, <strong>${escapeHtml(state.fromRound.round_name)}</strong> will be permanently finalized and locked into tournament history.
+                    Scorecards, participant selections, and advancement order become immutable historical records. Routine reopening, undoing, score resets, and song deletions are strictly prohibited.
+                    Subsequent stage <strong>${escapeHtml(state.nextRound.round_name)}</strong> will contain exactly these ${selectedCount} confirmed participants.
+                </p>
+            </div>
+
+            <!-- Review Tabs: Qualifiers vs Eliminated -->
+            <div class="advancement-toolbar" style="margin-bottom: 0.75rem;">
+                <div class="adv-filter-tabs">
+                    <button type="button" class="adv-filter-tab ${activeReviewTab === 'qualifiers' ? 'active' : ''}" id="tabReviewQualifiers">
+                        Advancing Qualifiers (${selectedCount})
+                    </button>
+                    <button type="button" class="adv-filter-tab ${activeReviewTab === 'eliminated' ? 'active' : ''}" id="tabReviewEliminated">
+                        Eliminated Participants (${eliminatedCandidates.length})
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table of Qualifiers or Eliminated -->
+            <div class="candidates-table-wrap" style="max-height: 240px; overflow-y: auto;">
+                ${activeReviewTab === 'qualifiers' ? `
+                    <table class="candidates-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px; text-align: center;">Seed</th>
+                                <th class="col-title-artist">Song Title &amp; Artist</th>
+                                <th style="width: 60px; text-align: center;">Adv Rank</th>
+                                <th style="width: 70px; text-align: center;">Total</th>
+                                <th style="width: 45px; text-align: center;">Emo</th>
+                                <th style="width: 45px; text-align: center;">Rep</th>
+                                <th style="width: 45px; text-align: center;">Mel</th>
+                                <th style="width: 45px; text-align: center;">Voc</th>
+                                <th style="width: 45px; text-align: center;">Lyr</th>
+                                <th style="width: 100px; text-align: center;">Decision</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.orderedQualifiers.map((q, idx) => `
+                                <tr class="candidate-row selected-advancing">
+                                    <td class="text-center font-mono font-bold text-accent">#${idx + 1}</td>
+                                    <td class="col-title-artist">
+                                        <div class="candidate-title">${escapeHtml(q.title)}</div>
+                                        <div class="candidate-artist">${escapeHtml(q.artist)}</div>
+                                    </td>
+                                    <td class="text-center font-mono text-xs text-gold">#${q.calculated_rank}</td>
+                                    <td class="text-center font-mono font-bold text-accent">${q.total}/50</td>
+                                    <td class="text-center font-mono text-xs">${q.emotion}</td>
+                                    <td class="text-center font-mono text-xs">${q.replayability}</td>
+                                    <td class="text-center font-mono text-xs">${q.melody}</td>
+                                    <td class="text-center font-mono text-xs">${q.vocals}</td>
+                                    <td class="text-center font-mono text-xs">${q.lyrics}</td>
+                                    <td class="text-center"><span class="badge badge-accent text-xs">Advancing</span></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : `
+                    <table class="candidates-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; text-align: center;">Adv Rank</th>
+                                <th class="col-title-artist">Song Title &amp; Artist</th>
+                                <th style="width: 70px; text-align: center;">Total</th>
+                                <th style="width: 45px; text-align: center;">Emo</th>
+                                <th style="width: 45px; text-align: center;">Rep</th>
+                                <th style="width: 45px; text-align: center;">Mel</th>
+                                <th style="width: 45px; text-align: center;">Voc</th>
+                                <th style="width: 45px; text-align: center;">Lyr</th>
+                                <th style="width: 120px; text-align: center;">Historical Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${eliminatedCandidates.length === 0 ? `
+                                <tr><td colspan="9" class="text-center p-3 text-muted">No candidates were eliminated.</td></tr>
+                            ` : eliminatedCandidates.map(c => `
+                                <tr class="candidate-row">
+                                    <td class="text-center font-mono text-xs text-gold">#${c.calculated_rank}</td>
+                                    <td class="col-title-artist">
+                                        <div class="candidate-title">${escapeHtml(c.title)}</div>
+                                        <div class="candidate-artist">${escapeHtml(c.artist)}</div>
+                                    </td>
+                                    <td class="text-center font-mono font-bold text-muted">${c.total}/50</td>
+                                    <td class="text-center font-mono text-xs">${c.emotion}</td>
+                                    <td class="text-center font-mono text-xs">${c.replayability}</td>
+                                    <td class="text-center font-mono text-xs">${c.melody}</td>
+                                    <td class="text-center font-mono text-xs">${c.vocals}</td>
+                                    <td class="text-center font-mono text-xs">${c.lyrics}</td>
+                                    <td class="text-center"><span class="badge badge-neutral text-xs">Eliminated (Archived)</span></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
+            </div>
+        `;
+
+        modalFooter.innerHTML = `
+            <button type="button" class="btn btn-secondary" id="btnBackToOrdering">&larr; Back to Order &amp; Seeding</button>
+            <button type="button" class="btn btn-accent" id="btnConfirmFinalAdvancement">
+                🔒 Confirm &amp; Permanently Finalize Stage
+            </button>
+        `;
+
+        bindChecklistStepEvents();
+    }
+
+    function bindChecklistStepEvents() {
+        const btnBack = document.getElementById('btnBackToOrdering');
+        if (btnBack) {
+            btnBack.addEventListener('click', () => {
+                state.currentStep = 2;
+                renderAdvancementModal();
+            });
+        }
+
+        const tabQualifiers = document.getElementById('tabReviewQualifiers');
+        if (tabQualifiers) {
+            tabQualifiers.addEventListener('click', () => {
+                state.checklistReviewTab = 'qualifiers';
+                renderChecklistStep();
+            });
+        }
+
+        const tabEliminated = document.getElementById('tabReviewEliminated');
+        if (tabEliminated) {
+            tabEliminated.addEventListener('click', () => {
+                state.checklistReviewTab = 'eliminated';
+                renderChecklistStep();
+            });
+        }
 
         const btnConfirm = document.getElementById('btnConfirmFinalAdvancement');
         if (btnConfirm) {
@@ -1326,12 +1556,16 @@ function initTournamentAdvancement() {
                 }
 
                 const confirmed = window.confirm(
-                    `Are you sure you want to advance these ${state.orderedQualifiers.length} songs to ${state.nextRound.round_name} in this exact manual order?\n\nThis will mark ${state.fromRound.round_name} as completed and persist your custom tournament seeding.`
+                    `Are you sure you want to permanently finalize and lock ${state.fromRound.round_name}?\n\n` +
+                    `• Exactly ${state.orderedQualifiers.length} songs will advance to ${state.nextRound.round_name} in your custom manual sequence.\n` +
+                    `• Completed evaluations, scorecards, and qualification records will become immutable historical records.\n` +
+                    `• Ordinary users cannot reopen, undo, edit, or reset scores for this stage.\n\n` +
+                    `Click OK to finalize.`
                 );
                 if (!confirmed) return;
 
                 btnConfirm.disabled = true;
-                btnConfirm.textContent = 'Advancing Stage...';
+                btnConfirm.textContent = 'Finalizing Stage...';
 
                 const qualifierIds = state.orderedQualifiers.map(q => q.entry_id);
                 const manualOrderMap = {};
@@ -1355,15 +1589,15 @@ function initTournamentAdvancement() {
 
                     const data = await res.json();
                     btnConfirm.disabled = false;
-                    btnConfirm.textContent = 'Confirm & Advance Stage ⚡';
+                    btnConfirm.textContent = '🔒 Confirm & Permanently Finalize Stage';
 
                     if (!data.success) {
-                        showToast(data.error || 'Failed to advance tournament stage.', 'danger', 5000);
+                        showToast(data.error || 'Failed to finalize stage.', 'danger', 5000);
                         return;
                     }
 
                     modal.classList.remove('active');
-                    showToast(data.message || 'Tournament stage advanced successfully!', 'success', 4000);
+                    showToast(data.message || 'Tournament stage permanently finalized!', 'success', 4000);
 
                     setTimeout(() => {
                         window.location.reload();
@@ -1371,9 +1605,9 @@ function initTournamentAdvancement() {
 
                 } catch (err) {
                     btnConfirm.disabled = false;
-                    btnConfirm.textContent = 'Confirm & Advance Stage ⚡';
+                    btnConfirm.textContent = '🔒 Confirm & Permanently Finalize Stage';
                     console.error('Commit Advancement Error:', err);
-                    showToast('Network error while committing stage advancement.', 'danger');
+                    showToast('Network error while finalizing stage.', 'danger');
                 }
             });
         }
@@ -1381,24 +1615,25 @@ function initTournamentAdvancement() {
 }
 
 /**
- * Tournament Controlled Stage Reopening
+ * Restricted Exceptional Administrative Stage Correction
+ * Only available to authorized administrators with a mandatory documented reason.
  */
 function initTournamentStageReopening() {
-    const reopenBtn = document.getElementById('btnReopenStage');
-    const modal = document.getElementById('reopenStageModal');
-    const modalBody = document.getElementById('reopenStageModalBody');
-    const confirmBtn = document.getElementById('btnConfirmReopenStage');
+    const adminBtn = document.getElementById('btnAdminCorrectStage') || document.getElementById('btnReopenStage');
+    const modal = document.getElementById('adminCorrectionModal') || document.getElementById('reopenStageModal');
+    const modalBody = document.getElementById('adminCorrectionModalBody') || document.getElementById('reopenStageModalBody');
+    const confirmBtn = document.getElementById('btnConfirmAdminCorrection') || document.getElementById('btnConfirmReopenStage');
 
-    if (!reopenBtn || !modal || !modalBody || !confirmBtn) return;
+    if (!adminBtn || !modal || !modalBody || !confirmBtn) return;
 
     let targetRoundId = null;
 
-    reopenBtn.addEventListener('click', async (e) => {
+    adminBtn.addEventListener('click', async (e) => {
         e.preventDefault();
-        targetRoundId = parseInt(reopenBtn.getAttribute('data-round-id'), 10);
+        targetRoundId = parseInt(adminBtn.getAttribute('data-round-id'), 10);
         if (!targetRoundId) return;
 
-        modalBody.innerHTML = '<div class="text-center p-4">Loading stage details & impact analysis...</div>';
+        modalBody.innerHTML = '<div class="text-center p-4">Loading stage details & administrative impact analysis...</div>';
         confirmBtn.disabled = true;
         modal.classList.add('active');
 
@@ -1413,32 +1648,44 @@ function initTournamentStageReopening() {
 
             confirmBtn.disabled = false;
             const round = data.round;
-            const subsequent = data.subsequent_rounds || [];
+            const subsequent = data.affected_stages || data.subsequent_rounds || [];
             const qualifiedCount = data.qualified_count || 0;
             const eliminatedCount = data.eliminated_count || 0;
 
             modalBody.innerHTML = `
                 <div class="mb-3">
-                    <p>You are requesting to reopen <strong>${escapeHtml(round.round_name)}</strong>.</p>
+                    <p style="margin: 0; font-size: 0.9rem;">
+                        Target Stage: <strong>${escapeHtml(round.round_name)}</strong>
+                    </p>
                 </div>
 
-                <div class="alert alert-warning mb-3">
-                    <strong>⚠️ What Reopening Does:</strong>
+                <div class="alert alert-warning mb-3" style="font-size: 0.82rem; line-height: 1.45;">
+                    <strong>⚠️ RESTRICTED ADMINISTRATIVE CORRECTION:</strong>
                     <ul class="text-sm mt-1" style="padding-left: 1.25rem;">
-                        <li>Reverts <strong>${escapeHtml(round.round_name)}</strong> back to <strong>In Progress</strong>.</li>
-                        <li>Past qualification decisions (${qualifiedCount} advanced, ${eliminatedCount} eliminated) will be archived into historical decision records.</li>
-                        ${subsequent.length > 0 ? `<li>Subsequent stages (${subsequent.map(s => escapeHtml(s.round_name)).join(', ')}) will be reset to <strong>Upcoming</strong>.</li>` : ''}
-                        <li><strong>Safe Data Preservation:</strong> All song scores, ratings, and criterion evaluations are safely preserved and will NOT be erased.</li>
+                        <li>This is an exceptional administrative mechanism, not a routine reopening feature.</li>
+                        <li>Past qualification decisions (${qualifiedCount} advanced, ${eliminatedCount} eliminated) will be archived into an auditable revision trail.</li>
+                        ${subsequent.length > 0 ? `<li>Subsequent stages (${subsequent.join(', ')}) will be reset to <strong>Upcoming</strong> to maintain consistency.</li>` : ''}
+                        <li><strong>Historical Audit Log:</strong> Your admin user ID, timestamp, and technical reason will be recorded in <code>tournament_admin_corrections</code>.</li>
+                        <li>Original scorecard evaluations remain preserved.</li>
                     </ul>
                 </div>
 
-                <p class="text-sm text-secondary">
-                    After reopening, you can adjust scores in Auditions and re-run the manual qualification and advancement workflow to correct any tournament decisions.
-                </p>
+                <div class="form-group mb-2">
+                    <label for="adminCorrectionReason" class="form-label font-bold text-danger" style="display: block; margin-bottom: 0.35rem; font-size: 0.85rem;">
+                        Documented Technical Reason (Required, min 10 characters):
+                    </label>
+                    <textarea 
+                        id="adminCorrectionReason" 
+                        class="form-input" 
+                        rows="3" 
+                        placeholder="Detail the technical or data-integrity issue requiring correction (e.g. Correcting corrupted evaluation criteria for Entry #14)..." 
+                        style="width: 100%; font-size: 0.85rem; padding: 0.5rem;"
+                    ></textarea>
+                </div>
             `;
 
         } catch (err) {
-            console.error('Fetch Reopen Info Error:', err);
+            console.error('Fetch Admin Correction Info Error:', err);
             modalBody.innerHTML = '<div class="alert alert-danger">Network error loading stage information.</div>';
         }
     });
@@ -1447,30 +1694,42 @@ function initTournamentStageReopening() {
         e.preventDefault();
         if (!targetRoundId) return;
 
+        const reasonEl = document.getElementById('adminCorrectionReason');
+        const reason = reasonEl ? reasonEl.value.trim() : '';
+
+        if (reason.length < 10) {
+            showToast('A documented technical reason of at least 10 characters is mandatory for administrative corrections.', 'danger', 5000);
+            if (reasonEl) reasonEl.focus();
+            return;
+        }
+
         confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Reopening Stage...';
+        confirmBtn.textContent = 'Authorizing Correction...';
 
         try {
-            const res = await fetch('api.php?action=reopen_stage', {
+            const res = await fetch('api.php?action=admin_stage_correction', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': getCsrfToken()
                 },
-                body: JSON.stringify({ round_id: targetRoundId })
+                body: JSON.stringify({ 
+                    round_id: targetRoundId,
+                    reason: reason
+                })
             });
 
             const data = await res.json();
             confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm & Reopen Stage';
+            confirmBtn.textContent = '⚠️ Authorize Exceptional Correction';
 
             if (!data.success) {
-                showToast(data.error || 'Failed to reopen stage.', 'danger', 5000);
+                showToast(data.error || 'Failed to execute administrative correction.', 'danger', 5000);
                 return;
             }
 
             modal.classList.remove('active');
-            showToast(data.message || 'Stage reopened successfully!', 'success', 4000);
+            showToast(data.message || 'Administrative correction executed successfully!', 'success', 4000);
 
             setTimeout(() => {
                 window.location.reload();
@@ -1478,9 +1737,9 @@ function initTournamentStageReopening() {
 
         } catch (err) {
             confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm & Reopen Stage';
-            console.error('Reopen Stage Error:', err);
-            showToast('Network error while reopening stage.', 'danger');
+            confirmBtn.textContent = '⚠️ Authorize Exceptional Correction';
+            console.error('Admin Correction Error:', err);
+            showToast('Network error while executing administrative correction.', 'danger');
         }
     });
 }
@@ -4042,9 +4301,43 @@ function initSongManagement() {
                     body: JSON.stringify({ song_id: songId })
                 });
 
-                const data = await res.json();
+                let data = null;
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    try {
+                        data = await res.json();
+                    } catch (parseErr) {
+                        data = null;
+                    }
+                } else {
+                    const rawText = await res.text();
+                    try {
+                        data = JSON.parse(rawText);
+                    } catch (e) {
+                        data = null;
+                    }
+                }
+
                 confirmDeleteBtn.disabled = false;
                 confirmDeleteBtn.textContent = 'Permanently Delete';
+
+                if (!data) {
+                    let errMsg = `Server error (${res.status}): `;
+                    if (res.status === 403) {
+                        errMsg += 'Unauthorized or session expired. Please refresh the page.';
+                    } else if (res.status === 409) {
+                        errMsg += 'Deletion blocked by competition safeguards.';
+                    } else if (res.status >= 500) {
+                        errMsg += 'Internal database or server error.';
+                    } else {
+                        errMsg += res.statusText || 'Unexpected server response.';
+                    }
+                    if (deleteSongError) {
+                        deleteSongError.textContent = errMsg;
+                        deleteSongError.style.display = 'block';
+                    }
+                    return;
+                }
 
                 if (!data.success) {
                     if (deleteSongError) {
@@ -4073,7 +4366,7 @@ function initSongManagement() {
                 confirmDeleteBtn.textContent = 'Permanently Delete';
                 console.error('Delete song error:', err);
                 if (deleteSongError) {
-                    deleteSongError.textContent = 'Network error deleting song.';
+                    deleteSongError.textContent = 'Network error: ' + (err.message || 'Unable to reach server. Please check your connection.');
                     deleteSongError.style.display = 'block';
                 }
             }
@@ -4211,9 +4504,43 @@ function initSongManagement() {
                     body: JSON.stringify({ song_ids: songIds })
                 });
 
-                const data = await res.json();
+                let data = null;
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    try {
+                        data = await res.json();
+                    } catch (parseErr) {
+                        data = null;
+                    }
+                } else {
+                    const rawText = await res.text();
+                    try {
+                        data = JSON.parse(rawText);
+                    } catch (e) {
+                        data = null;
+                    }
+                }
+
                 confirmBulkDeleteBtn.disabled = false;
                 confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
+
+                if (!data) {
+                    let errMsg = `Server error (${res.status}): `;
+                    if (res.status === 403) {
+                        errMsg += 'Unauthorized or session expired. Please refresh the page.';
+                    } else if (res.status === 409) {
+                        errMsg += 'Bulk deletion blocked by competition safeguards.';
+                    } else if (res.status >= 500) {
+                        errMsg += 'Internal database or server error.';
+                    } else {
+                        errMsg += res.statusText || 'Unexpected server response.';
+                    }
+                    if (bulkDeleteError) {
+                        bulkDeleteError.textContent = errMsg;
+                        bulkDeleteError.style.display = 'block';
+                    }
+                    return;
+                }
 
                 if (!data.success) {
                     if (bulkDeleteError) {
@@ -4253,7 +4580,7 @@ function initSongManagement() {
                 confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
                 console.error('Bulk delete error:', err);
                 if (bulkDeleteError) {
-                    bulkDeleteError.textContent = 'Network error during bulk delete.';
+                    bulkDeleteError.textContent = 'Network error: ' + (err.message || 'Unable to reach server. Please check your connection.');
                     bulkDeleteError.style.display = 'block';
                 }
             }
@@ -4361,5 +4688,221 @@ function initAccessiblePagination() {
         });
     });
 }
+
+/**
+ * Tournament Archive: Prominent Stage-by-Stage Sticky Navigation, Direct Jumps & Filtering
+ */
+function initArchiveStageNavigation() {
+    const navWrap = document.querySelector('.archive-nav-sticky-wrap');
+    if (!navWrap) return;
+
+    const navItems = navWrap.querySelectorAll('.archive-nav-item:not(.disabled)');
+    const filterInput = document.getElementById('archiveFilterInput');
+    const btnExpandAll = document.getElementById('btnExpandAllStages');
+    const btnCollapseAll = document.getElementById('btnCollapseAllStages');
+    const stageCards = document.querySelectorAll('.archive-stage-card');
+    const stageSections = document.querySelectorAll('.archive-stage-section');
+
+    // 1. Direct Anchor Navigation with Smooth Scrolling & Auto-Expansion
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            const href = item.getAttribute('href');
+            if (!href || !href.startsWith('#')) return;
+
+            const target = document.querySelector(href);
+            if (!target) return;
+
+            e.preventDefault();
+
+            // If target is inside a collapsed stage card, expand it
+            const parentCard = target.classList.contains('archive-stage-card') 
+                ? target 
+                : target.querySelector('.archive-stage-card') || target.closest('.archive-stage-card');
+
+            if (parentCard && parentCard.classList.contains('is-collapsed')) {
+                expandStageCard(parentCard);
+            }
+
+            // Smooth scroll to target
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Visual highlight pulse
+            const cardToPulse = parentCard || target.querySelector('.card') || target;
+            if (cardToPulse) {
+                cardToPulse.classList.remove('highlight-pulse');
+                void cardToPulse.offsetWidth; // trigger reflow
+                cardToPulse.classList.add('highlight-pulse');
+            }
+
+            // Update active state in nav
+            navItems.forEach(ni => ni.classList.remove('active'));
+            item.classList.add('active');
+
+            // Update URL hash without jumping
+            if (history.replaceState) {
+                history.replaceState(null, '', href);
+            }
+        });
+    });
+
+    // 2. Individual Collapse/Expand Toggles
+    document.querySelectorAll('.stage-collapse-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const card = btn.closest('.archive-stage-card');
+            if (!card) return;
+
+            const isCollapsed = card.classList.contains('is-collapsed');
+            if (isCollapsed) {
+                expandStageCard(card);
+            } else {
+                collapseStageCard(card);
+            }
+        });
+    });
+
+    function expandStageCard(card) {
+        card.classList.remove('is-collapsed');
+        const btn = card.querySelector('.stage-collapse-btn');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'true');
+            const icon = btn.querySelector('.stage-collapse-icon');
+            const text = btn.querySelector('.stage-collapse-text');
+            if (icon) icon.textContent = '▼';
+            if (text) text.textContent = 'Collapse';
+        }
+    }
+
+    function collapseStageCard(card) {
+        card.classList.add('is-collapsed');
+        const btn = card.querySelector('.stage-collapse-btn');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            const icon = btn.querySelector('.stage-collapse-icon');
+            const text = btn.querySelector('.stage-collapse-text');
+            if (icon) icon.textContent = '▶';
+            if (text) text.textContent = 'Expand';
+        }
+    }
+
+    // 3. Expand All / Collapse All Global Controls
+    if (btnExpandAll) {
+        btnExpandAll.addEventListener('click', () => {
+            stageCards.forEach(card => expandStageCard(card));
+        });
+    }
+
+    if (btnCollapseAll) {
+        btnCollapseAll.addEventListener('click', () => {
+            stageCards.forEach(card => collapseStageCard(card));
+        });
+    }
+
+    // 4. Live Archive Song Search & Filtering
+    if (filterInput) {
+        let filterTimeout = null;
+        filterInput.addEventListener('input', () => {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                const query = filterInput.value.trim().toLowerCase();
+                
+                stageCards.forEach(card => {
+                    const rows = card.querySelectorAll('tbody tr.archive-row');
+                    let matchCount = 0;
+
+                    rows.forEach(row => {
+                        if (!query) {
+                            row.style.display = '';
+                            matchCount++;
+                        } else {
+                            const titleEl = row.querySelector('.candidate-title, .song-title');
+                            const artistEl = row.querySelector('.candidate-artist, .song-artist');
+                            const titleText = titleEl ? titleEl.textContent.toLowerCase() : '';
+                            const artistText = artistEl ? artistEl.textContent.toLowerCase() : '';
+
+                            if (titleText.includes(query) || artistText.includes(query)) {
+                                row.style.display = '';
+                                matchCount++;
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        }
+                    });
+
+                    // If filtered and has matches, auto-expand card
+                    if (query && matchCount > 0 && card.classList.contains('is-collapsed')) {
+                        expandStageCard(card);
+                    }
+
+                    // Update footer indicator
+                    const footerStatus = card.querySelector('.stage-table-footer-actions span');
+                    if (footerStatus) {
+                        if (!query) {
+                            footerStatus.textContent = `Showing ${rows.length} historical records`;
+                        } else {
+                            footerStatus.textContent = `Showing ${matchCount} of ${rows.length} matching records`;
+                        }
+                    }
+                });
+            }, 120);
+        });
+    }
+
+    // 5. Scrollspy: Highlight Active Nav Item on Scroll
+    if ('IntersectionObserver' in window && stageSections.length > 0) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    if (!id) return;
+
+                    navItems.forEach(item => {
+                        const href = item.getAttribute('href');
+                        if (href === `#${id}`) {
+                            item.classList.add('active');
+                            // Ensure visible in horizontal scroll on mobile
+                            item.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+                        } else {
+                            item.classList.remove('active');
+                        }
+                    });
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '-100px 0px -60% 0px',
+            threshold: 0
+        });
+
+        stageSections.forEach(section => observer.observe(section));
+    }
+
+    // 6. Handle URL Hash on Page Load (Direct Jump e.g. results.php#stage-round-6)
+    if (window.location.hash) {
+        setTimeout(() => {
+            const hash = window.location.hash;
+            const target = document.querySelector(hash);
+            if (target) {
+                const parentCard = target.classList.contains('archive-stage-card') 
+                    ? target 
+                    : target.querySelector('.archive-stage-card') || target.closest('.archive-stage-card');
+                if (parentCard && parentCard.classList.contains('is-collapsed')) {
+                    expandStageCard(parentCard);
+                }
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                const cardToPulse = parentCard || target.querySelector('.card') || target;
+                if (cardToPulse) {
+                    cardToPulse.classList.add('highlight-pulse');
+                }
+
+                navItems.forEach(item => {
+                    item.classList.toggle('active', item.getAttribute('href') === hash);
+                });
+            }
+        }, 150);
+    }
+}
+
 
 

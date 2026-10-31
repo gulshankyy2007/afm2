@@ -59,15 +59,21 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <span class="btn-icon">🎧</span> Score Entries
             </a>
             <?php if ($isCompleted): ?>
-                <button 
-                    type="button" 
-                    class="btn btn-secondary" 
-                    id="btnReopenStage" 
-                    data-round-id="<?= (int)$selectedRoundId ?>"
-                    data-round-name="<?= htmlspecialchars($currentRound['round_name'], ENT_QUOTES, 'UTF-8') ?>"
-                >
-                    <span class="btn-icon">↺</span> Reopen Stage
-                </button>
+                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.5rem 0.85rem; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;">
+                    🔒 Stage Finalized &amp; Immutable
+                </span>
+                <?php if (is_admin()): ?>
+                    <button 
+                        type="button" 
+                        class="btn btn-secondary" 
+                        id="btnAdminCorrectStage" 
+                        data-round-id="<?= (int)$selectedRoundId ?>"
+                        data-round-name="<?= htmlspecialchars($currentRound['round_name'], ENT_QUOTES, 'UTF-8') ?>"
+                        style="border-color: rgba(239, 68, 68, 0.4); color: #f87171;"
+                    >
+                        <span class="btn-icon">⚠️</span> Admin: Exceptional Correction
+                    </button>
+                <?php endif; ?>
             <?php endif; ?>
             <?php if ($isInProgress && $nextRound): ?>
                 <button 
@@ -311,27 +317,29 @@ require_once dirname(__DIR__) . '/includes/header.php';
     </div>
 </div>
 
-<!-- Tournament Controlled Stage Reopening Modal -->
-<div class="modal-overlay" id="reopenStageModal" role="dialog" aria-modal="true" aria-labelledby="reopenModalTitle">
+<?php if (is_admin()): ?>
+<!-- Restricted Exceptional Administrative Stage Correction Modal -->
+<div class="modal-overlay" id="adminCorrectionModal" role="dialog" aria-modal="true" aria-labelledby="adminCorrectionModalTitle">
     <div class="modal-content">
         <div class="modal-header">
             <div>
-                <span class="badge badge-warning">Stage Management</span>
-                <h3 class="modal-title" id="reopenModalTitle">Reopen Tournament Stage</h3>
+                <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">Administrative Override</span>
+                <h3 class="modal-title" id="adminCorrectionModalTitle" style="color: #f87171;">⚠️ Exceptional Stage Correction</h3>
             </div>
             <button type="button" class="modal-close" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
-        <div class="modal-body" id="reopenStageModalBody">
+        <div class="modal-body" id="adminCorrectionModalBody">
             <div class="text-center p-4">Loading stage details...</div>
         </div>
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
-            <button type="button" class="btn btn-danger" id="btnConfirmReopenStage">
-                <span class="btn-icon">↺</span> Confirm & Reopen Stage
+            <button type="button" class="btn btn-danger" id="btnConfirmAdminCorrection">
+                <span class="btn-icon">⚠️</span> Authorize Exceptional Correction
             </button>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <?php
 require_once dirname(__DIR__) . '/includes/footer.php';

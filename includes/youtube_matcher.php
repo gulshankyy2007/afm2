@@ -712,7 +712,7 @@ class YouTubeMatcher {
             $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
             if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
             }
@@ -824,7 +824,7 @@ class YouTubeMatcher {
             $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
             if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
             }
@@ -923,7 +923,7 @@ class YouTubeMatcher {
             $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
             if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot clear recording for another user\'s song.'];
             }

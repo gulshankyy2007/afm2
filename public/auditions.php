@@ -657,11 +657,11 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
                                 <!-- Search Override Form (Hidden by default) -->
                                 <div class="lyrics-override-panel" style="display: none;">
-                                    <div style="display: flex; gap: 0.4rem; margin-bottom: 0.4rem;">
-                                        <input type="text" class="input-xs lyrics-custom-title" placeholder="Corrected Title" value="<?= htmlspecialchars($songTitle) ?>" style="flex:1;">
-                                        <input type="text" class="input-xs lyrics-custom-artist" placeholder="Corrected Artist" value="<?= htmlspecialchars($songArtist) ?>" style="flex:1;">
+                                    <div class="lyrics-override-inputs">
+                                        <input type="text" class="input-xs lyrics-custom-title" placeholder="Corrected Title" value="<?= htmlspecialchars($songTitle) ?>">
+                                        <input type="text" class="input-xs lyrics-custom-artist" placeholder="Corrected Artist" value="<?= htmlspecialchars($songArtist) ?>">
                                     </div>
-                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                                    <div class="lyrics-override-actions">
                                         <button type="button" class="btn btn-xs btn-secondary btn-cancel-override">Cancel</button>
                                         <button type="button" class="btn btn-xs btn-primary btn-apply-lyrics-search">Search Again</button>
                                     </div>

@@ -214,6 +214,7 @@ switch ($action) {
         break;
 
     case 'get_stage_reopen_info':
+        require_admin(true);
         $roundId = isset($_GET['round_id']) ? (int)$_GET['round_id'] : 0;
         if ($roundId <= 0) {
             http_response_code(400);
@@ -224,19 +225,30 @@ switch ($action) {
         echo json_encode($info);
         break;
 
+    case 'admin_stage_correction':
     case 'reopen_stage':
         if ($method !== 'POST') {
             http_response_code(405);
             echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
             exit;
         }
+        require_admin(true);
         $roundId = isset($input['round_id']) ? (int)$input['round_id'] : 0;
+        $reason = trim($input['reason'] ?? '');
         if ($roundId <= 0) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
             exit;
         }
-        $res = reopen_tournament_stage($roundId, $currentUserId);
+        if (strlen($reason) < 10) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error'   => 'A documented technical reason of at least 10 characters is required for exceptional administrative corrections.'
+            ]);
+            exit;
+        }
+        $res = admin_correct_tournament_stage($roundId, $reason, $currentUserId, $currentUserId);
         if (!$res['success']) {
             http_response_code(400);
         }
@@ -940,15 +952,21 @@ switch ($action) {
             exit;
         }
 
-        $res = delete_catalogue_song($songId, $currentUserId);
-        if (!$res['success']) {
-            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
-                http_response_code(403);
-            } else {
-                http_response_code(!empty($res['blocked']) ? 409 : 400);
+        try {
+            $res = delete_catalogue_song($songId, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
             }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 delete_song exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Server error while deleting song: ' . $e->getMessage()]);
         }
-        echo json_encode($res);
         break;
 
     case 'delete_multiple_songs':
@@ -964,15 +982,21 @@ switch ($action) {
             exit;
         }
 
-        $res = delete_multiple_catalogue_songs($rawSongIds, $currentUserId);
-        if (!$res['success']) {
-            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
-                http_response_code(403);
-            } else {
-                http_response_code(!empty($res['blocked']) ? 409 : 400);
+        try {
+            $res = delete_multiple_catalogue_songs($rawSongIds, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
             }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 delete_multiple_songs exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Server error during bulk deletion: ' . $e->getMessage()]);
         }
-        echo json_encode($res);
         break;
 
     case 'export_rejection_report':

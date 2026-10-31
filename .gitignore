@@ -40,6 +40,8 @@ backups/
 
 # Scratchpad, temporary debugging artifacts, and logs
 scratch/
+artifacts/
+*.mp4
 *.log
 bin/*.log
 
