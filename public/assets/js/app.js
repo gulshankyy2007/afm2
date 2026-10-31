@@ -4322,15 +4322,17 @@ function initSongManagement() {
                 confirmDeleteBtn.textContent = 'Permanently Delete';
 
                 if (!data) {
-                    let errMsg = `Server error (${res.status}): `;
+                    let errMsg = 'Failed to delete song.';
                     if (res.status === 403) {
-                        errMsg += 'Unauthorized or session expired. Please refresh the page.';
+                        errMsg = 'Permission denied: You do not have authorization to delete this song.';
+                    } else if (res.status === 404) {
+                        errMsg = 'Song not found in catalogue.';
                     } else if (res.status === 409) {
-                        errMsg += 'Deletion blocked by competition safeguards.';
+                        errMsg = 'Deletion blocked by competition safeguards.';
                     } else if (res.status >= 500) {
-                        errMsg += 'Internal database or server error.';
+                        errMsg = 'A database or server error occurred while deleting the song. The technical incident has been logged.';
                     } else {
-                        errMsg += res.statusText || 'Unexpected server response.';
+                        errMsg = `Server returned error (${res.status}). Please try again.`;
                     }
                     if (deleteSongError) {
                         deleteSongError.textContent = errMsg;
@@ -4340,8 +4342,13 @@ function initSongManagement() {
                 }
 
                 if (!data.success) {
+                    let errMsg = data.error || 'Failed to delete song.';
+                    // Never expose raw SQL errors, stack traces or internal table identifiers to users
+                    if (/SQLSTATE|Illegal mix of collations|General error|PDOException|Table.*doesn't exist/i.test(errMsg)) {
+                        errMsg = 'A database error occurred while processing song deletion. The technical incident has been logged. Please contact support.';
+                    }
                     if (deleteSongError) {
-                        deleteSongError.textContent = data.error || 'Failed to delete song.';
+                        deleteSongError.textContent = errMsg;
                         deleteSongError.style.display = 'block';
                     }
                     return;
@@ -4364,9 +4371,9 @@ function initSongManagement() {
             } catch (err) {
                 confirmDeleteBtn.disabled = false;
                 confirmDeleteBtn.textContent = 'Permanently Delete';
-                console.error('Delete song error:', err);
+                console.error('Delete song connection error:', err);
                 if (deleteSongError) {
-                    deleteSongError.textContent = 'Network error: ' + (err.message || 'Unable to reach server. Please check your connection.');
+                    deleteSongError.textContent = 'Network error: Unable to connect to the server. Please check your internet connection.';
                     deleteSongError.style.display = 'block';
                 }
             }
@@ -4525,15 +4532,17 @@ function initSongManagement() {
                 confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
 
                 if (!data) {
-                    let errMsg = `Server error (${res.status}): `;
+                    let errMsg = 'Failed to delete selected songs.';
                     if (res.status === 403) {
-                        errMsg += 'Unauthorized or session expired. Please refresh the page.';
+                        errMsg = 'Permission denied: You do not have authorization to delete these songs.';
+                    } else if (res.status === 404) {
+                        errMsg = 'One or more songs were not found in your catalogue.';
                     } else if (res.status === 409) {
-                        errMsg += 'Bulk deletion blocked by competition safeguards.';
+                        errMsg = 'Bulk deletion blocked by competition safeguards.';
                     } else if (res.status >= 500) {
-                        errMsg += 'Internal database or server error.';
+                        errMsg = 'A database or server error occurred during bulk deletion. The technical incident has been logged.';
                     } else {
-                        errMsg += res.statusText || 'Unexpected server response.';
+                        errMsg = `Server returned error (${res.status}). Please try again.`;
                     }
                     if (bulkDeleteError) {
                         bulkDeleteError.textContent = errMsg;
@@ -4543,8 +4552,13 @@ function initSongManagement() {
                 }
 
                 if (!data.success) {
+                    let errMsg = data.error || 'Failed to delete selected songs.';
+                    // Never expose raw SQL errors or internal database details to users
+                    if (/SQLSTATE|Illegal mix of collations|General error|PDOException|Table.*doesn't exist/i.test(errMsg)) {
+                        errMsg = 'A database error occurred during bulk deletion. The technical incident has been logged. Please contact support.';
+                    }
                     if (bulkDeleteError) {
-                        bulkDeleteError.textContent = data.error || 'Failed to delete selected songs.';
+                        bulkDeleteError.textContent = errMsg;
                         bulkDeleteError.style.display = 'block';
                     }
                     return;
@@ -4578,9 +4592,9 @@ function initSongManagement() {
             } catch (err) {
                 confirmBulkDeleteBtn.disabled = false;
                 confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
-                console.error('Bulk delete error:', err);
+                console.error('Bulk delete connection error:', err);
                 if (bulkDeleteError) {
-                    bulkDeleteError.textContent = 'Network error: ' + (err.message || 'Unable to reach server. Please check your connection.');
+                    bulkDeleteError.textContent = 'Network error: Unable to connect to the server. Please check your internet connection.';
                     bulkDeleteError.style.display = 'block';
                 }
             }

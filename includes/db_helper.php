@@ -1537,7 +1537,7 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
                 LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = rnd.`round_id`
                 WHERE e.`song_id` = :id 
                   AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g = :leg_id))
-                  AND COALESCE(urp.`status`, rnd.`status`) = 'in_progress'
+                  AND (urp.`status` = 'in_progress' OR (urp.`status` IS NULL AND rnd.`status` = 'in_progress'))
                   AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)
             ");
             $checkActiveScore->execute([':id' => $songId, ':uid1' => $userId, ':uid2' => $userId, ':uid_g' => $userId, ':leg_id' => $legacyId]);
@@ -1586,8 +1586,8 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
                   AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g = :leg_id))
                   AND rr.`result` IN ('qualified', 'winner')
                   AND (
-                      COALESCE(urp.`status`, r.`status`) = 'in_progress'
-                      OR (next_r.`round_id` IS NOT NULL AND COALESCE(next_urp.`status`, next_r.`status`) IN ('in_progress', 'upcoming'))
+                      (urp.`status` = 'in_progress' OR (urp.`status` IS NULL AND r.`status` = 'in_progress'))
+                      OR (next_r.`round_id` IS NOT NULL AND (next_urp.`status` IN ('in_progress', 'upcoming') OR (next_urp.`status` IS NULL AND next_r.`status` IN ('in_progress', 'upcoming'))))
                   )
             ");
             $checkActiveParticipant->execute([
@@ -1674,7 +1674,7 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
                 LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = r.`round_id`
                 WHERE e.`song_id` = :id
                   AND (rr.`user_id` = :uid2 OR (rr.`user_id` IS NULL AND :uid_g = :leg_id))
-                  AND COALESCE(urp.`status`, r.`status`) = 'completed'
+                  AND (urp.`status` = 'completed' OR (urp.`status` IS NULL AND r.`status` = 'completed'))
                 LIMIT 1
             ");
             $checkFinalizedStage->execute([':id' => $songId, ':uid1' => $userId, ':uid2' => $userId, ':uid_g' => $userId, ':leg_id' => $legacyId]);
@@ -1782,8 +1782,12 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("AFM2 delete_catalogue_song error: " . $e->getMessage());
-        return ['success' => false, 'error' => 'Database error deleting song: ' . $e->getMessage()];
+        error_log("AFM2 delete_catalogue_song database exception: " . $e->getMessage());
+        return [
+            'success'    => false,
+            'error_code' => 'database_error',
+            'error'      => 'A database error occurred while deleting the song. The technical incident has been logged. Please try again or contact support.'
+        ];
     }
 }
 
@@ -1899,7 +1903,7 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
                     LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = rnd.`round_id`
                     WHERE e.`song_id` = :id 
                       AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g = :leg_id))
-                      AND COALESCE(urp.`status`, rnd.`status`) = 'in_progress'
+                      AND (urp.`status` = 'in_progress' OR (urp.`status` IS NULL AND rnd.`status` = 'in_progress'))
                       AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)
                 ");
                 $chkScore->execute([':id' => $id, ':uid1' => $userId, ':uid2' => $userId, ':uid_g' => $userId, ':leg_id' => $legacyId]);
@@ -1947,8 +1951,8 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
                       AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g = :leg_id))
                       AND rr.`result` IN ('qualified', 'winner')
                       AND (
-                          COALESCE(urp.`status`, r.`status`) = 'in_progress'
-                          OR (next_r.`round_id` IS NOT NULL AND COALESCE(next_urp.`status`, next_r.`status`) IN ('in_progress', 'upcoming'))
+                          (urp.`status` = 'in_progress' OR (urp.`status` IS NULL AND r.`status` = 'in_progress'))
+                          OR (next_r.`round_id` IS NOT NULL AND (next_urp.`status` IN ('in_progress', 'upcoming') OR (next_urp.`status` IS NULL AND next_r.`status` IN ('in_progress', 'upcoming'))))
                       )
                 ");
                 $chkPart->execute([
@@ -2035,7 +2039,7 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
                     LEFT JOIN `user_round_progress` urp ON urp.`user_id` = :uid1 AND urp.`round_id` = r.`round_id`
                     WHERE e.`song_id` = :id
                       AND (rr.`user_id` = :uid2 OR (rr.`user_id` IS NULL AND :uid_g = :leg_id))
-                      AND COALESCE(urp.`status`, r.`status`) = 'completed'
+                      AND (urp.`status` = 'completed' OR (urp.`status` IS NULL AND r.`status` = 'completed'))
                     LIMIT 1
                 ");
                 $chkFinal->execute([':id' => $id, ':uid1' => $userId, ':uid2' => $userId, ':uid_g' => $userId, ':leg_id' => $legacyId]);
@@ -2180,10 +2184,11 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        error_log("AFM2 delete_multiple_catalogue_songs error: " . $e->getMessage());
+        error_log("AFM2 delete_multiple_catalogue_songs database exception: " . $e->getMessage());
         return [
             'success'       => false,
-            'error'         => 'Database error deleting songs: ' . $e->getMessage(),
+            'error_code'    => 'database_error',
+            'error'         => 'A database error occurred during bulk deletion. The technical incident has been logged. Please try again or contact support.',
             'deleted_count' => 0,
             'blocked_count' => 0,
             'deleted_ids'   => [],
@@ -2362,7 +2367,7 @@ function save_scorecard_rating(
     // Verify round exists and check status/eligibility
     $effectiveUid = $userId ?? (is_authenticated() ? get_current_user_id() : 995);
     $roundStmt = $pdo->prepare("
-        SELECT r.`round_id`, r.`round_name`, r.`sequence_no`, COALESCE(urp.`status`, r.`status`) AS `status`
+        SELECT r.`round_id`, r.`round_name`, r.`sequence_no`, CASE WHEN urp.`status` IS NOT NULL THEN urp.`status` ELSE r.`status` END AS `status`
         FROM `rounds` r
         LEFT JOIN `user_round_progress` urp ON r.`round_id` = urp.`round_id` AND urp.`user_id` = :uid
         WHERE r.`round_id` = :id
@@ -2567,7 +2572,7 @@ function reset_scorecard_rating(int $entryId, int $roundId, ?int $userId = null)
 
     // SAFEGUARD 1: Stage Immutability Check
     $stageStatusCheck = $pdo->prepare("
-        SELECT COALESCE(urp.`status`, r.`status`) AS `status`, r.`round_name`
+        SELECT CASE WHEN urp.`status` IS NOT NULL THEN urp.`status` ELSE r.`status` END AS `status`, r.`round_name`
         FROM `rounds` r
         LEFT JOIN `user_round_progress` urp ON r.`round_id` = urp.`round_id` AND urp.`user_id` = :uid
         WHERE r.`round_id` = :rid
@@ -3936,7 +3941,7 @@ function get_round_by_id(int $roundId, ?int $userId = null): ?array {
     if (!$res) {
         return null;
     }
-    if ($userId !== null) {
+    if ($userId !== null && has_table('user_round_progress', $pdo)) {
         $urpStmt = $pdo->prepare("SELECT `status`, `completed_at` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :rid");
         $urpStmt->execute([':uid' => $userId, ':rid' => $roundId]);
         $urp = $urpStmt->fetch();

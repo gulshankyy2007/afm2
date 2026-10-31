@@ -965,7 +965,11 @@ switch ($action) {
         } catch (\Throwable $e) {
             error_log("AFM2 delete_song exception: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['success' => false, 'error' => 'Server error while deleting song: ' . $e->getMessage()]);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred while deleting the song. The technical incident has been logged. Please try again later.'
+            ]);
         }
         break;
 
@@ -995,7 +999,11 @@ switch ($action) {
         } catch (\Throwable $e) {
             error_log("AFM2 delete_multiple_songs exception: " . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['success' => false, 'error' => 'Server error during bulk deletion: ' . $e->getMessage()]);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred during bulk deletion. The technical incident has been logged. Please try again later.'
+            ]);
         }
         break;
 
