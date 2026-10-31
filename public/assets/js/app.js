@@ -751,26 +751,53 @@ async function removeShortlistFromCard(card) {
 }
 
 /**
- * Generic Modal Dialogs (Confirmation for Tournament Advancement)
+ * Generic Modal Dialogs (Confirmation for Tournament Advancement & Dynamic Modals)
  */
 function initModals() {
-    document.querySelectorAll('[data-modal-open]').forEach(trigger => {
-        trigger.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = trigger.getAttribute('data-modal-open');
-            const modal = document.getElementById(targetId);
-            if (modal) modal.classList.add('active');
-        });
-    });
-
-    document.querySelectorAll('[data-modal-close]').forEach(closer => {
-        closer.addEventListener('click', (e) => {
+    // Delegated click handling for modal close triggers (supports static & dynamically rendered elements)
+    document.addEventListener('click', (e) => {
+        const closer = e.target.closest('[data-modal-close]');
+        if (closer) {
             e.preventDefault();
             const modal = closer.closest('.modal-overlay');
-            if (modal) modal.classList.remove('active');
-        });
+            if (modal) {
+                modal.classList.remove('active');
+                modal.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { closer } }));
+            }
+            return;
+        }
+
+        const opener = e.target.closest('[data-modal-open]');
+        if (opener) {
+            e.preventDefault();
+            const targetId = opener.getAttribute('data-modal-open');
+            const modal = document.getElementById(targetId);
+            if (modal) {
+                modal.classList.add('active');
+                modal.dispatchEvent(new CustomEvent('modal:open', { bubbles: true, detail: { opener } }));
+            }
+            return;
+        }
+
+        // Close when clicking directly on the backdrop overlay
+        if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('active')) {
+            e.target.classList.remove('active');
+            e.target.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { backdrop: true } }));
+        }
+    });
+
+    // Close active modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const activeModal = document.querySelector('.modal-overlay.active');
+            if (activeModal) {
+                activeModal.classList.remove('active');
+                activeModal.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { key: 'Escape' } }));
+            }
+        }
     });
 }
+
 
 /**
  * Tournament Stage Advancement Modal & Execution (Multi-step Manual Qualification & Reordering)
@@ -844,6 +871,22 @@ function initTournamentAdvancement() {
             console.error('Qualification Data Fetch Error:', err);
             modalBody.innerHTML = '<div class="alert alert-danger">Network error loading tournament qualification candidates.</div>';
         }
+    });
+
+    function closeWizard() {
+        modal.classList.remove('active');
+        // Cleanly reset wizard state so no uncommitted selections or steps persist
+        state.currentStep = 1;
+        state.selectedIds.clear();
+        state.orderedQualifiers = [];
+        state.searchQuery = '';
+        state.activeFilter = 'all';
+        state.sortBy = 'rank';
+        advBtn.disabled = false;
+    }
+
+    modal.addEventListener('modal:close', () => {
+        closeWizard();
     });
 
     function renderAdvancementModal() {
@@ -1079,7 +1122,7 @@ function initTournamentAdvancement() {
         `;
 
         modalFooter.innerHTML = `
-            <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+            <button type="button" class="btn btn-secondary" data-modal-close id="btnCancelAdvancementStep1">Cancel</button>
             <button type="button" class="btn btn-accent" id="btnGoToPreview" ${!canProceed ? 'disabled' : ''}>
                 Next: Preview & Order Selection (${selectedCount}/${targetCount}) &rarr;
             </button>
@@ -1089,6 +1132,14 @@ function initTournamentAdvancement() {
     }
 
     function bindSelectionStepEvents() {
+        const btnCancel1 = document.getElementById('btnCancelAdvancementStep1');
+        if (btnCancel1) {
+            btnCancel1.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeWizard();
+            });
+        }
+
         modalBody.querySelectorAll('.adv-filter-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 state.activeFilter = tab.getAttribute('data-filter') || 'all';
@@ -1245,7 +1296,10 @@ function initTournamentAdvancement() {
         `;
 
         modalFooter.innerHTML = `
-            <button type="button" class="btn btn-secondary" id="btnBackToSelection">&larr; Back to Selection</button>
+            <div class="wizard-footer-nav" style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-secondary" id="btnBackToSelection">&larr; Back to Selection</button>
+                <button type="button" class="btn btn-secondary" data-modal-close id="btnCancelAdvancementStep2">Cancel</button>
+            </div>
             <button type="button" class="btn btn-accent" id="btnGoToChecklist" ${!isExactMatch ? 'disabled' : ''}>
                 Next: Review Confirmation Checklist (${selectedCount}/${targetCount}) &rarr;
             </button>
@@ -1255,6 +1309,14 @@ function initTournamentAdvancement() {
     }
 
     function bindPreviewStepEvents() {
+        const btnCancel2 = document.getElementById('btnCancelAdvancementStep2');
+        if (btnCancel2) {
+            btnCancel2.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeWizard();
+            });
+        }
+
         const btnBack = document.getElementById('btnBackToSelection');
         if (btnBack) {
             btnBack.addEventListener('click', () => {
@@ -1512,7 +1574,10 @@ function initTournamentAdvancement() {
         `;
 
         modalFooter.innerHTML = `
-            <button type="button" class="btn btn-secondary" id="btnBackToOrdering">&larr; Back to Order &amp; Seeding</button>
+            <div class="wizard-footer-nav" style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-secondary" id="btnBackToOrdering">&larr; Back to Order &amp; Seeding</button>
+                <button type="button" class="btn btn-secondary" data-modal-close id="btnCancelAdvancementStep3">Cancel</button>
+            </div>
             <button type="button" class="btn btn-accent" id="btnConfirmFinalAdvancement">
                 🔒 Confirm &amp; Permanently Finalize Stage
             </button>
@@ -1522,6 +1587,14 @@ function initTournamentAdvancement() {
     }
 
     function bindChecklistStepEvents() {
+        const btnCancel3 = document.getElementById('btnCancelAdvancementStep3');
+        if (btnCancel3) {
+            btnCancel3.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeWizard();
+            });
+        }
+
         const btnBack = document.getElementById('btnBackToOrdering');
         if (btnBack) {
             btnBack.addEventListener('click', () => {
