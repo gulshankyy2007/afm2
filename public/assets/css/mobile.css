@@ -979,6 +979,93 @@ input[type="reset"],
         padding: 0.4rem 0.75rem !important;
     }
 
+    /* General Modals & Dialogs (Add Song, Edit Song, Delete, Bulk Delete, Quick Lyrics, Appearance) */
+    .modal-overlay {
+        padding: 0.5rem !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .modal-content:not(.modal-advancement) {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 90dvh !important;
+        padding: 1.25rem !important;
+        border-radius: var(--radius-md, 12px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .modal-close {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.5rem !important;
+        border-radius: var(--radius-sm, 4px) !important;
+    }
+
+    .modal-footer:not(.modal-advancement .modal-footer) {
+        flex-direction: column-reverse !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+
+    .modal-footer:not(.modal-advancement .modal-footer) .btn {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+    }
+
+    /* Appearance Modal Themes Grid */
+    .appearance-modal-content {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 1.25rem !important;
+    }
+
+    .curated-themes-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+
+    .curated-theme-card {
+        min-height: 52px !important;
+    }
+
+    /* Form Inputs & Accessibility */
+    .form-group {
+        margin-bottom: 1rem !important;
+    }
+
+    .form-label {
+        font-size: 0.9rem !important;
+        margin-bottom: 0.35rem !important;
+        display: block !important;
+        font-weight: 600 !important;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    select,
+    textarea,
+    .form-input,
+    .form-select,
+    .form-textarea {
+        font-size: 16px !important; /* Prevents auto-zoom on iOS */
+        min-height: 44px !important;
+        padding: 0.6rem 0.85rem !important;
+        width: 100% !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        box-sizing: border-box !important;
+    }
+
+    .form-textarea {
+        min-height: 100px !important;
+    }
+
     /* Floating Bulk Actions Bar */
     .bulk-actions-floating-bar {
         left: 0.75rem !important;
@@ -1135,3 +1222,52 @@ input[type="reset"],
         scroll-behavior: auto !important;
     }
 }
+
+/* ==========================================================================
+   7. GLOBAL ACCESSIBILITY, FOCUS INDICATORS & TOUCH TARGETS
+   ========================================================================== */
+
+/* High-Contrast Visible Focus for Keyboard Navigation */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2.5px solid var(--accent, #f59e0b) !important;
+    outline-offset: 2px !important;
+}
+
+/* Touch Targets: Minimum 44x44px for primary interactive elements */
+@media (pointer: coarse), (max-width: 1024px) {
+    .btn,
+    .nav-link,
+    .nav-links a,
+    .nav-drawer-header .drawer-close,
+    .modal-close,
+    .adv-filter-tab,
+    .btn-move-order,
+    .btn-remove-qualifier,
+    .archive-nav-item,
+    .pagination a,
+    .pagination span,
+    .appearance-trigger-btn,
+    .stage-collapse-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .col-select,
+    .checkbox-wrap {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-width: 22px;
+        min-height: 22px;
+    }
+}
+

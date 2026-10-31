@@ -264,7 +264,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand" id="addSongModalTitle"><span>＋</span> Add Song to Catalogue</h3>
                 <p class="modal-subtitle">Auto-extract from YouTube link or enter details manually.</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseAddSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseAddSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <!-- Mode Tabs -->
@@ -373,7 +373,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAddSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAddSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-primary btn-sm" id="btnSubmitAddSong">Save to Catalogue</button>
         </div>
     </div>
@@ -387,7 +387,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand" id="editSongModalTitle"><span>✏️</span> Edit Song Record</h3>
                 <p class="modal-subtitle" id="editSongSubtitle">Update title, artist, or YouTube recording</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseEditSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseEditSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -413,7 +413,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-primary btn-sm" id="btnSubmitEditSong">Save Changes</button>
         </div>
     </div>
@@ -427,7 +427,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand text-danger" id="deleteSongModalTitle"><span>🗑️</span> Delete Song</h3>
                 <p class="modal-subtitle">Permanently remove duplicate or unwanted song from catalogue</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseDeleteSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseDeleteSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -447,7 +447,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelDeleteSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelDeleteSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" id="btnConfirmDeleteSong">Permanently Delete</button>
         </div>
     </div>
@@ -479,7 +479,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand text-danger" id="bulkDeleteModalTitle"><span>🗑️</span> Delete Selected Tracks</h3>
                 <p class="modal-subtitle">Permanently remove selected unrated tracks from catalogue</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseBulkDeleteModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseBulkDeleteModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -494,7 +494,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelBulkDelete">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelBulkDelete" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" id="btnConfirmBulkDelete">Delete Eligible Tracks</button>
         </div>
     </div>

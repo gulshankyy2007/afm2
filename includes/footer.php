@@ -50,7 +50,7 @@
                     <h3 class="modal-title" id="appearanceModalTitle">Atmospheric Themes</h3>
                     <p class="modal-subtitle">Select a curated mood — harmonizing colors, background, and typography</p>
                 </div>
-                <button type="button" class="modal-close" id="closeAppearanceModal" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="closeAppearanceModal" data-modal-close aria-label="Close">&times;</button>
             </div>
             <div class="modal-body appearance-modal-body">
                 <!-- Curated Distinctive Themes Grid -->
@@ -232,7 +232,7 @@
                     ↺ Reset to Default
                 </button>
                 <div class="appearance-save-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAppearance">Cancel</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAppearance" data-modal-close>Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="btnSaveAppearance">Save Theme</button>
                 </div>
             </div>
