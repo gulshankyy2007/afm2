@@ -13,11 +13,15 @@
 define('AFM_APP', true);
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/test_db_guard.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 require_once dirname(__DIR__) . '/includes/media_helper.php';
 require_once dirname(__DIR__) . '/includes/preferences_helper.php';
 
-$pdo = get_db_connection();
+$pdo = get_test_db_connection();
+assert_test_db_isolated($pdo, 'test_song_management_and_sorting');
+$_SESSION['afm_user_id'] = 120;
+$_SESSION['user_id'] = 120;
 $testsPassed = 0;
 $testsFailed = 0;
 
@@ -175,9 +179,18 @@ $checkDeleted1 = $pdo->prepare("SELECT COUNT(*) FROM songs WHERE song_id = :id")
 $checkDeleted1->execute([':id' => $testSongId1]);
 assert_test((int)$checkDeleted1->fetchColumn() === 0, "Song #{$testSongId1} is completely removed from songs table");
 
-// Delete shortlisted test song 2 (no scorecard ratings): should delete cleanly
+// CRITICAL SAFEGUARD: Attempt to delete a shortlisted song: must be blocked!
+$delBlockedShortlist = delete_catalogue_song($testSongId2);
+assert_test($delBlockedShortlist['success'] === false, "CRITICAL SAFEGUARD: delete_catalogue_song() blocks deletion of shortlisted song #{$testSongId2}");
+assert_test(!empty($delBlockedShortlist['blocked']), "Blocked flag is set for shortlisted song deletion attempt");
+assert_test(stripos($delBlockedShortlist['error'], 'shortlist') !== false, "Error message explicitly identifies shortlist status blocking deletion");
+
+// Now remove from shortlist (return to unreviewed) and retry deletion
+$unshortlistRes = update_song_discovery_status($testSongId2, 'unreviewed');
+assert_test($unshortlistRes['success'] === true, "update_song_discovery_status() removed song #{$testSongId2} from shortlist");
+
 $delRes2 = delete_catalogue_song($testSongId2);
-assert_test($delRes2['success'] === true, "delete_catalogue_song() cleanly deletes unrated shortlisted song #{$testSongId2}");
+assert_test($delRes2['success'] === true, "delete_catalogue_song() cleanly deletes unshortlisted song #{$testSongId2}");
 
 // CRITICAL SAFEGUARD: Attempt to delete a song with tournament rating history
 // Find a song with an existing rating

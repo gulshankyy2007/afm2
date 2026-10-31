@@ -134,6 +134,33 @@ switch ($action) {
         echo json_encode($result);
         break;
 
+    case 'reset_score':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $entryId = isset($input['entry_id']) ? (int)$input['entry_id'] : 0;
+        $roundId = isset($input['round_id']) ? (int)$input['round_id'] : 1;
+
+        if ($entryId <= 0 || $roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid entry or tournament round ID.']);
+            exit;
+        }
+
+        $result = reset_scorecard_rating($entryId, $roundId, $currentUserId);
+        if (!$result['success']) {
+            if (strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
+        }
+        echo json_encode($result);
+        break;
+
     case 'preview_advancement':
         $fromRoundId = isset($_GET['from_round_id']) ? (int)$_GET['from_round_id'] : 0;
         if ($fromRoundId <= 0) {
@@ -303,14 +330,83 @@ switch ($action) {
             }
         }
 
+        // Allow optional custom search overrides (e.g. from corrected title/artist search)
+        $customTitle = trim($_GET['custom_title'] ?? ($input['custom_title'] ?? ''));
+        $customArtist = trim($_GET['custom_artist'] ?? ($input['custom_artist'] ?? ''));
+        if ($customTitle !== '') {
+            $title = $customTitle;
+        }
+        if ($customArtist !== '') {
+            $artist = $customArtist;
+        }
+
         if ($songId <= 0 || empty($title)) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Song ID and Title are required.']);
             exit;
         }
 
-        $res = fetch_lrclib_lyrics($songId, $title, $artist, $forceRefresh);
+        $provider = trim($_GET['provider'] ?? ($input['provider'] ?? 'auto'));
+        $res = fetch_multisource_lyrics($songId, $title, $artist, $currentUserId, $provider, $forceRefresh);
         echo json_encode($res);
+        break;
+
+    case 'save_manual_lyrics':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        $lyrics = isset($input['lyrics']) ? (string)$input['lyrics'] : '';
+
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $res = save_user_manual_lyrics($songId, $lyrics, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
+        echo json_encode($res);
+        break;
+
+    case 'clear_manual_lyrics':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $res = clear_user_manual_lyrics($songId, $currentUserId);
+        echo json_encode($res);
+        break;
+
+    case 'get_manual_lyrics':
+        $songId = isset($_GET['song_id']) ? (int)$_GET['song_id'] : (int)($input['song_id'] ?? 0);
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $manual = get_user_manual_lyrics($songId, $currentUserId);
+        echo json_encode([
+            'success'   => true,
+            'has_manual'=> ($manual !== null && !empty($manual['lyrics_text'])),
+            'lyrics'    => $manual['lyrics_text'] ?? null,
+            'updated_at'=> $manual['updated_at'] ?? null
+        ]);
         break;
 
     case 'search_lyrics_candidates':

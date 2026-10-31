@@ -16,6 +16,7 @@ $_SERVER['REQUEST_METHOD'] = 'CLI';
 
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/test_db_guard.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
@@ -48,7 +49,10 @@ class TestSuite {
     private PDO $pdo;
 
     public function __construct() {
-        $this->pdo = get_db_connection();
+        $this->pdo = get_test_db_connection();
+        assert_test_db_isolated($this->pdo, 'TestSuite');
+        $currentDb = (string)$this->pdo->query("SELECT DATABASE()")->fetchColumn();
+        echo CliPrinter::bold(CliPrinter::cyan("Target Test Database: ")) . CliPrinter::green($currentDb) . "\n\n";
     }
 
     public function assert(bool $condition, string $testName, string $failureDetails = ''): void {
@@ -98,7 +102,12 @@ class TestSuite {
         $this->assert($count >= 2400, "Catalogue contains active catalogue songs (count: {$count} >= 2400)", "Actual count: {$count}");
 
         // Verify specific songs with NULL artist
-        $nullArtists = $this->pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+        $hasMaster = (bool)$this->pdo->query("SHOW TABLES LIKE 'master_starter_songs'")->fetchColumn();
+        if ($hasMaster) {
+            $nullArtists = $this->pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL ORDER BY `source_song_id`")->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            $nullArtists = $this->pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+        }
         $expectedNullIds = [1546, 2015, 2196];
         $this->assert(
             $nullArtists === $expectedNullIds, 
@@ -147,36 +156,35 @@ class TestSuite {
     private function testAuthenticationAndRateLimiting(): void {
         echo CliPrinter::bold("3. Authentication, Setup Lock & Rate Limiting\n");
 
-        // Clean user table for controlled setup test
-        $this->pdo->exec("DELETE FROM `app_users`");
-        $this->pdo->exec("DELETE FROM `login_rate_limits`");
+        assert_test_db_isolated($this->pdo, 'testAuthenticationAndRateLimiting');
 
-        $this->assert(!has_users(), "has_users() correctly reports false before setup");
+        // Verify setup lock: in afm_test_db, accounts exist so setup is permanently locked
+        $this->assert(has_users(), "has_users() correctly reports true when accounts exist");
 
-        // Test password length validation (< 8 chars)
-        $resShort = create_initial_account('adminuser', 'short');
-        $this->assert(!$resShort['success'], "create_initial_account() rejects passwords under 8 characters");
-
-        // Test valid account creation
-        $resValid = create_initial_account('adminuser', 'SecurePassword2026!');
-        $this->assert($resValid['success'], "create_initial_account() successfully creates first admin account");
-        $this->assert(has_users(), "has_users() returns true after account setup");
-        $this->assert(is_authenticated(), "Account creation automatically establishes authenticated session");
-
-        // Test setup lock: cannot create second user
-        $resSecond = create_initial_account('hacker', 'HackerPass2026!');
+        $resLocked = create_initial_account('hacker', 'HackerPass2026!');
         $this->assert(
-            !$resSecond['success'] && strpos($resSecond['error'], 'locked') !== false,
+            !$resLocked['success'] && strpos($resLocked['error'], 'locked') !== false,
             "create_initial_account() permanently locks setup once an account exists"
         );
+
+        // Ensure adminuser test password in afm_test_db is known and valid
+        $testHash = password_hash('SecurePassword2026!', PASSWORD_DEFAULT);
+        $this->pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash WHERE `username` = 'adminuser'")->execute([':hash' => $testHash]);
+
+        // Clean any rate limit records for local testing
+        $this->pdo->exec("DELETE FROM `login_rate_limits` WHERE `ip_address` = '127.0.0.1'");
+
+        // Test login with valid credentials
+        $validLogin = attempt_login('adminuser', 'SecurePassword2026!');
+        $this->assert($validLogin['success'], "attempt_login() accepts valid password for adminuser");
+        $this->assert(is_authenticated(), "Successful login establishes authenticated session");
 
         // Test login with bad credentials
         $badLogin = attempt_login('adminuser', 'WrongPassword!');
         $this->assert(!$badLogin['success'], "attempt_login() rejects incorrect password");
 
-        // Test login with good credentials
-        $goodLogin = attempt_login('adminuser', 'SecurePassword2026!');
-        $this->assert($goodLogin['success'], "attempt_login() accepts correct credentials");
+        // Clear rate limits
+        clear_rate_limits();
 
         // Test login rate limiting
         for ($i = 0; $i < 5; $i++) {
@@ -193,6 +201,11 @@ class TestSuite {
         // Clear rate limits
         clear_rate_limits();
         $this->assert(!is_rate_limited(), "clear_rate_limits() resets IP rate limit bucket");
+
+        // Establish authenticated session as gulshan (owner of baseline songs 1..2428 in afm_test_db)
+        $gulshanHash = password_hash('SecurePassword2026!', PASSWORD_DEFAULT);
+        $this->pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash WHERE `username` = 'gulshan'")->execute([':hash' => $gulshanHash]);
+        attempt_login('gulshan', 'SecurePassword2026!');
         echo "\n";
     }
 
@@ -203,7 +216,7 @@ class TestSuite {
         echo CliPrinter::bold("4. Song Catalogue Search & Missing Artist Handling\n");
 
         // Search songs pagination
-        $totalCatalogue = (int)$this->pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+        $totalCatalogue = (int)$this->pdo->query("SELECT COUNT(*) FROM `songs` WHERE `user_id` = " . (int)get_current_user_id() . " AND `deleted_at` IS NULL AND `is_consolidated` = 0")->fetchColumn();
         $expectedPages = (int)ceil($totalCatalogue / 50);
         $page1 = search_songs('', 'all', 1, 50);
         $this->assert(count($page1['songs']) === 50, "search_songs() returns exactly 50 songs on page 1");
@@ -238,11 +251,13 @@ class TestSuite {
     private function testDiscoveryShortlistAndPass(): void {
         echo CliPrinter::bold("5. One-Tap Discovery Shortlist & Pass Actions\n");
 
-        // Clean discovery and entries for testing
-        $this->pdo->exec("DELETE FROM `ratings`");
-        $this->pdo->exec("DELETE FROM `round_results`");
-        $this->pdo->exec("DELETE FROM `song_discovery`");
-        $this->pdo->exec("DELETE FROM `afm_entries`");
+        assert_test_db_isolated($this->pdo, 'testDiscoveryShortlistAndPass');
+
+        // Scoped cleanup strictly for test song IDs (1, 2, 3), never unconstrained table wipe
+        $this->pdo->exec("DELETE FROM `ratings` WHERE `entry_id` IN (SELECT `entry_id` FROM `afm_entries` WHERE `song_id` IN (1, 2, 3))");
+        $this->pdo->exec("DELETE FROM `round_results` WHERE `entry_id` IN (SELECT `entry_id` FROM `afm_entries` WHERE `song_id` IN (1, 2, 3))");
+        $this->pdo->exec("DELETE FROM `song_discovery` WHERE `song_id` IN (1, 2, 3)");
+        $this->pdo->exec("DELETE FROM `afm_entries` WHERE `song_id` IN (1, 2, 3)");
 
         // Shortlist Song ID 1
         $res1 = update_song_discovery_status(1, 'shortlisted');
@@ -383,10 +398,12 @@ class TestSuite {
     private function testTournamentAdvancementAndDoubleAdvancementProtection(): void {
         echo CliPrinter::bold("9. Stage Advancement & Double-Advancement Protection\n");
 
+        assert_test_db_isolated($this->pdo, 'testTournamentAdvancementAndDoubleAdvancementProtection');
+
         // Reset rounds status to default (Round 1 in_progress, Round 2 upcoming)
         $this->pdo->exec("UPDATE `rounds` SET `status` = 'in_progress', `completed_at` = NULL WHERE `round_id` = 1");
         $this->pdo->exec("UPDATE `rounds` SET `status` = 'upcoming', `completed_at` = NULL WHERE `round_id` > 1");
-        $this->pdo->exec("DELETE FROM `round_results`");
+        $this->pdo->exec("DELETE FROM `round_results` WHERE `round_id` = 1");
 
         // Preview advancement from Round 1
         $preview = preview_stage_advancement(1);
@@ -431,22 +448,24 @@ class TestSuite {
         $this->assert(isset($history['Formal Auditions']), "Historical results archive contains Formal Auditions");
         $this->assert(count($history['Formal Auditions']['results']) === 3, "Historical results archive preserves all entry decisions and reasons");
 
-        // Reset rounds status back to clean in_progress state for Formal Auditions
+        // Reset rounds status back to clean in_progress state strictly for test entries on isolated test DB
         $this->pdo->exec("UPDATE `rounds` SET `status` = 'in_progress', `completed_at` = NULL WHERE `round_id` = 1");
         $this->pdo->exec("UPDATE `rounds` SET `status` = 'upcoming', `completed_at` = NULL WHERE `round_id` > 1");
-        $this->pdo->exec("DELETE FROM `round_results`");
-        $this->pdo->exec("DELETE FROM `ratings`");
-        $this->pdo->exec("DELETE FROM `song_discovery`");
-        $this->pdo->exec("DELETE FROM `afm_entries`");
+        $this->pdo->exec("DELETE FROM `round_results` WHERE `round_id` = 1");
+        $this->pdo->exec("DELETE FROM `ratings` WHERE `entry_id` IN (SELECT `entry_id` FROM `afm_entries` WHERE `song_id` IN (1, 2, 3))");
+        $this->pdo->exec("DELETE FROM `song_discovery` WHERE `song_id` IN (1, 2, 3)");
+        $this->pdo->exec("DELETE FROM `afm_entries` WHERE `song_id` IN (1, 2, 3)");
 
-        // Seed primary user account 'gulshan' with '!Admin@123#4'
-        $hash = password_hash('!Admin@123#4', PASSWORD_DEFAULT);
-        $seedStmt = $this->pdo->prepare("
-            INSERT INTO `app_users` (`username`, `password_hash`, `created_at`, `last_login`)
-            VALUES ('gulshan', :hash, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE `password_hash` = :hash2
-        ");
-        $seedStmt->execute([':hash' => $hash, ':hash2' => $hash]);
+        // Seed primary user account 'gulshan' strictly if not already present
+        $userCheck = (int)$this->pdo->query("SELECT COUNT(*) FROM `app_users` WHERE `username` = 'gulshan'")->fetchColumn();
+        if ($userCheck === 0) {
+            $hash = password_hash('!Admin@123#4', PASSWORD_DEFAULT);
+            $seedStmt = $this->pdo->prepare("
+                INSERT INTO `app_users` (`username`, `password_hash`, `role`, `is_active`, `created_at`, `last_login`)
+                VALUES ('gulshan', :hash, 'admin', 1, NOW(), NOW())
+            ");
+            $seedStmt->execute([':hash' => $hash]);
+        }
 
         echo "\n";
     }

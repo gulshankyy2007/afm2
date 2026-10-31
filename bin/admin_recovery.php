@@ -28,17 +28,18 @@ require_once dirname(__DIR__) . '/includes/auth.php';
 $pdo = get_db_connection();
 
 // Parse CLI options
-$options = getopt('', ['status', 'reset-password', 'backfill-legacy', 'username:', 'help']);
+$options = getopt('', ['status', 'reset-password', 'backfill-legacy', 'set-role', 'username:', 'password:', 'role:', 'help']);
 
 if (isset($options['help']) || empty($options)) {
     echo "======================================================================\n";
     echo " AFM#2 — Administrator Account Access & Recovery CLI\n";
     echo "======================================================================\n";
     echo "Commands:\n";
-    echo "  --status                     Inspect administrator accounts and readiness\n";
-    echo "  --reset-password --username= Reset administrator password with secure temp credential\n";
-    echo "  --backfill-legacy --username= Assign unowned legacy catalogue & data to a user\n";
-    echo "  --help                       Show this help message\n\n";
+    echo "  --status                                Inspect accounts and readiness\n";
+    echo "  --reset-password --username= [--password=] Reset password with secure credential\n";
+    echo "  --set-role --username= --role=admin|user Change account role\n";
+    echo "  --backfill-legacy --username=           Assign unowned legacy data to user\n";
+    echo "  --help                                  Show this help message\n\n";
     exit(0);
 }
 
@@ -122,16 +123,20 @@ if (isset($options['reset-password'])) {
     }
 
     if ($user['role'] !== 'admin') {
-        echo "ERROR: Target user '{$targetUsername}' does not have 'admin' role. Cannot use admin recovery.\n";
-        exit(1);
+        echo "Notice: Promoting user '{$targetUsername}' to 'admin' role for administrator access.\n";
     }
 
-    // Generate high-entropy 20-character temporary password
-    $randomHex = bin2hex(random_bytes(8));
-    $tempPassword = "Tmp!" . $randomHex . "9#";
+    $providedPass = trim($options['password'] ?? '');
+    if (!empty($providedPass)) {
+        $tempPassword = $providedPass;
+    } else {
+        // Generate high-entropy 20-character temporary password
+        $randomHex = bin2hex(random_bytes(8));
+        $tempPassword = "Tmp!" . $randomHex . "9#";
+    }
     $hashedPassword = password_hash($tempPassword, PASSWORD_DEFAULT);
 
-    $updStmt = $pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash, `is_active` = 1 WHERE `user_id` = :uid");
+    $updStmt = $pdo->prepare("UPDATE `app_users` SET `password_hash` = :hash, `role` = 'admin', `is_active` = 1 WHERE `user_id` = :uid");
     $updStmt->execute([
         ':hash' => $hashedPassword,
         ':uid'  => (int)$user['user_id']
@@ -141,15 +146,49 @@ if (isset($options['reset-password'])) {
     echo " ADMINISTRATOR CREDENTIAL RECOVERY SUCCESSFUL\n";
     echo "======================================================================\n";
     echo "Account:             {$user['username']} (User ID: {$user['user_id']})\n";
-    echo "Role:                {$user['role']}\n";
+    echo "Role:                admin\n";
     echo "Status:              Active (Reactivated)\n";
-    echo "Temporary Password:  {$tempPassword}\n";
+    echo "Password Set:        {$tempPassword}\n";
     echo "----------------------------------------------------------------------\n";
     echo "IMPORTANT NOTICE FOR PROJECT OWNER:\n";
-    echo "1. This temporary credential has been generated securely and displayed ONLY ONCE.\n";
-    echo "2. Log in immediately at /login.php using this username and temporary password.\n";
-    echo "3. Go to /account.php to establish a permanent private password.\n";
-    echo "4. Clear your terminal scrollback or do not persist this credential in logs.\n";
+    echo "1. Log in immediately at /login.php using this username and password.\n";
+    echo "2. Go to /account.php if you wish to link Google OIDC or WebAuthn Passkeys.\n";
+    echo "3. Clear your terminal scrollback or do not persist this credential in logs.\n";
+    echo "======================================================================\n\n";
+    exit(0);
+}
+
+// -----------------------------------------------------------------------------
+// Action: --set-role --username=<name> --role=admin|user
+// -----------------------------------------------------------------------------
+if (isset($options['set-role'])) {
+    $targetUsername = trim($options['username'] ?? '');
+    $targetRole = trim($options['role'] ?? '');
+
+    if (empty($targetUsername) || !in_array($targetRole, ['admin', 'user'], true)) {
+        echo "ERROR: --username and valid --role (admin|user) are required.\n";
+        echo "Example: php bin/admin_recovery.php --set-role --username=gulshan --role=user\n";
+        exit(1);
+    }
+
+    $stmt = $pdo->prepare("SELECT `user_id`, `username`, `role` FROM `app_users` WHERE `username` = :uname");
+    $stmt->execute([':uname' => $targetUsername]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user) {
+        echo "ERROR: User '{$targetUsername}' not found in database.\n";
+        exit(1);
+    }
+
+    $upd = $pdo->prepare("UPDATE `app_users` SET `role` = :role, `is_active` = 1 WHERE `user_id` = :uid");
+    $upd->execute([':role' => $targetRole, ':uid' => (int)$user['user_id']]);
+
+    echo "======================================================================\n";
+    echo " USER ROLE UPDATED SUCCESSFULLY\n";
+    echo "======================================================================\n";
+    echo "User:    {$user['username']} (ID: {$user['user_id']})\n";
+    echo "Role:    {$targetRole}\n";
+    echo "Status:  Active (1)\n";
     echo "======================================================================\n\n";
     exit(0);
 }

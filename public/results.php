@@ -15,7 +15,8 @@ require_once dirname(__DIR__) . '/includes/import_helper.php';
 
 require_auth();
 
-$historicalData = get_historical_results();
+$currentUserId = get_current_user_id();
+$historicalData = get_historical_results($currentUserId);
 
 // CSV Export Handler
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
@@ -129,7 +130,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
             </div>
 
             <p class="champion-note text-sm text-muted mt-3">
-                Decided in <strong><?= htmlspecialchars($winnerSong['winning_stage'], ENT_QUOTES, 'UTF-8') ?></strong> on <?= date('F j, Y', strtotime($winnerSong['decided_at'])) ?>
+                Decided in <strong><?= htmlspecialchars($winnerSong['winning_stage'], ENT_QUOTES, 'UTF-8') ?></strong> on <?= htmlspecialchars(format_local_timestamp($winnerSong['decided_at'] ?? null, 'F j, Y')) ?>
             </p>
         </div>
     </div>
@@ -175,12 +176,12 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         </div>
                         <?php if ($stage['completed_at']): ?>
                             <div class="text-xs text-muted mt-1">
-                                Completed on <?= date('M j, Y H:i', strtotime($stage['completed_at'])) ?>
+                                Completed on <?= htmlspecialchars(format_local_timestamp($stage['completed_at'])) ?>
                             </div>
                         <?php endif; ?>
                     </div>
 
-                    <div class="stage-summary-pills flex-align-center gap-2">
+                    <div class="stage-summary-pills flex-align-center gap-2" style="flex-wrap: wrap;">
                         <span class="badge badge-accent">Total: <?= $totalInStage ?></span>
                         <span class="badge badge-success">Advanced: <?= $qualCount ?></span>
                         <span class="badge badge-danger">Eliminated: <?= $elimCount ?></span>
@@ -210,24 +211,24 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                     $outcome = $item['result'];
                                 ?>
                                 <tr>
-                                    <td class="col-rank font-bold text-center">
+                                    <td class="col-rank font-bold text-center" data-label="Rank">
                                         #<?= $rankPos ?>
                                     </td>
-                                    <td class="col-song">
+                                    <td class="col-song" data-label="Song">
                                         <div class="song-meta">
                                             <span class="song-title font-bold"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></span>
                                             <span class="song-artist text-muted text-xs"><?= htmlspecialchars($item['artist'], ENT_QUOTES, 'UTF-8') ?></span>
                                         </div>
                                     </td>
-                                    <td class="col-total text-center font-mono font-bold text-accent">
+                                    <td class="col-total text-center font-mono font-bold text-accent" data-label="Score">
                                         <?= (int)$item['total'] ?>
                                     </td>
-                                    <td class="col-criteria text-center font-mono text-xs"><?= (int)$item['emotion'] ?></td>
-                                    <td class="col-criteria text-center font-mono text-xs"><?= (int)$item['replayability'] ?></td>
-                                    <td class="col-criteria text-center font-mono text-xs"><?= (int)$item['melody'] ?></td>
-                                    <td class="col-criteria text-center font-mono text-xs"><?= (int)$item['vocals'] ?></td>
-                                    <td class="col-criteria text-center font-mono text-xs"><?= (int)$item['lyrics'] ?></td>
-                                    <td class="col-status text-center">
+                                    <td class="col-criteria text-center font-mono text-xs" data-label="Emotion"><?= (int)$item['emotion'] ?></td>
+                                    <td class="col-criteria text-center font-mono text-xs" data-label="Replay"><?= (int)$item['replayability'] ?></td>
+                                    <td class="col-criteria text-center font-mono text-xs" data-label="Melody"><?= (int)$item['melody'] ?></td>
+                                    <td class="col-criteria text-center font-mono text-xs" data-label="Vocals"><?= (int)$item['vocals'] ?></td>
+                                    <td class="col-criteria text-center font-mono text-xs" data-label="Lyrics"><?= (int)$item['lyrics'] ?></td>
+                                    <td class="col-status text-center" data-label="Outcome">
                                         <?php if ($outcome === 'winner'): ?>
                                             <span class="badge badge-gold font-bold">👑 Winner</span>
                                         <?php elseif ($outcome === 'qualified'): ?>
@@ -236,7 +237,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                             <span class="badge badge-danger">Eliminated</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="col-reason text-xs text-muted">
+                                    <td class="col-reason text-xs text-muted" data-label="Audit Reason">
                                         <?= htmlspecialchars($item['reason'] ?? '', ENT_QUOTES, 'UTF-8') ?>
                                     </td>
                                 </tr>

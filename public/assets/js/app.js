@@ -22,14 +22,61 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 
 function initNavToggle() {
-    const toggle = document.getElementById('navToggle');
-    const nav = document.getElementById('appNav');
-    if (!toggle || !nav) return;
+    const bindToggle = (toggleId, navId) => {
+        const toggle = document.getElementById(toggleId);
+        const nav = document.getElementById(navId);
+        if (!toggle || !nav) return;
 
-    toggle.addEventListener('click', () => {
-        const isOpen = nav.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    });
+        const openMenu = () => {
+            nav.classList.add('open');
+            toggle.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+            document.body.classList.add('mobile-nav-active');
+        };
+
+        const closeMenu = () => {
+            if (nav.classList.contains('open')) {
+                nav.classList.remove('open');
+                toggle.classList.remove('active');
+                toggle.setAttribute('aria-expanded', 'false');
+                document.body.classList.remove('mobile-nav-active');
+            }
+        };
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (nav.classList.contains('open')) {
+                closeMenu();
+            } else {
+                openMenu();
+            }
+        });
+
+        // Close when clicking anywhere outside the drawer and toggle button
+        document.addEventListener('click', (e) => {
+            if (nav.classList.contains('open') && !nav.contains(e.target) && !toggle.contains(e.target)) {
+                closeMenu();
+            }
+        });
+
+        // Close when pressing Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && nav.classList.contains('open')) {
+                closeMenu();
+                toggle.focus();
+            }
+        });
+
+        // Close on link click inside mobile nav
+        nav.querySelectorAll('a, button:not(.btn-nav-appearance)').forEach(el => {
+            el.addEventListener('click', () => {
+                closeMenu();
+            });
+        });
+    };
+
+    bindToggle('navToggle', 'appNav');
+    bindToggle('navToggleGuest', 'guestNav');
 }
 
 /**
@@ -239,6 +286,24 @@ function initScorecards() {
             saveBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 saveScorecard(card);
+            });
+        }
+
+        // Reset Score on button click
+        const resetBtn = card.querySelector('.btn-reset-scorecard');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                resetScorecard(card);
+            });
+        }
+
+        // Remove from Shortlist on button click
+        const removeShortlistBtn = card.querySelector('.btn-remove-shortlist');
+        if (removeShortlistBtn) {
+            removeShortlistBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                removeShortlistFromCard(card);
             });
         }
     });
@@ -522,6 +587,12 @@ async function saveScorecard(card) {
             feedback.style.color = data.is_complete ? 'var(--success)' : 'var(--gold)';
         }
 
+        // Reveal the Reset Score button once active scores exist
+        const resetBtn = card.querySelector('.btn-reset-scorecard');
+        if (resetBtn) {
+            resetBtn.style.display = '';
+        }
+
         showToast(data.message, data.is_complete ? 'success' : 'info');
 
     } catch (err) {
@@ -529,6 +600,151 @@ async function saveScorecard(card) {
         if (feedback) feedback.textContent = 'Save error.';
         console.error('AFM2 Save Scorecard Error:', err);
         showToast('Network error while saving scorecard.', 'danger');
+    }
+}
+
+/**
+ * Reset / Unscore scorecard rating
+ */
+async function resetScorecard(card) {
+    const entryId = card.getAttribute('data-entry-id');
+    const songId = card.getAttribute('data-song-id');
+    const roundId = card.getAttribute('data-round-id') || 1;
+    const songTitle = card.getAttribute('data-song-title') || 'this song';
+    const resetBtn = card.querySelector('.btn-reset-scorecard');
+    const feedback = card.querySelector('.save-feedback');
+
+    if (!entryId) return;
+
+    if (!confirm(`Are you sure you want to reset your score for "${songTitle}"?\n\nThis will remove your active audition score and return the scorecard to an unscored state.`)) {
+        return;
+    }
+
+    if (resetBtn) resetBtn.disabled = true;
+    if (feedback) feedback.textContent = 'Resetting score...';
+
+    try {
+        const res = await fetch('api.php?action=reset_score', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({
+                entry_id: parseInt(entryId, 10),
+                round_id: parseInt(roundId, 10)
+            })
+        });
+
+        const data = await res.json();
+        if (resetBtn) resetBtn.disabled = false;
+
+        if (!data.success) {
+            if (feedback) feedback.textContent = 'Reset failed.';
+            showToast(data.error || 'Failed to reset score.', 'danger');
+            return;
+        }
+
+        // Clear 5 inputs and reset range sliders
+        const inputs = card.querySelectorAll('.criterion-input');
+        const ranges = card.querySelectorAll('.criterion-range');
+        inputs.forEach(inp => { inp.value = ''; });
+        ranges.forEach(rng => { rng.value = 5; });
+
+        // Reset badge, label, and meter
+        const totalBadge = card.querySelector('.total-score-badge');
+        const totalLabel = card.querySelector('.total-score-label');
+        const meterFill  = card.querySelector('.total-score-fill');
+
+        if (totalBadge) {
+            totalBadge.textContent = '— / 50';
+            totalBadge.classList.remove('complete');
+        }
+        if (totalLabel) {
+            totalLabel.textContent = 'Unscored';
+        }
+        if (meterFill) {
+            meterFill.style.width = '0%';
+        }
+
+        card.classList.remove('complete');
+        card.classList.remove('incomplete');
+
+        if (feedback) {
+            feedback.textContent = 'Fill all 5 fields for total score';
+            feedback.style.color = '';
+        }
+
+        // Hide reset button
+        if (resetBtn) {
+            resetBtn.style.display = 'none';
+        }
+
+        showToast(`Scorecard for "${songTitle}" reset to unscored.`, 'info');
+
+    } catch (err) {
+        if (resetBtn) resetBtn.disabled = false;
+        console.error('AFM2 Reset Score Error:', err);
+        showToast('Network error while resetting score.', 'danger');
+    }
+}
+
+/**
+ * Remove song from shortlist directly from scorecard in auditions
+ */
+async function removeShortlistFromCard(card) {
+    const songId = card.getAttribute('data-song-id');
+    const songTitle = card.getAttribute('data-song-title') || 'this song';
+    const removeBtn = card.querySelector('.btn-remove-shortlist');
+
+    if (!songId) return;
+
+    if (!confirm(`Remove "${songTitle}" from your audition shortlist?\n\nThe song will remain safely in your personal catalogue.`)) {
+        return;
+    }
+
+    if (removeBtn) removeBtn.disabled = true;
+
+    try {
+        const res = await fetch('api.php?action=update_discovery', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify({
+                song_id: parseInt(songId, 10),
+                status: 'unreviewed'
+            })
+        });
+
+        const data = await res.json();
+        if (removeBtn) removeBtn.disabled = false;
+
+        if (!data.success) {
+            showToast(data.error || 'Failed to remove from shortlist.', 'danger');
+            return;
+        }
+
+        showToast(`"${songTitle}" removed from shortlist.`, 'success');
+
+        // Smoothly animate removal of scorecard wrapper
+        const wrapper = card.closest('.scorecard-wrapper') || card;
+        wrapper.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        wrapper.style.opacity = '0';
+        wrapper.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            wrapper.remove();
+            const container = document.getElementById('scorecardsContainer');
+            if (container && container.querySelectorAll('.scorecard-wrapper').length === 0) {
+                location.reload();
+            }
+        }, 300);
+
+    } catch (err) {
+        if (removeBtn) removeBtn.disabled = false;
+        console.error('AFM2 Remove Shortlist Error:', err);
+        showToast('Network error while removing from shortlist.', 'danger');
     }
 }
 
@@ -991,6 +1207,33 @@ function initAuditionMediaAndLyrics() {
         }
     });
 
+    // Change listener for provider dropdown selection
+    container.addEventListener('change', async (e) => {
+        const providerSelect = e.target.closest('.lyrics-provider-select');
+        if (providerSelect) {
+            const panel = e.target.closest('.scorecard-media-panel');
+            if (!panel) return;
+            const songId = parseInt(panel.dataset.songId, 10);
+            const songTitle = panel.dataset.songTitle || '';
+            const songArtist = panel.dataset.songArtist || '';
+            const box = panel.querySelector('.lyrics-box');
+            const val = providerSelect.value;
+            if (val === 'manual') {
+                const manualTab = box ? box.querySelector('.lyrics-tab[data-view="manual"]') : null;
+                if (manualTab) manualTab.click();
+            } else {
+                const body = box ? box.querySelector('.lyrics-body') : null;
+                const manualPanel = box ? box.querySelector('.manual-lyrics-panel') : null;
+                if (manualPanel) manualPanel.style.display = 'none';
+                if (body) body.style.display = 'block';
+                if (box) {
+                    box.querySelectorAll('.lyrics-tab[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === 'plain'));
+                }
+                loadLyricsForCard(panel, songId, songTitle, songArtist, true, val);
+            }
+        }
+    });
+
     container.addEventListener('click', async (e) => {
         const panel = e.target.closest('.scorecard-media-panel');
         if (!panel) return;
@@ -1441,12 +1684,17 @@ function initAuditionMediaAndLyrics() {
             return;
         }
 
-        // 9. Lyrics View Tabs (Plain vs Synced)
+        // 9. Lyrics View Tabs (Plain vs Synced vs Manual)
         const tabBtn = e.target.closest('.lyrics-tab[data-view]');
         if (tabBtn) {
             e.preventDefault();
             const view = tabBtn.dataset.view;
             const box = panel.querySelector('.lyrics-box');
+            const body = box.querySelector('.lyrics-body');
+            const manualPanel = box.querySelector('.manual-lyrics-panel');
+            const overridePanel = box.querySelector('.lyrics-override-panel');
+            if (overridePanel) overridePanel.style.display = 'none';
+
             const data = cardLyricsCache.get(songId);
 
             if (view === 'synced' && (!data || !data.synced_lyrics)) {
@@ -1456,14 +1704,219 @@ function initAuditionMediaAndLyrics() {
             box.querySelectorAll('.lyrics-tab[data-view]').forEach(t => t.classList.remove('active'));
             tabBtn.classList.add('active');
 
-            const body = box.querySelector('.lyrics-body');
-            if (data) {
-                renderLyricsContent(body, data, view);
+            if (view === 'manual') {
+                if (body) body.style.display = 'none';
+                if (manualPanel) {
+                    manualPanel.style.display = 'flex';
+                    const textarea = manualPanel.querySelector('.manual-lyrics-textarea');
+                    if (textarea && !textarea.value.trim()) {
+                        if (data && (data.manual_lyrics || (data.is_manual && data.plain_lyrics))) {
+                            textarea.value = data.manual_lyrics || data.plain_lyrics || '';
+                        } else {
+                            fetch(`api.php?action=get_manual_lyrics&song_id=${songId}`)
+                                .then(r => r.json())
+                                .then(mData => {
+                                    if (mData.success && mData.has_manual_lyrics) {
+                                        textarea.value = mData.lyrics_text || '';
+                                    }
+                                })
+                                .catch(err => console.warn('Error fetching manual lyrics:', err));
+                        }
+                    }
+                }
+            } else {
+                if (manualPanel) manualPanel.style.display = 'none';
+                if (body) {
+                    body.style.display = 'block';
+                    if (data) {
+                        renderLyricsContent(body, data, view);
+                    }
+                }
             }
             return;
         }
 
-        // 10. Find Alternative Lyrics Candidates
+        // 10. Toggle Lyrics Search Override Form
+        const toggleOverrideBtn = e.target.closest('.btn-lyrics-toggle-override');
+        if (toggleOverrideBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const overridePanel = box.querySelector('.lyrics-override-panel');
+            if (overridePanel) {
+                const isHidden = overridePanel.style.display === 'none';
+                overridePanel.style.display = isHidden ? 'block' : 'none';
+                toggleOverrideBtn.classList.toggle('active', isHidden);
+            }
+            return;
+        }
+
+        // 11. Cancel Lyrics Search Override
+        const cancelOverrideBtn = e.target.closest('.btn-cancel-override');
+        if (cancelOverrideBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const overridePanel = box.querySelector('.lyrics-override-panel');
+            if (overridePanel) overridePanel.style.display = 'none';
+            const toggleBtn = box.querySelector('.btn-lyrics-toggle-override');
+            if (toggleBtn) toggleBtn.classList.remove('active');
+            return;
+        }
+
+        // 12. Apply Lyrics Search Override
+        const applySearchBtn = e.target.closest('.btn-apply-lyrics-search');
+        if (applySearchBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const customTitleInput = box.querySelector('.lyrics-custom-title');
+            const customArtistInput = box.querySelector('.lyrics-custom-artist');
+            const customTitle = customTitleInput ? customTitleInput.value.trim() : '';
+            const customArtist = customArtistInput ? customArtistInput.value.trim() : '';
+            const overridePanel = box.querySelector('.lyrics-override-panel');
+            if (overridePanel) overridePanel.style.display = 'none';
+            const toggleBtn = box.querySelector('.btn-lyrics-toggle-override');
+            if (toggleBtn) toggleBtn.classList.remove('active');
+
+            const providerSelect = box.querySelector('.lyrics-provider-select');
+            const provider = providerSelect ? providerSelect.value : 'auto';
+
+            // Switch to plain view
+            const body = box.querySelector('.lyrics-body');
+            const manualPanel = box.querySelector('.manual-lyrics-panel');
+            if (manualPanel) manualPanel.style.display = 'none';
+            if (body) body.style.display = 'block';
+            box.querySelectorAll('.lyrics-tab[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === 'plain'));
+
+            loadLyricsForCard(panel, songId, songTitle, songArtist, true, provider, customTitle, customArtist);
+            return;
+        }
+
+        // 13. Save Personal Manual Lyrics
+        const saveManualBtn = e.target.closest('.btn-save-manual-lyrics');
+        if (saveManualBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const textarea = box.querySelector('.manual-lyrics-textarea');
+            const statusSpan = box.querySelector('.manual-lyrics-status');
+            const text = textarea ? textarea.value.trim() : '';
+            if (!text) {
+                showToast('Please type or paste lyrics before saving.', 'warning');
+                return;
+            }
+
+            saveManualBtn.disabled = true;
+            saveManualBtn.innerHTML = '<span class="lyrics-spinner" style="width:12px;height:12px;display:inline-block;vertical-align:middle;"></span> Saving...';
+
+            try {
+                const res = await fetch('api.php?action=save_manual_lyrics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
+                    },
+                    body: JSON.stringify({ song_id: songId, lyrics: text })
+                });
+                const resData = await res.json();
+                if (!resData.success) {
+                    showToast(resData.error || 'Failed to save manual lyrics.', 'danger');
+                    return;
+                }
+
+                // Update cache
+                let cached = cardLyricsCache.get(songId) || {};
+                cached.plain_lyrics = text;
+                cached.manual_lyrics = text;
+                cached.is_manual = true;
+                cached.provider = 'manual';
+                cached.success = true;
+                cardLyricsCache.set(songId, cached);
+
+                if (statusSpan) {
+                    statusSpan.textContent = 'Saved!';
+                    setTimeout(() => { if (statusSpan) statusSpan.textContent = ''; }, 3000);
+                }
+
+                renderLyricsHeader(box, cached);
+                showToast('Personal manual lyrics saved safely.', 'success');
+            } catch (err) {
+                console.error('Error saving manual lyrics:', err);
+                showToast('Network error saving manual lyrics.', 'danger');
+            } finally {
+                saveManualBtn.disabled = false;
+                saveManualBtn.textContent = 'Save My Lyrics';
+            }
+            return;
+        }
+
+        // 14. Clear Personal Manual Lyrics
+        const clearManualBtn = e.target.closest('.btn-clear-manual-lyrics');
+        if (clearManualBtn) {
+            e.preventDefault();
+            if (!confirm('Are you sure you want to clear your personal manual lyrics for this song?')) {
+                return;
+            }
+
+            const box = panel.querySelector('.lyrics-box');
+            const textarea = box.querySelector('.manual-lyrics-textarea');
+            clearManualBtn.disabled = true;
+
+            try {
+                const res = await fetch('api.php?action=clear_manual_lyrics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
+                    },
+                    body: JSON.stringify({ song_id: songId })
+                });
+                const resData = await res.json();
+                if (!resData.success) {
+                    showToast(resData.error || 'Failed to clear manual lyrics.', 'danger');
+                    return;
+                }
+
+                if (textarea) textarea.value = '';
+                cardLyricsCache.delete(songId);
+                showToast('Personal manual lyrics cleared.', 'info');
+
+                // Reload automated lyrics and switch to plain tab
+                const body = box.querySelector('.lyrics-body');
+                const manualPanel = box.querySelector('.manual-lyrics-panel');
+                if (manualPanel) manualPanel.style.display = 'none';
+                if (body) body.style.display = 'block';
+                box.querySelectorAll('.lyrics-tab[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === 'plain'));
+
+                loadLyricsForCard(panel, songId, songTitle, songArtist, true);
+            } catch (err) {
+                console.error('Error clearing manual lyrics:', err);
+                showToast('Network error clearing manual lyrics.', 'danger');
+            } finally {
+                clearManualBtn.disabled = false;
+            }
+            return;
+        }
+
+        // 15. Quick Action: Switch to Manual Lyrics Tab
+        const openManualBtn = e.target.closest('.btn-open-manual-lyrics');
+        if (openManualBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const manualTab = box ? box.querySelector('.lyrics-tab[data-view="manual"]') : null;
+            if (manualTab) manualTab.click();
+            return;
+        }
+
+        // 16. Quick Action: Retry with Lyrics.ovh
+        const retryOvhBtn = e.target.closest('.btn-retry-lyrics-ovh');
+        if (retryOvhBtn) {
+            e.preventDefault();
+            const box = panel.querySelector('.lyrics-box');
+            const providerSelect = box ? box.querySelector('.lyrics-provider-select') : null;
+            if (providerSelect) providerSelect.value = 'lyrics_ovh';
+            loadLyricsForCard(panel, songId, songTitle, songArtist, true, 'lyrics_ovh');
+            return;
+        }
+
+        // 17. Find Alternative Lyrics Candidates
         const altBtn = e.target.closest('.btn-lyrics-find-alt');
         if (altBtn) {
             e.preventDefault();
@@ -1502,7 +1955,7 @@ function initAuditionMediaAndLyrics() {
             return;
         }
 
-        // 11. Select Specific Candidate
+        // 18. Select Specific Candidate
         const candItem = e.target.closest('.candidate-item');
         if (candItem) {
             e.preventDefault();
@@ -1545,7 +1998,7 @@ function initAuditionMediaAndLyrics() {
             return;
         }
 
-        // 12. Retry Lyrics
+        // 19. Retry Lyrics
         const retryBtn = e.target.closest('.btn-retry-lyrics');
         if (retryBtn) {
             e.preventDefault();
@@ -1553,7 +2006,7 @@ function initAuditionMediaAndLyrics() {
             return;
         }
 
-        // 13. Jump Player to Timestamped Lyric Line (Bi-directional seeking)
+        // 20. Jump Player to Timestamped Lyric Line (Bi-directional seeking)
         const syncedLine = e.target.closest('.lyrics-synced-line');
         if (syncedLine) {
             const sec = parseFloat(syncedLine.dataset.seconds);
@@ -1568,7 +2021,7 @@ function initAuditionMediaAndLyrics() {
             return;
         }
 
-        // 14. Auto-Scroll Toggle Button
+        // 21. Auto-Scroll Toggle Button
         const autoScrollBtn = e.target.closest('.btn-autoscroll-toggle');
         if (autoScrollBtn) {
             e.preventDefault();
@@ -1581,85 +2034,110 @@ function initAuditionMediaAndLyrics() {
 }
 
 /**
- * Load lyrics on-demand via API
+ * Load lyrics on-demand via Multi-Source API (LRCLIB, Lyrics.ovh, Manual)
  */
-async function loadLyricsForCard(panel, songId, title, artist, forceRefresh = false) {
+async function loadLyricsForCard(panel, songId, title, artist, forceRefresh = false, provider = 'auto', customTitle = null, customArtist = null) {
     const box = panel.querySelector('.lyrics-box');
     const body = box.querySelector('.lyrics-body');
+    const manualPanel = box.querySelector('.manual-lyrics-panel');
+    const searchTitle = (customTitle !== null && customTitle !== undefined && customTitle !== '') ? customTitle : title;
+    const searchArtist = (customArtist !== null && customArtist !== undefined && customArtist !== '') ? customArtist : artist;
 
     // Check in-memory cache
-    if (!forceRefresh && cardLyricsCache.has(songId)) {
+    if (!forceRefresh && cardLyricsCache.has(songId) && provider === 'auto' && !customTitle && !customArtist) {
         const cached = cardLyricsCache.get(songId);
         renderLyricsHeader(box, cached);
-        renderLyricsContent(body, cached, 'plain');
+        const isManualView = box.querySelector('.lyrics-tab[data-view="manual"]')?.classList.contains('active');
+        if (!isManualView) {
+            if (manualPanel) manualPanel.style.display = 'none';
+            if (body) body.style.display = 'block';
+            renderLyricsContent(body, cached, 'plain');
+        }
         return;
     }
 
     body.innerHTML = `
         <div class="lyrics-state-msg">
             <span class="lyrics-spinner"></span>
-            <span>Fetching lyrics from LRCLIB...</span>
+            <span>Searching lyrics providers...</span>
         </div>
     `;
 
     try {
         const refreshParam = forceRefresh ? '&refresh=1' : '';
-        const res = await fetch(`api.php?action=get_lyrics&song_id=${songId}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}${refreshParam}`);
+        const providerParam = provider ? `&provider=${encodeURIComponent(provider)}` : '';
+        const titleParam = customTitle ? `&custom_title=${encodeURIComponent(customTitle)}` : '';
+        const artistParam = customArtist ? `&custom_artist=${encodeURIComponent(customArtist)}` : '';
+
+        const url = `api.php?action=get_lyrics&song_id=${songId}&title=${encodeURIComponent(searchTitle)}&artist=${encodeURIComponent(searchArtist)}${refreshParam}${providerParam}${titleParam}${artistParam}`;
+        const res = await fetch(url);
         const data = await res.json();
 
-        // 1. Success Exact or Cached Match
+        // 1. Success Exact or Cached Match (or Manual Lyrics)
         if (data.success && (data.plain_lyrics || data.synced_lyrics || data.instrumental)) {
             cardLyricsCache.set(songId, data);
             renderLyricsHeader(box, data);
-            renderLyricsContent(body, data, 'plain');
+            const isManualView = box.querySelector('.lyrics-tab[data-view="manual"]')?.classList.contains('active');
+            if (!isManualView) {
+                if (manualPanel) manualPanel.style.display = 'none';
+                if (body) body.style.display = 'block';
+                renderLyricsContent(body, data, 'plain');
+            }
             return;
         }
 
-        // 2. Ambiguous Candidates Found
+        // 2. Ambiguous Candidates Found (from LRCLIB search)
         if (data.match_type === 'candidates' && Array.isArray(data.candidates)) {
             renderCandidatesList(body, songId, data.candidates);
             return;
         }
 
-        // 3. Rate Limited / Overloaded / Not Found
-        const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(`${title} ${artist} lyrics`);
-        const geniusUrl = 'https://genius.com/search?q=' + encodeURIComponent(`${title} ${artist}`);
+        // 3. Error / Timeout / Rate Limit / Not Found Handling
+        const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(`${searchTitle} ${searchArtist} lyrics`);
+        const statusType = data.status || data.error_type || 'not_found';
 
-        if (data.status === 'overloaded' || data.status === 'rate_limited') {
-            body.innerHTML = `
-                <div class="lyrics-state-msg">
-                    <span>⏳ ${escapeHtml(data.message || 'Lyrics service is busy.')}</span>
-                    <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
-                        <button type="button" class="btn btn-xs btn-primary-subtle btn-retry-lyrics">Retry LRCLIB</button>
-                        <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="link-external">Search Google ↗</a>
-                    </div>
-                </div>
-            `;
-            return;
+        let statusTitle = '🔍 No lyrics match found.';
+        let statusSub = 'Automated search across providers returned no match.';
+        let icon = '🔍';
+
+        if (statusType === 'timeout') {
+            icon = '⏱️';
+            statusTitle = 'Provider request timed out.';
+            statusSub = 'LRCLIB or fallback took too long to respond. You can retry or write personal notes.';
+        } else if (statusType === 'rate_limited' || statusType === 'overloaded') {
+            icon = '⏳';
+            statusTitle = 'Provider rate limit reached.';
+            statusSub = escapeHtml(data.message || 'Service is busy. Retry or use manual entry.');
+        } else if (statusType === 'unavailable') {
+            icon = '🔌';
+            statusTitle = 'Lyrics service unavailable.';
+            statusSub = 'Remote lyrics providers could not be reached.';
         }
 
-        // Not Found
         body.innerHTML = `
             <div class="lyrics-state-msg">
-                <span>🔍 No lyrics match found on LRCLIB.</span>
-                <span class="text-xs text-muted">Audition scoring remains fully accessible.</span>
-                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
-                    <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-xs">Google Lyrics ↗</a>
-                    <a href="${geniusUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-xs">Genius ↗</a>
-                    <button type="button" class="btn btn-xs btn-lyrics-find-alt">Search Variants</button>
+                <span>${icon} <strong>${statusTitle}</strong></span>
+                <span class="text-xs text-muted">${statusSub}</span>
+                <div style="display:flex; flex-wrap:wrap; gap:0.4rem; justify-content:center; margin-top:0.6rem;">
+                    <button type="button" class="btn btn-xs btn-primary-subtle btn-open-manual-lyrics">✏️ Enter Manual Lyrics</button>
+                    <button type="button" class="btn btn-xs btn-secondary btn-lyrics-toggle-override">🔍 Edit Search</button>
+                    ${provider !== 'lyrics_ovh' ? '<button type="button" class="btn btn-xs btn-secondary btn-retry-lyrics-ovh">Try Lyrics.ovh</button>' : ''}
+                    <button type="button" class="btn btn-xs btn-secondary btn-retry-lyrics">Retry</button>
+                    <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-secondary">Google ↗</a>
                 </div>
             </div>
         `;
 
     } catch (err) {
         console.error('Fetch Lyrics Error:', err);
-        const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(`${title} ${artist} lyrics`);
+        const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(`${searchTitle} ${searchArtist} lyrics`);
         body.innerHTML = `
             <div class="lyrics-state-msg">
-                <span>Network error loading lyrics.</span>
-                <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
+                <span>⚠️ Network error connecting to lyrics backend.</span>
+                <div style="display:flex; gap:0.4rem; margin-top:0.5rem;">
+                    <button type="button" class="btn btn-xs btn-primary-subtle btn-open-manual-lyrics">✏️ Enter Manual Lyrics</button>
                     <button type="button" class="btn btn-xs btn-retry-lyrics">Retry</button>
-                    <a href="${googleUrl}" target="_blank" class="link-external">Google ↗</a>
+                    <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" class="link-external">Google ↗</a>
                 </div>
             </div>
         `;
@@ -1673,7 +2151,20 @@ function renderLyricsHeader(box, data) {
     const attr = box.querySelector('.lyrics-attribution');
     if (!attr) return;
 
-    let text = `Lyrics via <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer">LRCLIB</a>`;
+    let providerBadge = '';
+    let providerName = '';
+    if (data.is_manual || data.provider === 'manual') {
+        providerBadge = `<span class="lyrics-provider-badge badge-manual">Manual</span>`;
+        providerName = `Personal Notes`;
+    } else if (data.provider === 'lyrics_ovh') {
+        providerBadge = `<span class="lyrics-provider-badge badge-lyrics_ovh">Lyrics.ovh</span>`;
+        providerName = `<a href="https://lyrics.ovh" target="_blank" rel="noopener noreferrer">Lyrics.ovh</a>`;
+    } else {
+        providerBadge = `<span class="lyrics-provider-badge badge-lrclib">LRCLIB</span>`;
+        providerName = `<a href="https://lrclib.net" target="_blank" rel="noopener noreferrer">LRCLIB</a>`;
+    }
+
+    let text = `${providerBadge}<span class="attr-text">Lyrics via ${providerName}</span>`;
     if (data.album_name) {
         text += ` • <em>${escapeHtml(data.album_name)}</em>`;
     }
@@ -1697,6 +2188,12 @@ function renderLyricsHeader(box, data) {
         syncedTab.style.opacity = hasSynced ? '1' : '0.4';
         syncedTab.style.cursor = hasSynced ? 'pointer' : 'not-allowed';
         syncedTab.title = hasSynced ? 'View timestamped lyrics' : 'Timed lyrics not available for this recording';
+    }
+
+    // Populate manual textarea if manual lyrics exist
+    const manualTextarea = box.querySelector('.manual-lyrics-textarea');
+    if (manualTextarea && data.manual_lyrics && !manualTextarea.value.trim()) {
+        manualTextarea.value = data.manual_lyrics;
     }
 }
 

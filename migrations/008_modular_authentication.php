@@ -36,8 +36,8 @@ return function(PDO $pdo): void {
         }
     }
 
-    // Ensure all pre-existing users are promoted to 'admin' role so they retain administrative rights
-    $pdo->exec("UPDATE `app_users` SET `role` = 'admin', `is_active` = 1 WHERE `role` = 'user' AND `created_at` <= NOW()");
+    // Ensure adminuser has administrative rights and active status
+    $pdo->exec("UPDATE `app_users` SET `role` = 'admin', `is_active` = 1 WHERE `username` = 'adminuser'");
 
     // 2. Table: `user_auth_identities` (Google OIDC and future federated identity providers)
     $pdo->exec("

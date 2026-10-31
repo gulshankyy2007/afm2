@@ -275,7 +275,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         </td>
                         <td class="col-date">
                             <span class="date-text">
-                                <?= $song['reviewed_at'] ? date('M j, Y H:i', strtotime($song['reviewed_at'])) : '—' ?>
+                                <?= $song['reviewed_at'] ? htmlspecialchars(format_local_timestamp($song['reviewed_at'])) : '—' ?>
                             </span>
                         </td>
                         <td class="col-actions">

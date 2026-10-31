@@ -1,9 +1,33 @@
+# AFM#2 - Annual Musical Finale 2026
+# Public search engine crawling rules
+
 User-agent: *
 Allow: /
+Allow: /landing.php
+Allow: /about.php
+Allow: /privacy.php
+Allow: /terms.php
+Allow: /contact.php
+Allow: /login.php
 Allow: /assets/
+
+# Disallow private user-specific and administrative routes
 Disallow: /api.php
 Disallow: /setup.php
 Disallow: /import.php
 Disallow: /duplicates.php
+Disallow: /admin_migrate.php
+Disallow: /library.php
+Disallow: /auditions.php
+Disallow: /tournament.php
+Disallow: /account.php
+Disallow: /users.php
+Disallow: /recordings.php
+Disallow: /discovery.php
+Disallow: /results.php
+Disallow: /invite.php
+Disallow: /auth_callback.php
 Disallow: /config/
 Disallow: /includes/
+
+Sitemap: https://afm2.infinityfreeapp.com/sitemap.xml

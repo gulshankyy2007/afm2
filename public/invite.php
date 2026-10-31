@@ -62,17 +62,17 @@ if ($invitation && GoogleAuthService::is_enabled()) {
     <div class="ambient-glow-orb orb-1" aria-hidden="true"></div>
     <div class="ambient-glow-orb orb-2" aria-hidden="true"></div>
 
-    <div class="auth-wrapper" style="position: relative; z-index: 10; max-width: 480px; margin: 3rem auto; padding: 2rem;">
+    <div class="auth-wrapper card p-4" style="position: relative; z-index: 10; max-width: 480px; margin: 3rem auto;">
         <div class="auth-header" style="text-align: center; margin-bottom: 2rem;">
             <div class="auth-logo" style="margin-bottom: 1rem;">
                 <img src="assets/img/afm2-logo.png" alt="AFM#2" width="160" height="87">
             </div>
-            <h1 class="auth-title" style="font-size: 1.65rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.5rem;">Join AFM#2</h1>
-            <p class="auth-subtitle" style="color: #94a3b8; font-size: 0.9rem;">Personal Music Journal &amp; Audition Tournament</p>
+            <h1 class="auth-title" style="font-size: 1.65rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">Join AFM#2</h1>
+            <p class="auth-subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Personal Music Journal &amp; Audition Tournament</p>
         </div>
 
         <?php if ($error && !$invitation): ?>
-            <div class="alert alert-danger" style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; line-height: 1.5;">
+            <div class="alert alert-danger" style="padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; line-height: 1.5;">
                 <div style="font-weight: 600; margin-bottom: 0.5rem;">Invitation Unavailable</div>
                 <?= htmlspecialchars($error) ?>
             </div>
@@ -80,14 +80,14 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                 <a href="login.php" class="btn btn-primary" style="text-decoration: none;">Return to Sign In</a>
             </div>
         <?php else: ?>
-            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.88rem; color: #cbd5e1;">
-                <div style="color: #94a3b8; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Invited Account</div>
-                <div style="font-weight: 600; color: #38bdf8;"><?= htmlspecialchars($invitation['email']) ?></div>
-                <div style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.25rem;">Role: <span style="text-transform: capitalize; color: #f59e0b; font-weight: 600;"><?= htmlspecialchars($invitation['role']) ?></span></div>
+            <div style="background: var(--card-glass-bg, rgba(255,255,255,0.03)); border: 1px solid var(--card-glass-border, var(--border-color)); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.88rem; color: var(--text-secondary);">
+                <div style="color: var(--text-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Invited Account</div>
+                <div style="font-weight: 600; color: var(--primary);"><?= htmlspecialchars($invitation['email']) ?></div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem;">Role: <span style="text-transform: capitalize; color: var(--primary); font-weight: 600;"><?= htmlspecialchars($invitation['role']) ?></span></div>
             </div>
 
             <?php if ($error): ?>
-                <div class="alert alert-danger" style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; padding: 0.85rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem;">
+                <div class="alert alert-danger mb-3" style="font-size: 0.85rem;">
                     <?= htmlspecialchars($error) ?>
                 </div>
             <?php endif; ?>
@@ -99,10 +99,10 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                         Sign Up with Google
                     </a>
                 </div>
-                <div style="display: flex; align-items: center; margin: 1.25rem 0; color: #64748b; font-size: 0.8rem;">
-                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="display: flex; align-items: center; margin: 1.25rem 0; color: var(--text-muted); font-size: 0.8rem;">
+                    <div style="flex: 1; height: 1px; background: var(--border-subtle, var(--border-color));"></div>
                     <span style="padding: 0 0.75rem;">or create password</span>
-                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                    <div style="flex: 1; height: 1px; background: var(--border-subtle, var(--border-color));"></div>
                 </div>
             <?php endif; ?>
 
@@ -110,8 +110,8 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                 <?= csrf_field() ?>
                 <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label for="username" class="form-label" style="display: block; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.35rem;">Choose Username</label>
+                <div class="form-group mb-3">
+                    <label for="username" class="form-label">Choose Username</label>
                     <input 
                         type="text" 
                         id="username" 
@@ -123,12 +123,11 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                         title="Letters, numbers, underscores, and hyphens only"
                         value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
                         autofocus
-                        style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff;"
                     >
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label for="password" class="form-label" style="display: block; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.35rem;">Set Password (min. 8 characters)</label>
+                <div class="form-group mb-3">
+                    <label for="password" class="form-label">Set Password (min. 8 characters)</label>
                     <input 
                         type="password" 
                         id="password" 
@@ -137,12 +136,11 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                         required 
                         minlength="8"
                         placeholder="••••••••"
-                        style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff;"
                     >
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label for="confirm_password" class="form-label" style="display: block; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.35rem;">Confirm Password</label>
+                <div class="form-group mb-4">
+                    <label for="confirm_password" class="form-label">Confirm Password</label>
                     <input 
                         type="password" 
                         id="confirm_password" 
@@ -151,11 +149,10 @@ if ($invitation && GoogleAuthService::is_enabled()) {
                         required 
                         minlength="8"
                         placeholder="••••••••"
-                        style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff;"
                     >
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 6px;">
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem; font-weight: 700; border-radius: 6px;">
                     Activate Account &amp; Sign In
                 </button>
             </form>

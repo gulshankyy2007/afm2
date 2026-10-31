@@ -759,7 +759,7 @@ function fetch_lrclib_lyrics(
         return [
             'success'     => false,
             'status'      => 'rate_limited',
-            'retry_after' => $res['retry_after'],
+            'retry_after' => $res['retry_after'] ?? null,
             'message'     => 'LRCLIB rate limit reached. Please wait a moment before retrying.',
             'search_url'  => 'https://www.google.com/search?q=' . urlencode("{$cleanTitle} {$cleanArtist} lyrics")
         ];
@@ -1120,6 +1120,57 @@ function save_song_lyrics_ref(int $songId, array $data, ?int $userId = null): bo
         }
     }
 
+    static $hasProviderCol = null;
+    if ($hasProviderCol === null) {
+        try {
+            $checkCol = $pdo->query("SHOW COLUMNS FROM `song_lyrics_ref` LIKE 'provider'");
+            $hasProviderCol = (bool)$checkCol->fetch();
+        } catch (\Throwable $e) {
+            $hasProviderCol = false;
+        }
+    }
+
+    if ($hasProviderCol) {
+        $stmt = $pdo->prepare("
+            INSERT INTO `song_lyrics_ref` 
+                (`song_id`, `lrclib_id`, `track_name`, `artist_name`, `album_name`, `duration`, `instrumental`, `has_synced`, `source_url`, `cached_lyrics_plain`, `cached_lyrics_synced`, `status`, `provider`, `error_type`, `updated_at`)
+            VALUES 
+                (:song_id, :lrclib_id, :track_name, :artist_name, :album_name, :duration, :instrumental, :has_synced, :source_url, :plain, :synced, :status, :provider, :error_type, NOW())
+            ON DUPLICATE KEY UPDATE
+                `lrclib_id` = VALUES(`lrclib_id`),
+                `track_name` = VALUES(`track_name`),
+                `artist_name` = VALUES(`artist_name`),
+                `album_name` = VALUES(`album_name`),
+                `duration` = VALUES(`duration`),
+                `instrumental` = VALUES(`instrumental`),
+                `has_synced` = VALUES(`has_synced`),
+                `source_url` = VALUES(`source_url`),
+                `cached_lyrics_plain` = VALUES(`cached_lyrics_plain`),
+                `cached_lyrics_synced` = VALUES(`cached_lyrics_synced`),
+                `status` = VALUES(`status`),
+                `provider` = VALUES(`provider`),
+                `error_type` = VALUES(`error_type`),
+                `updated_at` = NOW()
+        ");
+
+        return $stmt->execute([
+            ':song_id'      => $songId,
+            ':lrclib_id'    => $data['lrclib_id'] ?? null,
+            ':track_name'   => $data['track_name'] ?? null,
+            ':artist_name'  => $data['artist_name'] ?? null,
+            ':album_name'   => $data['album_name'] ?? null,
+            ':duration'     => $data['duration'] ?? null,
+            ':instrumental' => !empty($data['instrumental']) ? 1 : 0,
+            ':has_synced'   => !empty($data['has_synced']) ? 1 : 0,
+            ':source_url'   => $data['source_url'] ?? 'https://lrclib.net',
+            ':plain'        => $data['cached_lyrics_plain'] ?? null,
+            ':synced'       => $data['cached_lyrics_synced'] ?? null,
+            ':status'       => $data['status'] ?? 'matched',
+            ':provider'     => $data['provider'] ?? 'lrclib',
+            ':error_type'   => $data['error_type'] ?? null
+        ]);
+    }
+
     $stmt = $pdo->prepare("
         INSERT INTO `song_lyrics_ref` 
             (`song_id`, `lrclib_id`, `track_name`, `artist_name`, `album_name`, `duration`, `instrumental`, `has_synced`, `source_url`, `cached_lyrics_plain`, `cached_lyrics_synced`, `status`, `updated_at`)
@@ -1174,4 +1225,399 @@ function clear_song_lyrics_ref(int $songId, ?int $userId = null): array {
     $stmt = $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` = :id");
     $stmt->execute([':id' => $songId]);
     return ['success' => true];
+}
+
+/**
+ * Get private user-specific manual lyrics notes for a song
+ */
+function get_user_manual_lyrics(int $songId, ?int $userId = null): ?array {
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null || $songId <= 0) {
+        return null;
+    }
+
+    $pdo = get_db_connection();
+    try {
+        $stmt = $pdo->prepare("
+            SELECT `id`, `song_id`, `user_id`, `lyrics_text`, `created_at`, `updated_at`
+            FROM `user_song_lyrics`
+            WHERE `song_id` = :sid AND `user_id` = :uid
+            LIMIT 1
+        ");
+        $stmt->execute([':sid' => $songId, ':uid' => $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Save or update private user-specific manual lyrics notes for a song
+ */
+function save_user_manual_lyrics(int $songId, string $lyricsText, ?int $userId = null): array {
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required to save lyrics.'];
+    }
+    if ($songId <= 0) {
+        return ['success' => false, 'error' => 'Invalid song ID.'];
+    }
+
+    $cleanLyrics = trim($lyricsText);
+    if ($cleanLyrics === '') {
+        return clear_user_manual_lyrics($songId, $userId);
+    }
+
+    $pdo = get_db_connection();
+
+    // Verify ownership of the song
+    $checkSong = $pdo->prepare("SELECT `song_id`, `user_id`, `title` FROM `songs` WHERE `song_id` = :id");
+    $checkSong->execute([':id' => $songId]);
+    $song = $checkSong->fetch(PDO::FETCH_ASSOC);
+    if (!$song || ($song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId)) {
+        return ['success' => false, 'error' => 'Unauthorized: Song does not belong to your catalogue.'];
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO `user_song_lyrics` (`song_id`, `user_id`, `lyrics_text`, `updated_at`)
+            VALUES (:sid, :uid, :text, NOW())
+            ON DUPLICATE KEY UPDATE `lyrics_text` = VALUES(`lyrics_text`), `updated_at` = NOW()
+        ");
+        $stmt->execute([
+            ':sid'  => $songId,
+            ':uid'  => $userId,
+            ':text' => $cleanLyrics
+        ]);
+
+        return [
+            'success'     => true,
+            'song_id'     => $songId,
+            'user_id'     => $userId,
+            'is_manual'   => true,
+            'lyrics_text' => $cleanLyrics,
+            'message'     => 'Your manual lyrics have been saved to this track.'
+        ];
+    } catch (\Throwable $e) {
+        error_log("AFM2 save_user_manual_lyrics error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'Database error saving manual lyrics: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Clear private user-specific manual lyrics for a song
+ */
+function clear_user_manual_lyrics(int $songId, ?int $userId = null): array {
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
+    if ($songId <= 0) {
+        return ['success' => false, 'error' => 'Invalid song ID.'];
+    }
+
+    $pdo = get_db_connection();
+    try {
+        $stmt = $pdo->prepare("DELETE FROM `user_song_lyrics` WHERE `song_id` = :sid AND `user_id` = :uid");
+        $stmt->execute([':sid' => $songId, ':uid' => $userId]);
+
+        return [
+            'success' => true,
+            'song_id' => $songId,
+            'message' => 'Manual lyrics cleared.'
+        ];
+    } catch (\Throwable $e) {
+        return ['success' => false, 'error' => 'Database error clearing manual lyrics: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Fetch lyrics from Lyrics.ovh free public API
+ * Plain lyrics only, with non-blocking timeout handling.
+ */
+function fetch_lyrics_ovh(string $title, string $artist): array {
+    $cleanTitle = trim($title);
+    $cleanArtist = trim($artist);
+    if ($cleanTitle === '' || $cleanArtist === '' || strcasecmp($cleanArtist, 'unknown artist') === 0) {
+        return [
+            'success'    => false,
+            'provider'   => 'lyrics_ovh',
+            'status'     => 'not_found',
+            'error_type' => 'missing_metadata',
+            'error'      => 'Artist name and song title are required for Lyrics.ovh lookup.'
+        ];
+    }
+
+    $cleanTitle = clean_track_title_for_lyrics($cleanTitle);
+    $tempTitle = $cleanTitle;
+    $cleanArtist = clean_artist_for_lyrics($cleanArtist, $tempTitle);
+
+    $encodedArtist = rawurlencode($cleanArtist);
+    $encodedTitle  = rawurlencode($cleanTitle);
+    $url = "https://api.lyrics.ovh/v1/{$encodedArtist}/{$encodedTitle}";
+
+    $res = http_get_json($url, 3);
+
+    if ($res['success'] && !empty($res['data']['lyrics'])) {
+        $rawLyrics = trim((string)$res['data']['lyrics']);
+        if ($rawLyrics !== '') {
+            return [
+                'success'             => true,
+                'provider'            => 'lyrics_ovh',
+                'status'              => 'matched',
+                'has_synced'          => false,
+                'plain_lyrics'        => $rawLyrics,
+                'synced_lyrics'       => null,
+                'cached_lyrics_plain' => $rawLyrics,
+                'cached_lyrics_synced'=> null,
+                'source_url'          => 'https://lyrics.ovh',
+                'track_name'          => $cleanTitle,
+                'artist_name'         => $cleanArtist
+            ];
+        }
+    }
+
+    $code = (int)($res['status_code'] ?? 0);
+    $errorType = 'not_found';
+    $errorMsg  = "No matching lyrics found on Lyrics.ovh for \"{$cleanTitle}\".";
+
+    if ($code === 404) {
+        $errorType = 'not_found';
+    } elseif ($code === 429) {
+        $errorType = 'rate_limit';
+        $errorMsg = 'Lyrics.ovh rate limit exceeded. Please try again shortly or use manual input.';
+    } elseif ($code === 0 || strpos(strtolower($res['error'] ?? ''), 'timeout') !== false) {
+        $errorType = 'timeout';
+        $errorMsg = 'Lyrics.ovh request timed out.';
+    } elseif ($code >= 500) {
+        $errorType = 'unavailable';
+        $errorMsg = 'Lyrics.ovh service is temporarily unavailable.';
+    }
+
+    return [
+        'success'    => false,
+        'provider'   => 'lyrics_ovh',
+        'status'     => 'not_found',
+        'error_type' => $errorType,
+        'error'      => $errorMsg
+    ];
+}
+
+/**
+ * Retrieve lyrics with multi-source fallback (Manual -> Cache -> LRCLIB -> Lyrics.ovh)
+ * 
+ * Non-blocking, safe timeouts, clear error states, and multiuser safety.
+ *
+ * @param int $songId
+ * @param string $title
+ * @param string $artist
+ * @param int|null $userId Authenticated user for user-scoped manual lyrics
+ * @param string $preferredProvider 'auto' | 'lrclib' | 'lyrics_ovh' | 'manual'
+ * @param bool $forceRefresh
+ * @param float|null $targetDuration
+ * @return array
+ */
+function fetch_multisource_lyrics(
+    int $songId,
+    string $title,
+    string $artist,
+    ?int $userId = null,
+    string $preferredProvider = 'auto',
+    bool $forceRefresh = false,
+    ?float $targetDuration = null
+): array {
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+
+    // 1. PRIORITY 1: User-Specific Manual Lyrics
+    // If user has saved private manual lyrics notes for their song, return them
+    if ($userId !== null && $songId > 0 && ($preferredProvider === 'auto' || $preferredProvider === 'manual')) {
+        $manual = get_user_manual_lyrics($songId, $userId);
+        if ($manual !== null && !empty($manual['lyrics_text'])) {
+            return [
+                'success'             => true,
+                'source'              => 'manual',
+                'provider'            => 'manual',
+                'is_manual'           => true,
+                'has_synced'          => false,
+                'plain_lyrics'        => $manual['lyrics_text'],
+                'synced_lyrics'       => null,
+                'manual_lyrics'       => $manual['lyrics_text'],
+                'cached_lyrics_plain' => $manual['lyrics_text'],
+                'cached_lyrics_synced'=> null,
+                'status'              => 'matched',
+                'track_name'          => $title,
+                'artist_name'         => $artist,
+                'source_url'          => null,
+                'message'             => 'Loaded your personal manual lyrics notes.'
+            ];
+        }
+        if ($preferredProvider === 'manual') {
+            return [
+                'success'    => false,
+                'source'     => 'manual',
+                'provider'   => 'manual',
+                'is_manual'  => true,
+                'status'     => 'not_found',
+                'error_type' => 'not_found',
+                'error'      => 'No manual lyrics saved for this track yet. Paste your lyrics in the editor below.'
+            ];
+        }
+    }
+
+    // 2. PRIORITY 2: Check database cached provider lookup (unless forceRefresh)
+    if (!$forceRefresh && $songId > 0 && $preferredProvider === 'auto') {
+        $saved = get_saved_song_lyrics($songId);
+        if ($saved) {
+            $normTitle = trim(preg_replace('/\s+/u', ' ', $title));
+            $cleanTitle = clean_track_title_for_lyrics($normTitle);
+            $cleanArtist = clean_artist_for_lyrics($artist, $cleanTitle);
+            $cachedTrack = trim($saved['track_name'] ?? '');
+            $cachedArtist = trim($saved['artist_name'] ?? '');
+
+            if ($saved['status'] === 'matched' || $saved['status'] === 'instrumental') {
+                $trackMatches = (
+                    strcasecmp($cachedTrack, $normTitle) === 0 || 
+                    strcasecmp($cachedTrack, $cleanTitle) === 0 || 
+                    stripos($normTitle, $cachedTrack) !== false || 
+                    stripos($cachedTrack, $cleanTitle) !== false
+                );
+                $artistMatches = (
+                    empty($cleanArtist) || 
+                    empty($cachedArtist) || 
+                    strcasecmp($cachedArtist, $cleanArtist) === 0 || 
+                    stripos($cleanArtist, $cachedArtist) !== false ||
+                    stripos($cachedArtist, $cleanArtist) !== false
+                );
+
+                if ($trackMatches && $artistMatches) {
+                    return [
+                        'success'             => true,
+                        'cached'              => true,
+                        'source'              => 'cache',
+                        'provider'            => $saved['provider'] ?? 'lrclib',
+                        'is_manual'           => false,
+                        'status'              => $saved['status'],
+                        'lrclib_id'           => $saved['lrclib_id'],
+                        'track_name'          => $saved['track_name'],
+                        'artist_name'         => $saved['artist_name'],
+                        'album_name'          => $saved['album_name'],
+                        'duration'            => $saved['duration'],
+                        'instrumental'        => (bool)$saved['instrumental'],
+                        'has_synced'          => (bool)$saved['has_synced'],
+                        'source_url'          => $saved['source_url'] ?? 'https://lrclib.net',
+                        'plain_lyrics'        => $saved['cached_lyrics_plain'],
+                        'synced_lyrics'       => $saved['cached_lyrics_synced'],
+                        'cached_lyrics_plain' => $saved['cached_lyrics_plain'],
+                        'cached_lyrics_synced'=> $saved['cached_lyrics_synced']
+                    ];
+                }
+            } elseif ($saved['status'] === 'not_found') {
+                $cachedTime = strtotime($saved['updated_at'] ?? $saved['cached_at'] ?? '2000-01-01');
+                if ((time() - $cachedTime) < 7200) {
+                    return [
+                        'success'    => false,
+                        'cached'     => true,
+                        'provider'   => $saved['provider'] ?? 'lrclib',
+                        'status'     => 'not_found',
+                        'error_type' => $saved['error_type'] ?? 'not_found',
+                        'error'      => 'No lyrics found on previous lookup. Click Retry to search again.'
+                    ];
+                }
+            }
+        }
+    }
+
+    // 3. PRIORITY 3: Fetch from requested or fallback providers
+    if ($preferredProvider === 'lyrics_ovh') {
+        $lyricsOvhResult = fetch_lyrics_ovh($title, $artist);
+        if ($lyricsOvhResult['success']) {
+            if ($songId > 0) {
+                save_song_lyrics_ref($songId, [
+                    'track_name'          => $title,
+                    'artist_name'         => $artist,
+                    'album_name'          => null,
+                    'duration'            => $targetDuration,
+                    'instrumental'        => 0,
+                    'has_synced'          => 0,
+                    'source_url'          => 'https://lyrics.ovh',
+                    'cached_lyrics_plain' => $lyricsOvhResult['cached_lyrics_plain'],
+                    'cached_lyrics_synced'=> null,
+                    'status'              => 'matched',
+                    'provider'            => 'lyrics_ovh'
+                ], $userId);
+            }
+            return $lyricsOvhResult;
+        }
+        return $lyricsOvhResult;
+    }
+
+    // Default or LRCLIB preference: Query LRCLIB first
+    $lrclibResult = fetch_lrclib_lyrics($songId, $title, $artist, $forceRefresh, $targetDuration);
+
+    if ($lrclibResult['success'] && ($lrclibResult['status'] === 'matched' || $lrclibResult['status'] === 'instrumental')) {
+        $lrclibResult['provider'] = 'lrclib';
+        $lrclibResult['is_manual'] = false;
+        return $lrclibResult;
+    }
+
+    // Fallback: If LRCLIB failed / not found / timed out, try Lyrics.ovh as secondary source
+    if ($preferredProvider === 'auto' || $preferredProvider === 'lrclib') {
+        $lyricsOvhResult = fetch_lyrics_ovh($title, $artist);
+        if ($lyricsOvhResult['success']) {
+            if ($songId > 0) {
+                save_song_lyrics_ref($songId, [
+                    'track_name'          => $title,
+                    'artist_name'         => $artist,
+                    'album_name'          => null,
+                    'duration'            => $targetDuration,
+                    'instrumental'        => 0,
+                    'has_synced'          => 0,
+                    'source_url'          => 'https://lyrics.ovh',
+                    'cached_lyrics_plain' => $lyricsOvhResult['cached_lyrics_plain'],
+                    'cached_lyrics_synced'=> null,
+                    'status'              => 'matched',
+                    'provider'            => 'lyrics_ovh'
+                ], $userId);
+            }
+            $lyricsOvhResult['is_fallback'] = true;
+            $lyricsOvhResult['fallback_from'] = 'lrclib';
+            $lyricsOvhResult['message'] = 'LRCLIB had no match; successfully retrieved plain lyrics from Lyrics.ovh fallback.';
+            return $lyricsOvhResult;
+        }
+    }
+
+    // If all automated providers failed:
+    $errorType = $lrclibResult['error_type'] ?? 'not_found';
+    $errorMsg  = 'No lyrics found on LRCLIB or Lyrics.ovh. You can enter and save lyrics manually.';
+    if (isset($lrclibResult['error']) && stripos($lrclibResult['error'], 'timeout') !== false) {
+        $errorType = 'timeout';
+        $errorMsg = 'Lyrics lookup timed out. You can retry or enter lyrics manually.';
+    }
+
+    if ($songId > 0) {
+        save_song_lyrics_ref($songId, [
+            'track_name'          => $title,
+            'artist_name'         => $artist,
+            'status'              => 'not_found',
+            'provider'            => 'all_failed',
+            'error_type'          => $errorType
+        ], $userId);
+    }
+
+    return [
+        'success'    => false,
+        'provider'   => 'all_failed',
+        'status'     => 'not_found',
+        'error_type' => $errorType,
+        'error'      => $errorMsg
+    ];
 }

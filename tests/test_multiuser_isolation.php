@@ -16,6 +16,7 @@
 define('AFM_APP', true);
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/test_db_guard.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 require_once dirname(__DIR__) . '/includes/media_helper.php';
@@ -40,18 +41,19 @@ echo "======================================================================\n";
 echo " AFM#2 — TWO-USER ISOLATION & MULTIUSER ARCHITECTURE TEST SUITE\n";
 echo "======================================================================\n\n";
 
-$pdo = get_db_connection();
+$pdo = get_test_db_connection();
+assert_test_db_isolated($pdo, 'test_multiuser_isolation');
 
 // --- 0. Pre-Flight Catalogue Invariants ---
 echo "--- 0. Pre-Flight Invariants ---\n";
-$preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-assert_iso("Pre-test Catalogue Baseline Invariant: strictly 2,411 songs", $preSongCount === 2411, "Found: {$preSongCount}");
+$masterSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+assert_iso("Pre-test Master Starter Catalogue Invariant: strictly 2,411 songs", $masterSongCount === 2411, "Found: {$masterSongCount}");
 
-$preNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
-$preNulls = array_map('intval', $preNullStmt->fetchAll(PDO::FETCH_COLUMN));
-assert_iso("Pre-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $preNulls === [1546, 2015, 2196], "Found: " . json_encode($preNulls));
+$masterNullStmt = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`");
+$masterNulls = array_map('intval', $masterNullStmt->fetchAll(PDO::FETCH_COLUMN));
+assert_iso("Pre-test Master Missing Artist Invariant: strictly [1546, 2015, 2196]", $masterNulls === [1546, 2015, 2196], "Found: " . json_encode($masterNulls));
 
-// Verify Schema additions from Migration 009
+// Verify Schema additions from Migration 009 & 011
 $schemaCheckCols = [
     'songs'                 => 'user_id',
     'afm_entries'           => 'user_id',
@@ -62,10 +64,12 @@ $schemaCheckCols = [
 ];
 foreach ($schemaCheckCols as $tbl => $col) {
     $cCheck = $pdo->query("SHOW COLUMNS FROM `{$tbl}` LIKE '{$col}'")->fetch();
-    assert_iso("Migration 009 Schema: `{$tbl}`.`{$col}` column exists", !empty($cCheck));
+    assert_iso("Schema: `{$tbl}`.`{$col}` column exists", !empty($cCheck));
 }
 $progTableCheck = $pdo->query("SHOW TABLES LIKE 'user_round_progress'")->fetch();
-assert_iso("Migration 009 Schema: `user_round_progress` table exists", !empty($progTableCheck));
+assert_iso("Schema: `user_round_progress` table exists", !empty($progTableCheck));
+$uciTableCheck = $pdo->query("SHOW TABLES LIKE 'user_catalogue_initialization'")->fetch();
+assert_iso("Schema: `user_catalogue_initialization` table exists", !empty($uciTableCheck));
 
 // --- 1. Provision Two Isolated Test Users ---
 echo "\n--- 1. Provision Test Users (User A & User B) ---\n";
@@ -89,6 +93,17 @@ $uidB = (int)$pdo->lastInsertId();
 
 assert_iso("User A provisioned successfully (ID: {$uidA})", $uidA > 0);
 assert_iso("User B provisioned successfully (ID: {$uidB})", $uidB > 0 && $uidB !== $uidA);
+
+// Initialize independent starter catalogues for User A and User B
+$initA = initialize_user_starter_catalogue($uidA, 1, $pdo);
+assert_iso("User A cloned independent starter catalogue (2,411 songs)", $initA['success'] === true && $initA['songs_cloned'] === 2411);
+
+$initB = initialize_user_starter_catalogue($uidB, 1, $pdo);
+assert_iso("User B cloned independent starter catalogue (2,411 songs)", $initB['success'] === true && $initB['songs_cloned'] === 2411);
+
+$minSongA = (int)$pdo->query("SELECT MIN(song_id) FROM `songs` WHERE `user_id` = {$uidA}")->fetchColumn();
+$minSongB = (int)$pdo->query("SELECT MIN(song_id) FROM `songs` WHERE `user_id` = {$uidB}")->fetchColumn();
+assert_iso("User A and User B receive distinct, non-overlapping song IDs", $minSongA !== $minSongB, "minA: {$minSongA}, minB: {$minSongB}");
 
 try {
     // --- 2. Catalogue Isolation (Create, Read, Search, Count) ---
@@ -122,11 +137,11 @@ try {
     $searchBIds = array_map('intval', array_column($searchB['songs'], 'song_id'));
     assert_iso("User B search results contain only User B songs", in_array($songBId, $searchBIds, true) && !in_array($songAId, $searchBIds, true));
 
-    // Scoped catalogue song count
+    // Scoped catalogue song count (independent starter catalogue 2,411 + user private songs)
     $countA = get_catalogue_song_count($uidA, true);
     $countB = get_catalogue_song_count($uidB, true);
-    assert_iso("User A catalogue song count strictly scopes to User A (1 song)", $countA === 1, "Got: {$countA}");
-    assert_iso("User B catalogue song count strictly scopes to User B (1 song)", $countB === 1, "Got: {$countB}");
+    assert_iso("User A catalogue song count includes starter catalogue (2,411) + 1 private song = 2,412", $countA === 2412, "Got: {$countA}");
+    assert_iso("User B catalogue song count includes starter catalogue (2,411) + 1 private song = 2,412", $countB === 2412, "Got: {$countB}");
 
     // --- 3. Mutative Song Operations (Update, Delete, IDOR Prevention) ---
     echo "\n--- 3. Mutative IDOR Prevention (Update & Delete) ---\n";
@@ -337,8 +352,8 @@ try {
 
     $statsA = YouTubeMatcher::get_matching_stats(true, $uidA);
     $statsB = YouTubeMatcher::get_matching_stats(true, $uidB);
-    assert_iso("User A matching stats reflect User A catalogue count (1 song)", (int)$statsA['total_songs'] === 1, "Got: {$statsA['total_songs']}");
-    assert_iso("User B matching stats reflect User B catalogue count (2 songs)", (int)$statsB['total_songs'] === 2, "Got: {$statsB['total_songs']}");
+    assert_iso("User A matching stats reflect starter catalogue + 1 private song (2,412)", (int)$statsA['total_songs'] === 2412, "Got: {$statsA['total_songs']}");
+    assert_iso("User B matching stats reflect starter catalogue + 2 private songs (2,413)", (int)$statsB['total_songs'] === 2413, "Got: {$statsB['total_songs']}");
 
     // Resetting User A job does not affect User B
     YouTubeMatcher::reset_job($uidA);
@@ -351,6 +366,7 @@ try {
     echo "\n--- 9. Cleanup & Post-Flight Catalogue Invariants ---\n";
 
     // Clean up all data created for User A and User B
+    $pdo->exec("DELETE FROM `user_catalogue_initialization` WHERE `user_id` IN ({$uidA}, {$uidB})");
     $pdo->exec("DELETE FROM `round_results` WHERE `user_id` IN ({$uidA}, {$uidB})");
     $pdo->exec("DELETE FROM `user_round_progress` WHERE `user_id` IN ({$uidA}, {$uidB})");
     $pdo->exec("DELETE FROM `ratings` WHERE `user_id` IN ({$uidA}, {$uidB})");
@@ -361,13 +377,13 @@ try {
     $pdo->exec("DELETE FROM `songs` WHERE `user_id` IN ({$uidA}, {$uidB})");
     $pdo->exec("DELETE FROM `app_users` WHERE `user_id` IN ({$uidA}, {$uidB})");
 
-    // Post-flight Catalogue Baseline
-    $postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-    assert_iso("Post-test Catalogue Baseline Invariant: strictly 2,411 songs", $postSongCount === 2411, "Found: {$postSongCount}");
+    // Post-flight Master Starter Invariants
+    $postMasterCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    assert_iso("Post-test Master Starter Invariant: strictly 2,411 songs", $postMasterCount === 2411, "Found: {$postMasterCount}");
 
-    $postNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
-    $postNulls = array_map('intval', $postNullStmt->fetchAll(PDO::FETCH_COLUMN));
-    assert_iso("Post-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNulls === [1546, 2015, 2196], "Found: " . json_encode($postNulls));
+    $postMasterNullStmt = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`");
+    $postMasterNulls = array_map('intval', $postMasterNullStmt->fetchAll(PDO::FETCH_COLUMN));
+    assert_iso("Post-test Master Missing Artist Invariant: strictly [1546, 2015, 2196]", $postMasterNulls === [1546, 2015, 2196], "Found: " . json_encode($postMasterNulls));
 }
 
 echo "\n======================================================================\n";

@@ -8,6 +8,7 @@
 define('AFM_APP', true);
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/test_db_guard.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 require_once dirname(__DIR__) . '/includes/webauthn_service.php';
@@ -23,7 +24,8 @@ function assert_test(string $name, bool $condition, string $details = ''): void 
         $passedTests++;
         echo "  [PASS] {$totalTests}. {$name}\n";
     } else {
-        echo "  [FAIL] {$totalTests}. {$name}" . ($details ? " ({$details})" : "") . "\n";
+        $failText = "  [FAIL] {$totalTests}. {$name}" . ($details ? " ({$details})" : "") . "\n";
+        echo $failText;
     }
 }
 
@@ -32,16 +34,27 @@ echo " AFM#2 — MODULAR MULTI-METHOD AUTHENTICATION TEST SUITE\n";
 echo " Methods: Password + Google OIDC + WebAuthn Passkeys + Admin Provisioning\n";
 echo "======================================================================\n\n";
 
-$pdo = get_db_connection();
+$pdo = get_test_db_connection();
+assert_test_db_isolated($pdo, 'test_modular_auth');
 
 // --- 0. Pre-Flight Catalogue Invariants ---
 echo "--- 0. Pre-Flight Invariants ---\n";
-$preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-assert_test("Pre-test Catalogue Baseline Invariant: strictly 2,411 songs", $preSongCount === 2411);
+$hasMasterStarter = (bool)$pdo->query("SHOW TABLES LIKE 'master_starter_songs'")->fetchColumn();
+if ($hasMasterStarter) {
+    $preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    assert_test("Pre-test Master Starter Invariant: strictly 2,411 songs", $preSongCount === 2411);
 
-$preNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
-$preNulls = array_map('intval', $preNullStmt->fetchAll(PDO::FETCH_COLUMN));
-assert_test("Pre-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $preNulls === [1546, 2015, 2196]);
+    $preNullStmt = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`");
+    $preNulls = array_map('intval', $preNullStmt->fetchAll(PDO::FETCH_COLUMN));
+    assert_test("Pre-test Master Missing Artist Invariant: strictly [1546, 2015, 2196]", $preNulls === [1546, 2015, 2196]);
+} else {
+    $preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    assert_test("Pre-test Catalogue Baseline Invariant: strictly 2,411 songs", $preSongCount === 2411);
+
+    $preNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
+    $preNulls = array_map('intval', $preNullStmt->fetchAll(PDO::FETCH_COLUMN));
+    assert_test("Pre-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $preNulls === [1546, 2015, 2196]);
+}
 
 // --- 1. Password Authentication & Email Identification ---
 echo "\n--- 1. Password Authentication & Canonical Identity ---\n";
@@ -391,12 +404,21 @@ $pdo->exec("DELETE FROM `user_invitations` WHERE `email` = '{$invEmail}'");
 
 // --- 5. Post-Flight Catalogue Invariants Verification ---
 echo "\n--- 5. Post-Flight Invariants Verification ---\n";
-$postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-assert_test("Post-test Catalogue Preservation Invariant: strictly 2,411 songs", $postSongCount === 2411);
+if ($hasMasterStarter) {
+    $postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    assert_test("Post-test Master Starter Invariant: strictly 2,411 songs", $postSongCount === 2411);
 
-$postNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
-$postNulls = array_map('intval', $postNullStmt->fetchAll(PDO::FETCH_COLUMN));
-assert_test("Post-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNulls === [1546, 2015, 2196]);
+    $postNullStmt = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`");
+    $postNulls = array_map('intval', $postNullStmt->fetchAll(PDO::FETCH_COLUMN));
+    assert_test("Post-test Master Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNulls === [1546, 2015, 2196]);
+} else {
+    $postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    assert_test("Post-test Catalogue Preservation Invariant: strictly 2,411 songs", $postSongCount === 2411);
+
+    $postNullStmt = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `song_id`");
+    $postNulls = array_map('intval', $postNullStmt->fetchAll(PDO::FETCH_COLUMN));
+    assert_test("Post-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNulls === [1546, 2015, 2196]);
+}
 
 echo "\n======================================================================\n";
 echo " MODULAR AUTHENTICATION TEST EXECUTION SUMMARY\n";

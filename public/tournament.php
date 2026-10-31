@@ -14,16 +14,18 @@ require_once dirname(__DIR__) . '/includes/db_helper.php';
 
 require_auth();
 
+$currentUserId = get_current_user_id();
+
 $pageTitle = 'Tournament Progression — AFM#2 2026';
 
-$allRounds = get_tournament_rounds();
-$activeRound = get_active_round();
+$allRounds = get_tournament_rounds($currentUserId);
+$activeRound = get_active_round($currentUserId);
 
 $selectedRoundId = isset($_GET['round_id']) ? (int)$_GET['round_id'] : (int)($activeRound['round_id'] ?? 1);
-$currentRound = get_round_by_id($selectedRoundId) ?? $activeRound;
+$currentRound = get_round_by_id($selectedRoundId, $currentUserId) ?? $activeRound;
 
-// Fetch leaderboard data for selected round
-$rankData = get_round_rankings($selectedRoundId);
+// Fetch leaderboard data for selected round scoped to current user
+$rankData = get_round_rankings($selectedRoundId, $currentUserId);
 $rankings = $rankData['rankings'];
 $totalCompleted = $rankData['total_completed'];
 
@@ -32,6 +34,9 @@ $pdo = get_db_connection();
 $nextStmt = $pdo->prepare("SELECT * FROM `rounds` WHERE `sequence_no` = :seq");
 $nextStmt->execute([':seq' => (int)$currentRound['sequence_no'] + 1]);
 $nextRound = $nextStmt->fetch() ?: null;
+if ($nextRound) {
+    $nextRound = get_round_by_id((int)$nextRound['round_id'], $currentUserId) ?? $nextRound;
+}
 
 $targetCutoff = $nextRound ? (int)$nextRound['target_count'] : 1;
 $isInProgress = ($currentRound['status'] === 'in_progress');
@@ -119,7 +124,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                     <?php if ($isCompleted): ?>
                         <span class="badge badge-success">Stage Completed</span>
                         <?php if ($currentRound['completed_at']): ?>
-                            <span class="text-muted text-xs ml-2">Decided on <?= date('M j, Y H:i', strtotime($currentRound['completed_at'])) ?></span>
+                            <span class="text-muted text-xs ml-2">Decided on <?= htmlspecialchars(format_local_timestamp($currentRound['completed_at'])) ?></span>
                         <?php endif; ?>
                     <?php elseif ($isInProgress): ?>
                         <span class="badge badge-accent">Stage In Progress</span>

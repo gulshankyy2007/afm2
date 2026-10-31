@@ -15,14 +15,16 @@ require_once dirname(__DIR__) . '/includes/artwork_helper.php';
 
 require_auth();
 
+$currentUserId = get_current_user_id();
+
 $pageTitle = 'Formal Auditions — AFM#2 2026';
 
-// Get all rounds to allow round selection (defaults to active round)
-$allRounds = get_tournament_rounds();
-$activeRound = get_active_round();
+// Get all rounds to allow round selection (scoped to current user's journey)
+$allRounds = get_tournament_rounds($currentUserId);
+$activeRound = get_active_round($currentUserId);
 
 $selectedRoundId = isset($_GET['round_id']) ? (int)$_GET['round_id'] : (int)($activeRound['round_id'] ?? 1);
-$currentRound = get_round_by_id($selectedRoundId) ?? $activeRound;
+$currentRound = get_round_by_id($selectedRoundId, $currentUserId) ?? $activeRound;
 
 $filter = $_GET['filter'] ?? 'all';
 $searchQuery = trim($_GET['q'] ?? '');
@@ -35,23 +37,23 @@ $perPage = in_array($rawPerPage, [25, 50, 75, 100], true) ? $rawPerPage : max(10
 // Handle direct song audition navigation (?song_id=...)
 $targetSongId = isset($_GET['song_id']) ? (int)$_GET['song_id'] : 0;
 if ($targetSongId > 0) {
-    $targetSong = get_song_by_id($targetSongId);
+    $targetSong = get_song_by_id($targetSongId, $currentUserId);
     if ($targetSong) {
-        // Ensure song is shortlisted and enrolled in auditions
+        // Ensure song is shortlisted and enrolled in auditions for current user
         $pdo = get_db_connection();
         $shortlistStmt = $pdo->prepare("
-            INSERT INTO `song_discovery` (`song_id`, `status`, `reviewed_at`)
-            VALUES (:id, 'shortlisted', NOW())
+            INSERT INTO `song_discovery` (`song_id`, `user_id`, `status`, `reviewed_at`)
+            VALUES (:id, :uid, 'shortlisted', NOW())
             ON DUPLICATE KEY UPDATE `status` = 'shortlisted', `reviewed_at` = NOW()
         ");
-        $shortlistStmt->execute([':id' => $targetSongId]);
+        $shortlistStmt->execute([':id' => $targetSongId, ':uid' => $currentUserId]);
 
         $ensureEntry = $pdo->prepare("
-            INSERT INTO `afm_entries` (`song_id`, `status`)
-            VALUES (:id, 'auditioning')
+            INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`)
+            VALUES (:id, :uid, 'auditioning')
             ON DUPLICATE KEY UPDATE `status` = CASE WHEN `status` = 'excluded' THEN 'auditioning' ELSE `status` END
         ");
-        $ensureEntry->execute([':id' => $targetSongId]);
+        $ensureEntry->execute([':id' => $targetSongId, ':uid' => $currentUserId]);
 
         if (empty($searchQuery)) {
             $searchQuery = $targetSong['title'];
@@ -63,8 +65,8 @@ if ($targetSongId > 0) {
 // Origin for YouTube postMessage API handshake
 $appOrigin = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
 
-// Fetch eligible entries for this round
-$result = get_audition_entries($selectedRoundId, $filter, $searchQuery, $page, $perPage);
+// Fetch eligible entries for this round scoped to current user
+$result = get_audition_entries($selectedRoundId, $filter, $searchQuery, $page, $perPage, $currentUserId);
 $totalCount = $result['total'];
 $totalPages = $result['total_pages'];
 $counts = $result['counts'];
@@ -72,7 +74,7 @@ $counts = $result['counts'];
 // Snap if page exceeds totalPages due to per_page change or filter
 if ($page > $totalPages && $totalPages > 0) {
     $page = $totalPages;
-    $result = get_audition_entries($selectedRoundId, $filter, $searchQuery, $page, $perPage);
+    $result = get_audition_entries($selectedRoundId, $filter, $searchQuery, $page, $perPage, $currentUserId);
 }
 $entries = $result['entries'];
 
@@ -367,11 +369,21 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                     <span class="stream-title">AFM#2 Audition</span>
                                 </div>
                                 <div class="scorecard-total-box">
+                                    <?php
+                                    $partialSum = 0;
+                                    if ($isIncomplete) {
+                                        if ($item['melody'] !== null) $partialSum += (int)$item['melody'];
+                                        if ($item['lyrics'] !== null) $partialSum += (int)$item['lyrics'];
+                                        if ($item['vocals'] !== null) $partialSum += (int)$item['vocals'];
+                                        if ($item['emotion'] !== null) $partialSum += (int)$item['emotion'];
+                                        if ($item['replayability'] !== null) $partialSum += (int)$item['replayability'];
+                                    }
+                                    ?>
                                     <div class="total-score-badge <?= $isComplete ? 'complete' : '' ?>">
                                         <?php if ($isComplete): ?>
                                             <?= (int)$totalScore ?> / 50
                                         <?php elseif ($isIncomplete): ?>
-                                            <?= (int)$totalScore ?>* / 50
+                                            <?= $partialSum ?>* / 50
                                         <?php else: ?>
                                             — / 50
                                         <?php endif; ?>
@@ -380,7 +392,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                         <?= $isComplete ? 'Complete' : ($isIncomplete ? 'Incomplete' : 'Unscored') ?>
                                     </div>
                                     <div class="total-score-meter" title="Total score progress">
-                                        <div class="total-score-fill" style="width: <?= $totalScore !== null ? min(100, round(($totalScore / 50) * 100)) : 0 ?>%;"></div>
+                                        <div class="total-score-fill" style="width: <?= $isComplete ? min(100, round(($totalScore / 50) * 100)) : ($isIncomplete ? min(100, round(($partialSum / 50) * 100)) : 0) ?>%;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -621,17 +633,53 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
                         <!-- Right Column: Lyrics Box -->
                         <div class="drawer-col-lyrics">
-                            <div class="lyrics-box">
+                            <div class="lyrics-box" data-song-id="<?= $songId ?>">
                                 <div class="lyrics-box-header">
                                     <div class="lyrics-attribution">
                                         <span class="attr-text">Lyrics via <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer">LRCLIB</a></span>
                                     </div>
-                                    <div class="lyrics-tab-group">
-                                        <button type="button" class="lyrics-tab active" data-view="plain">Plain</button>
-                                        <button type="button" class="lyrics-tab" data-view="synced">Synced (Timed)</button>
-                                        <button type="button" class="lyrics-tab btn-lyrics-find-alt" title="Find another version">Alternatives ▾</button>
+                                    <div class="lyrics-controls-group">
+                                        <select class="lyrics-provider-select" title="Lyrics Provider" aria-label="Lyrics Provider">
+                                            <option value="auto">Auto (Best Match)</option>
+                                            <option value="lrclib">LRCLIB (Synced)</option>
+                                            <option value="lyrics_ovh">Lyrics.ovh (Plain)</option>
+                                            <option value="manual">My Manual Lyrics</option>
+                                        </select>
+                                        <div class="lyrics-tab-group">
+                                            <button type="button" class="lyrics-tab active" data-view="plain">Plain</button>
+                                            <button type="button" class="lyrics-tab" data-view="synced">Synced</button>
+                                            <button type="button" class="lyrics-tab" data-view="manual" title="Write or paste your own lyrics">✏️ Manual</button>
+                                            <button type="button" class="lyrics-tab btn-lyrics-find-alt" title="Find another version">Alts ▾</button>
+                                            <button type="button" class="lyrics-tab btn-lyrics-toggle-override" title="Search with corrected song or artist name">🔍 Edit Search</button>
+                                        </div>
                                     </div>
                                 </div>
+
+                                <!-- Search Override Form (Hidden by default) -->
+                                <div class="lyrics-override-panel" style="display: none;">
+                                    <div style="display: flex; gap: 0.4rem; margin-bottom: 0.4rem;">
+                                        <input type="text" class="input-xs lyrics-custom-title" placeholder="Corrected Title" value="<?= htmlspecialchars($songTitle) ?>" style="flex:1;">
+                                        <input type="text" class="input-xs lyrics-custom-artist" placeholder="Corrected Artist" value="<?= htmlspecialchars($songArtist) ?>" style="flex:1;">
+                                    </div>
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                                        <button type="button" class="btn btn-xs btn-secondary btn-cancel-override">Cancel</button>
+                                        <button type="button" class="btn btn-xs btn-primary btn-apply-lyrics-search">Search Again</button>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Lyrics Editor Panel (Hidden by default) -->
+                                <div class="manual-lyrics-panel" style="display: none;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                        <span class="text-xs text-muted">🔒 Personal private lyrics (only visible to your account)</span>
+                                        <span class="manual-lyrics-status text-xs" style="color: #10b981; font-weight: 600;"></span>
+                                    </div>
+                                    <textarea class="manual-lyrics-textarea" placeholder="Paste or type personal lyrics notes here..."></textarea>
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 0.4rem;">
+                                        <button type="button" class="btn btn-xs btn-danger-subtle btn-clear-manual-lyrics" title="Clear your saved manual lyrics">Clear</button>
+                                        <button type="button" class="btn btn-xs btn-primary btn-save-manual-lyrics">Save My Lyrics</button>
+                                    </div>
+                                </div>
+
                                 <div class="lyrics-body plain">
                                     <div class="lyrics-state-msg">
                                         <span class="lyrics-spinner"></span>
@@ -795,6 +843,23 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         <?php endif; ?>
                     </div>
                     <div class="scorecard-actions">
+                        <?php if ((int)$selectedRoundId === 1): ?>
+                            <button type="button" 
+                                    class="btn btn-secondary-subtle btn-sm btn-remove-shortlist" 
+                                    data-song-id="<?= $songId ?>" 
+                                    data-entry-id="<?= $entryId ?>"
+                                    title="Remove this song from your audition shortlist">
+                                <span class="btn-icon">✕</span> Remove Shortlist
+                            </button>
+                        <?php endif; ?>
+                        <button type="button" 
+                                class="btn btn-outline-danger btn-sm btn-reset-scorecard" 
+                                data-entry-id="<?= $entryId ?>" 
+                                data-round-id="<?= (int)$selectedRoundId ?>" 
+                                title="Reset this scorecard to unscored state"
+                                style="<?= ($isComplete || $isIncomplete) ? '' : 'display: none;' ?>">
+                            <span class="btn-icon">↺</span> Reset Score
+                        </button>
                         <button type="button" class="btn btn-primary btn-sm btn-save-scorecard">
                             <span class="btn-icon">💾</span> Save Scorecard
                         </button>

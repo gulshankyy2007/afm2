@@ -116,22 +116,46 @@ function detect_duplicate_candidates(array $filters = [], ?int $userId = null): 
     if ($userId === null && isset($filters['user_id'])) {
         $userId = (int)$filters['user_id'];
     }
+    if ($userId === null && function_exists('get_current_user_id')) {
+        $userId = get_current_user_id();
+    }
 
     // 1. Fetch all songs and existing media references (READ-ONLY)
-    $sql = "
-        SELECT 
-            s.`song_id`, 
-            s.`title`, 
-            s.`artist`,
-            s.`user_id`,
-            s.`is_consolidated`,
-            s.`consolidated_into_id`,
-            sm.`video_id` AS `media_video_id`
-        FROM `songs` s
-        LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
-        ORDER BY s.`song_id` ASC
-    ";
-    $songs = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    if ($userId !== null) {
+        $sql = "
+            SELECT 
+                s.`song_id`, 
+                s.`title`, 
+                s.`artist`,
+                s.`user_id`,
+                s.`is_consolidated`,
+                s.`consolidated_into_id`,
+                sm.`video_id` AS `media_video_id`
+            FROM `songs` s
+            LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
+            WHERE s.`user_id` = :uid AND s.`deleted_at` IS NULL
+            ORDER BY s.`song_id` ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+        $songs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $sql = "
+            SELECT 
+                s.`song_id`, 
+                s.`title`, 
+                s.`artist`,
+                s.`user_id`,
+                s.`is_consolidated`,
+                s.`consolidated_into_id`,
+                sm.`video_id` AS `media_video_id`
+            FROM `songs` s
+            LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
+            WHERE s.`deleted_at` IS NULL
+            ORDER BY s.`song_id` ASC
+        ";
+        $songs = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     // 2. Fetch existing duplicate review decisions
     $reviewStmt = $pdo->query("

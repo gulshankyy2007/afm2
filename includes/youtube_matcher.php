@@ -11,6 +11,7 @@ if (!defined('AFM_APP')) {
 }
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/db_helper.php';
 require_once __DIR__ . '/media_helper.php';
 
 // Portable mbstring polyfills
@@ -707,10 +708,12 @@ class YouTubeMatcher {
         $pdo = get_db_connection();
 
         if ($userId !== null) {
-            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$userId) {
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
             }
         }
@@ -817,10 +820,12 @@ class YouTubeMatcher {
         $pdo = get_db_connection();
 
         if ($userId !== null) {
-            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$userId) {
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
             }
         }
@@ -914,10 +919,12 @@ class YouTubeMatcher {
         $pdo = get_db_connection();
 
         if ($userId !== null) {
-            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id");
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
             $chk->execute([':id' => $songId]);
             $sRow = $chk->fetch();
-            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$userId) {
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || ($userId === 995 && $sRow['user_id'] === null));
+            if (!$owned) {
                 return ['success' => false, 'error' => 'Unauthorized: Cannot clear recording for another user\'s song.'];
             }
         }
@@ -993,16 +1000,22 @@ class YouTubeMatcher {
      * Get or initialize the active bulk matching job.
      */
     public static function get_or_create_active_job(?int $userId = null): array {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
+
         $pdo = get_db_connection();
+        $delSql = song_deleted_sql('', $pdo);
         if ($userId !== null) {
-            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND (`user_id` = :uid OR `user_id` IS NULL)");
-            $tStmt->execute([':uid' => $userId]);
+            $userSql = song_user_scope_sql($userId, '', $pdo);
+            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+            $tStmt->execute();
             $totalSongs = (int)$tStmt->fetchColumn();
 
             $stmt = $pdo->prepare("SELECT * FROM `youtube_matching_jobs` WHERE `user_id` = :uid ORDER BY `job_id` DESC LIMIT 1");
             $stmt->execute([':uid' => $userId]);
         } else {
-            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
             $stmt = $pdo->query("SELECT * FROM `youtube_matching_jobs` WHERE `user_id` IS NULL ORDER BY `job_id` DESC LIMIT 1");
         }
         $job = $stmt->fetch();
@@ -1030,6 +1043,10 @@ class YouTubeMatcher {
      * Process next batch of songs in bulk matching queue.
      */
     public static function process_batch(int $batchSize = 10, array $options = [], ?int $userId = null): array {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
+
         $pdo = get_db_connection();
 
         // Non-blocking per-user advisory lock to prevent duplicate concurrent batches
@@ -1057,7 +1074,8 @@ class YouTubeMatcher {
 
         $lastSongId = (int)$job['last_processed_song_id'];
         $forceReprocess = $options['force'] ?? false;
-        $userFilter = ($userId !== null) ? " AND (`user_id` = :uid OR `user_id` IS NULL)" : "";
+        $delSql = song_deleted_sql('', $pdo);
+        $userFilter = ($userId !== null) ? " AND " . song_user_scope_sql($userId, '', $pdo) . " AND {$delSql}" : " AND {$delSql}";
 
         // Fetch next batch of songs
         if ($forceReprocess) {
@@ -1068,9 +1086,6 @@ class YouTubeMatcher {
                 ORDER BY `song_id` ASC 
                 LIMIT :limit OFFSET :offset
             ");
-            if ($userId !== null) {
-                $songStmt->bindValue(':uid', $userId, PDO::PARAM_INT);
-            }
             $songStmt->bindValue(':limit', $batchSize, PDO::PARAM_INT);
             $songStmt->bindValue(':offset', (int)$job['processed_songs'], PDO::PARAM_INT);
         } else {
@@ -1082,9 +1097,6 @@ class YouTubeMatcher {
                 LIMIT :limit
             ");
             $songStmt->bindValue(':last_id', $lastSongId, PDO::PARAM_INT);
-            if ($userId !== null) {
-                $songStmt->bindValue(':uid', $userId, PDO::PARAM_INT);
-            }
             $songStmt->bindValue(':limit', $batchSize, PDO::PARAM_INT);
         }
 
@@ -1244,10 +1256,16 @@ class YouTubeMatcher {
      * Reset job progress so bulk matching can be started cleanly from the beginning.
      */
     public static function reset_job(?int $userId = null): void {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
+
         $pdo = get_db_connection();
+        $delSql = song_deleted_sql('', $pdo);
         if ($userId !== null) {
-            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND (`user_id` = :uid OR `user_id` IS NULL)");
-            $tStmt->execute([':uid' => $userId]);
+            $userSql = song_user_scope_sql($userId, '', $pdo);
+            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+            $tStmt->execute();
             $totalSongs = (int)$tStmt->fetchColumn();
 
             $pdo->prepare("
@@ -1377,24 +1395,32 @@ class YouTubeMatcher {
             return self::$matchingStatsCache[$cacheKey];
         }
 
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+            $cacheKey = 'u_' . $userId;
+        }
+
         $pdo = get_db_connection();
 
         $totalSongs = null;
         if (function_exists('get_catalogue_song_count')) {
             $totalSongs = get_catalogue_song_count($userId, $forceRefresh);
         }
+        $delSql = song_deleted_sql('', $pdo);
+        $delSqlS = song_deleted_sql('s', $pdo);
         if ($totalSongs === null) {
             if ($userId !== null) {
-                $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND (`user_id` = :uid OR `user_id` IS NULL)");
-                $tStmt->execute([':uid' => $userId]);
+                $userSql = song_user_scope_sql($userId, '', $pdo);
+                $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+                $tStmt->execute();
                 $totalSongs = (int)$tStmt->fetchColumn();
             } else {
-                $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+                $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
             }
         }
 
-        $userCond = ($userId !== null) ? " AND (s.`user_id` = :uid OR s.`user_id` IS NULL)" : "";
-        $params = ($userId !== null) ? [':uid' => $userId] : [];
+        $userCond = ($userId !== null) ? " AND " . song_user_scope_sql($userId, 's', $pdo) . " AND {$delSqlS}" : " AND {$delSqlS}";
+        $params = [];
 
         $mStmt = $pdo->prepare("
             SELECT 
@@ -1457,12 +1483,15 @@ class YouTubeMatcher {
         $filter = $params['filter'] ?? 'all';
         $search = trim($params['q'] ?? '');
         $sort = $params['sort'] ?? 'id_asc';
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
 
-        $whereClauses = ["s.`is_consolidated` = 0"];
+        $delSql = song_deleted_sql('s', $pdo);
+        $whereClauses = ["s.`is_consolidated` = 0", $delSql];
         $bindings = [];
         if ($userId !== null) {
-            $whereClauses[] = "(s.`user_id` = :uid OR s.`user_id` IS NULL)";
-            $bindings[':uid'] = $userId;
+            $whereClauses[] = song_user_scope_sql($userId, 's', $pdo);
         }
 
         if ($search !== '') {

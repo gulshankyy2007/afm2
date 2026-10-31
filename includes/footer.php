@@ -174,6 +174,45 @@
                             <p class="theme-narrative">Sun-warmed terracotta dawn, roasted sienna, golden hour sunlight, and deep espresso text.</p>
                         </div>
                     </button>
+                    <!-- Theme 7: Oceanic Dusk (Dark Marine & Tranquil Teal) -->
+                    <button type="button" class="curated-theme-card" data-theme-val="oceanic" data-bg-val="atmospheric" data-opacity-val="75">
+                        <div class="theme-card-banner banner-oceanic">
+                            <span class="theme-mood-tag">Nocturnal Sea</span>
+                            <div class="theme-swatch-pills">
+                                <span style="background: #061219;" title="Midnight Marine"></span>
+                                <span style="background: #0d9488;" title="Tranquil Teal"></span>
+                                <span style="background: #38bdf8;" title="Cool Cyan"></span>
+                            </div>
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-header">
+                                <h4 class="theme-title-display font-brand">Oceanic Dusk</h4>
+                                <span class="theme-active-badge">Active ✓</span>
+                            </div>
+                            <span class="theme-subtitle">Deep Marine &amp; Twilight Coast</span>
+                            <p class="theme-narrative">Midnight ocean horizons, tranquil deep teal, cool cyan highlights, and serene spacing.</p>
+                        </div>
+                    </button>
+
+                    <!-- Theme 8: Quiet Minimal (Warm Alabaster Studio Light) -->
+                    <button type="button" class="curated-theme-card" data-theme-val="quiet_minimal" data-bg-val="atmospheric" data-opacity-val="18">
+                        <div class="theme-card-banner banner-minimal">
+                            <span class="theme-mood-tag">Focused Studio</span>
+                            <div class="theme-swatch-pills">
+                                <span style="background: #faf9f6;" title="Warm Alabaster"></span>
+                                <span style="background: #374151;" title="Graphite Slate"></span>
+                                <span style="background: #111827;" title="Charcoal Ink"></span>
+                            </div>
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-header">
+                                <h4 class="theme-title-display font-main">Quiet Minimal</h4>
+                                <span class="theme-active-badge">Active ✓</span>
+                            </div>
+                            <span class="theme-subtitle">Pure Studio &amp; High Contrast</span>
+                            <p class="theme-narrative">Warm alabaster, crisp neutral borders, charcoal typography, and distraction-free focus.</p>
+                        </div>
+                    </button>
                 </div>
 
                 <!-- Streamlined Layout Option -->
@@ -291,16 +330,39 @@
                         } catch (\Throwable $e) {}
                     }
                     ?>
-                    <?php if ($footerTrackCount !== null): ?>
+                    <?php if (is_authenticated() && $footerTrackCount !== null && $footerTrackCount > 0): ?>
                         <span class="dot-live"></span> <?= number_format($footerTrackCount) ?> Songs Preserved
+                    <?php elseif (is_authenticated()): ?>
+                        <span class="dot-live"></span> Personal Music Sanctuary
                     <?php else: ?>
-                        <span class="dot-live"></span> Catalogue Preserved
+                        <span class="dot-live"></span> Curated Music Sanctuary
                     <?php endif; ?>
                 </span>
             </div>
         </div>
+
+        <div class="footer-bottom-row">
+            <nav class="footer-trust-nav" aria-label="Project Policies and Documentation">
+                <a href="about.php">About AFM#2</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="privacy.php">Privacy Policy</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="terms.php">Terms of Use</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="contact.php">Contact</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="https://github.com/gulshankyy2007/afm2" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
+            </nav>
+            <p class="footer-attribution">
+                Playback via YouTube embedded player &bull; Synchronized lyrics via LRCLIB &bull; Personal non-commercial music listening project &bull; All copyrights belong to original artists and labels.
+            </p>
+        </div>
     </footer>
 
-    <script src="assets/js/app.js?v=3.6"></script>
+    <?php
+    $appJsFile = dirname(__DIR__) . '/public/assets/js/app.js';
+    $appJsVer = '4.1.' . (file_exists($appJsFile) ? filemtime($appJsFile) : '20261029');
+    ?>
+    <script src="assets/js/app.js?v=<?= $appJsVer ?>"></script>
 </body>
 </html>

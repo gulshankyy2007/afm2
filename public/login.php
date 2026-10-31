@@ -83,9 +83,15 @@ $pageTitle = 'Sign In — AFM#2';
     <div class="ambient-glow-orb orb-2" aria-hidden="true"></div>
 
     <div class="auth-wrapper" style="position: relative; z-index: 10;">
+        <div style="text-align: left; margin-bottom: 1rem;">
+            <a href="index.php" style="color: #94a3b8; text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                &larr; Return to AFM#2 Home
+            </a>
+        </div>
+
         <div class="auth-header">
             <div class="auth-logo">
-                <a href="login.php" aria-label="AFM#2 — Annual Musical Finale">
+                <a href="index.php" aria-label="AFM#2 — Annual Musical Finale 2026 Home">
                     <img src="assets/img/afm2-logo.png" 
                          alt="AFM#2 — Annual Musical Finale" 
                          class="auth-logo-img" 
@@ -123,16 +129,16 @@ $pageTitle = 'Sign In — AFM#2';
                     </a>
                 <?php endif; ?>
 
-                <button type="button" class="btn" id="btnPasskeyLogin" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.65rem; background: rgba(255,255,255,0.06); color: #f8fafc; font-weight: 600; border-radius: 8px; padding: 0.7rem 1rem; border: 1px solid rgba(255,255,255,0.15); font-size: 0.9rem; cursor: pointer;">
+                <button type="button" class="btn" id="btnPasskeyLogin" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.65rem; background: var(--card-glass-bg, var(--bg-card)); color: var(--text-primary); font-weight: 600; border-radius: 8px; padding: 0.7rem 1rem; border: 1px solid var(--border-color); font-size: 0.9rem; cursor: pointer;">
                     <span style="font-size: 1.1rem;">🛡️</span>
                     Sign in with a Passkey
                 </button>
             </div>
 
-            <div style="display: flex; align-items: center; margin: 1.25rem 0; color: #64748b; font-size: 0.8rem;">
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <div style="display: flex; align-items: center; margin: 1.25rem 0; color: var(--text-muted); font-size: 0.8rem;">
+                <div style="flex: 1; height: 1px; background: var(--border-subtle, var(--border-color));"></div>
                 <span style="padding: 0 0.75rem;">or use password</span>
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="flex: 1; height: 1px; background: var(--border-subtle, var(--border-color));"></div>
             </div>
         <?php endif; ?>
 
@@ -174,6 +180,16 @@ $pageTitle = 'Sign In — AFM#2';
         <div class="auth-footer-notice" style="margin-top: 1.5rem; padding: 0.85rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 0.76rem; color: #94a3b8; line-height: 1.5; text-align: center;">
             <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.25rem;">🔒 Private Invitation-Only Music Journal</div>
             AFM#2 (Annual Musical Finale 2026) is an invitation-only personal music tournament tool. Public registration is closed. Accounts are provisioned exclusively by the administrator.
+        </div>
+
+        <div class="auth-trust-links" style="margin-top: 1.25rem; display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; font-size: 0.78rem; text-align: center;">
+            <a href="about.php" style="color: #94a3b8; text-decoration: none;">About AFM#2</a>
+            <span style="color: rgba(255,255,255,0.2);">&bull;</span>
+            <a href="privacy.php" style="color: #94a3b8; text-decoration: none;">Privacy Policy</a>
+            <span style="color: rgba(255,255,255,0.2);">&bull;</span>
+            <a href="terms.php" style="color: #94a3b8; text-decoration: none;">Terms of Use</a>
+            <span style="color: rgba(255,255,255,0.2);">&bull;</span>
+            <a href="contact.php" style="color: #94a3b8; text-decoration: none;">Contact</a>
         </div>
     </div>
 

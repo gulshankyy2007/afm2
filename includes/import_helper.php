@@ -170,7 +170,8 @@ function parse_and_validate_csv(
     string $filepath, 
     ?int $titleColOverride = null, 
     ?int $artistColOverride = null, 
-    int $maxRows = 5000
+    int $maxRows = 5000,
+    ?int $userId = null
 ): array {
     if (!file_exists($filepath) || !is_readable($filepath)) {
         return ['success' => false, 'error' => 'CSV file does not exist or cannot be read.'];
@@ -220,9 +221,18 @@ function parse_and_validate_csv(
         ];
     }
 
+    if ($userId === null && function_exists('get_current_user_id')) {
+        $userId = get_current_user_id();
+    }
+
     // Pre-load existing catalogue for fast in-memory exact & similarity lookup
     $pdo = get_db_connection();
-    $existingStmt = $pdo->query("SELECT song_id, title, artist FROM `songs`");
+    if ($userId !== null) {
+        $existingStmt = $pdo->prepare("SELECT song_id, title, artist FROM `songs` WHERE `user_id` = :uid AND `deleted_at` IS NULL AND `is_consolidated` = 0");
+        $existingStmt->execute([':uid' => $userId]);
+    } else {
+        $existingStmt = $pdo->query("SELECT song_id, title, artist FROM `songs` WHERE `deleted_at` IS NULL AND `is_consolidated` = 0");
+    }
     
     $existingExact = []; // key: normalized(title|||artist) => song_id
     $existingByBaseTitle = []; // key: baseTitle => [ [song_id, title, artist] ]
@@ -374,6 +384,10 @@ function parse_and_validate_csv(
 function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus = 'unreviewed', ?int $userId = null): array {
     $pdo = get_db_connection();
 
+    if ($userId === null && function_exists('get_current_user_id')) {
+        $userId = get_current_user_id();
+    }
+
     if (empty($approvedRows)) {
         return [
             'success'       => false,
@@ -387,7 +401,7 @@ function execute_csv_import(array $approvedRows, string $defaultDiscoveryStatus 
         ? $defaultDiscoveryStatus 
         : 'unreviewed';
 
-    $insertSong = $pdo->prepare("INSERT INTO `songs` (`title`, `artist`, `user_id`) VALUES (:title, :artist, :user_id)");
+    $insertSong = $pdo->prepare("INSERT INTO `songs` (`title`, `artist`, `user_id`, `is_consolidated`, `deleted_at`) VALUES (:title, :artist, :user_id, 0, NULL)");
     $insertDisc = $pdo->prepare("INSERT INTO `song_discovery` (`song_id`, `user_id`, `status`) VALUES (:song_id, :user_id, :status)");
     $insertEntry = $pdo->prepare("INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`) VALUES (:song_id, :user_id, 'auditioning')");
 

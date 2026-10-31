@@ -3,7 +3,9 @@
  * AFM#2 - YouTube Recording Discovery, Matching & Manual Correction Interface
  */
 
-define('AFM_APP', true);
+if (!defined('AFM_APP')) {
+    define('AFM_APP', true);
+}
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
@@ -14,6 +16,7 @@ require_once dirname(__DIR__) . '/includes/youtube_matcher.php';
 require_auth();
 
 $pageTitle = 'Recordings — AFM#2 YouTube Matching & Verification';
+$currentUserId = get_current_user_id();
 
 // Query parameters
 $filter = trim($_GET['filter'] ?? 'all');
@@ -37,7 +40,7 @@ $catalogueData = YouTubeMatcher::get_recordings_catalogue([
     'sort'     => $sortBy,
     'page'     => $page,
     'per_page' => $perPage
-]);
+], $currentUserId);
 
 $items = $catalogueData['items'];
 $total = $catalogueData['total'];
@@ -45,7 +48,7 @@ $totalPages = $catalogueData['total_pages'];
 $stats = $catalogueData['stats'];
 
 // Active job state
-$activeJob = YouTubeMatcher::get_or_create_active_job();
+$activeJob = YouTubeMatcher::get_or_create_active_job($currentUserId);
 
 require_once dirname(__DIR__) . '/includes/header.php';
 ?>

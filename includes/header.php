@@ -33,11 +33,30 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AFM#2 Personal Music Catalogue, Audition, and Tournament Web Application for Annual Musical Finale 2026.">
+    <meta name="description" content="<?= htmlspecialchars($pageDescription ?? 'AFM#2 Personal Music Catalogue, Audition, and Tournament Web Application for Annual Musical Finale 2026.', ENT_QUOTES, 'UTF-8') ?>">
     <meta name="csrf-token" content="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
     <?php if (defined('GOOGLE_SITE_VERIFICATION') && GOOGLE_SITE_VERIFICATION): ?>
     <meta name="google-site-verification" content="<?= htmlspecialchars(GOOGLE_SITE_VERIFICATION, ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
+
+    <!-- Canonical URL & Search Metadata -->
+    <?php $canonicalUrl = get_base_url() . '/' . ($currentPage === 'index.php' ? '' : htmlspecialchars($currentPage, ENT_QUOTES, 'UTF-8')); ?>
+    <link rel="canonical" href="<?= $canonicalUrl ?>">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="<?= $canonicalUrl ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($pageDescription ?? 'AFM#2 — Personal Music Journal and Audition Tournament for Annual Musical Finale 2026.', ENT_QUOTES, 'UTF-8') ?>">
+    <meta property="og:image" content="<?= get_base_url() ?>/assets/img/afm2-logo.png">
+    <meta property="og:site_name" content="AFM#2 — Annual Musical Finale 2026">
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($pageDescription ?? 'AFM#2 — Personal Music Journal and Audition Tournament for Annual Musical Finale 2026.', ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="twitter:image" content="<?= get_base_url() ?>/assets/img/afm2-logo.png">
+
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <!-- Favicon & Touch Icons (Approved Compact AFM#2 Symbol) -->
     <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -47,7 +66,11 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
     <link rel="icon" type="image/png" sizes="192x192" href="assets/img/afm2-favicon-192x192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
-    <link rel="stylesheet" href="assets/css/style.css?v=3.6">
+    <?php
+    $styleFile = dirname(__DIR__) . '/public/assets/css/style.css';
+    $styleVer = '4.1.' . (file_exists($styleFile) ? filemtime($styleFile) : '20261029');
+    ?>
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= $styleVer ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -81,13 +104,27 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
             </div>
 
             <?php if ($isLoggedIn): ?>
-            <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation menu" aria-expanded="false">
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation menu" aria-controls="appNav" aria-expanded="false">
                 <span class="bar"></span>
                 <span class="bar"></span>
                 <span class="bar"></span>
             </button>
 
             <nav class="app-nav" id="appNav">
+                <div class="mobile-user-card" id="mobileUserCard">
+                    <a href="account.php" class="mobile-user-info" title="Signed in as <?= htmlspecialchars($currentUsername ?? '', ENT_QUOTES, 'UTF-8') ?> — Account Security" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
+                        <span class="status-indicator online"></span>
+                        <span class="mobile-user-name"><?= htmlspecialchars($currentUsername ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="mobile-role-badge <?= is_admin() ? 'badge-admin' : 'badge-judge' ?>" style="display:inline-flex;align-items:center;">
+                            <?= is_admin() ? 'Admin' : 'Judge' ?>
+                        </span>
+                    </a>
+                    <form action="logout.php" method="POST" class="mobile-logout-form" style="margin:0;padding:0;display:flex;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="submit" class="btn-mobile-signout btn-logout" id="btnMobileSignout" title="Sign out of AFM#2">Sign Out</button>
+                    </form>
+                </div>
+
                 <ul class="nav-links">
                     <li><a href="index.php" class="<?= $currentPage === 'index.php' ? 'active' : '' ?>" id="navDashboard">Journal</a></li>
                     <li><a href="library.php" class="<?= $currentPage === 'library.php' ? 'active' : '' ?>" id="navLibrary">Library</a></li>
@@ -106,24 +143,41 @@ $bgOverlayDecimal = number_format($currentBgOpacity / 100, 2, '.', '');
                         <span class="appearance-icon">🎨</span>
                         <span class="appearance-text">Appearance</span>
                     </button>
-                    <a href="account.php" class="user-pill" title="Signed in as <?= htmlspecialchars($currentUsername ?? '', ENT_QUOTES, 'UTF-8') ?> — Account Security" style="text-decoration: none;">
+                    <a href="account.php" class="user-pill desktop-user-pill" title="Signed in as <?= htmlspecialchars($currentUsername ?? '', ENT_QUOTES, 'UTF-8') ?> — Account Security" style="text-decoration: none;">
                         <span class="status-indicator online"></span>
                         <span class="user-name"><?= htmlspecialchars($currentUsername ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
                     </a>
-                    <form action="logout.php" method="POST" class="logout-form" style="display:inline;margin:0;">
+                    <form action="logout.php" method="POST" class="logout-form desktop-logout-form" style="display:inline;margin:0;">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
                         <button type="submit" class="btn-logout" id="btnLogout" title="Log out of application">Sign Out</button>
                     </form>
                 </div>
             </nav>
             <?php else: ?>
-            <div class="nav-auth-guest">
-                <?php if (has_users()): ?>
-                    <a href="login.php" class="btn btn-primary btn-sm" id="navLogin">Sign In</a>
-                <?php else: ?>
-                    <a href="setup.php" class="btn btn-accent btn-sm" id="navSetup">Setup Account</a>
-                <?php endif; ?>
-            </div>
+            <button class="nav-toggle" id="navToggleGuest" aria-label="Toggle navigation menu" aria-controls="guestNav" aria-expanded="false">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </button>
+
+            <nav class="app-nav guest-nav" id="guestNav">
+                <ul class="nav-links">
+                    <li><a href="index.php" class="<?= ($currentPage === 'index.php' || $currentPage === 'landing.php') ? 'active' : '' ?>">Home</a></li>
+                    <li><a href="<?= ($currentPage === 'index.php' || $currentPage === 'landing.php') ? '#how-it-works' : 'index.php#how-it-works' ?>">How It Works</a></li>
+                    <li><a href="<?= ($currentPage === 'index.php' || $currentPage === 'landing.php') ? '#criteria' : 'index.php#criteria' ?>">Criteria</a></li>
+                    <li><a href="<?= ($currentPage === 'index.php' || $currentPage === 'landing.php') ? '#tournament-stages' : 'index.php#tournament-stages' ?>">Tournament</a></li>
+                    <li><a href="about.php" class="<?= $currentPage === 'about.php' ? 'active' : '' ?>">About</a></li>
+                    <li><a href="contact.php" class="<?= $currentPage === 'contact.php' ? 'active' : '' ?>">Contact</a></li>
+                </ul>
+
+                <div class="user-meta guest-user-meta">
+                    <?php if (has_users()): ?>
+                        <a href="login.php" class="btn btn-primary btn-sm btn-glow" id="navLogin">Sign In</a>
+                    <?php else: ?>
+                        <a href="setup.php" class="btn btn-accent btn-sm" id="navSetup">Setup Account</a>
+                    <?php endif; ?>
+                </div>
+            </nav>
             <?php endif; ?>
         </div>
     </header>

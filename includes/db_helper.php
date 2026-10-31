@@ -40,6 +40,257 @@ function clear_dashboard_stats_cache(): void {
 }
 
 /**
+ * Transactionally initialize a user's independent starter catalogue from the immutable master collection.
+ * 
+ * Safely copies all songs, media links, and artwork references from master_starter_* tables,
+ * assigning brand new auto-increment song IDs under the user's specific user_id.
+ * Protects against duplicate execution and concurrent initialization requests using InnoDB row locks.
+ *
+ * @param int $userId Target user ID
+ * @param int $starterVersion Starter catalogue version (default 1)
+ * @param PDO|null $pdo Optional existing PDO connection
+ * @return array Result summary with counts and status
+ */
+function initialize_user_starter_catalogue(int $userId, int $starterVersion = 1, ?PDO $pdo = null): array {
+    if ($userId <= 0) {
+        return ['success' => false, 'error' => 'Invalid user ID.'];
+    }
+
+    if ($pdo === null) {
+        $pdo = get_db_connection();
+    }
+
+    // Verify user exists in app_users
+    $userStmt = $pdo->prepare("SELECT `user_id`, `username` FROM `app_users` WHERE `user_id` = :uid LIMIT 1");
+    $userStmt->execute([':uid' => $userId]);
+    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        return ['success' => false, 'error' => "User ID {$userId} does not exist."];
+    }
+
+    $inOurTx = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $inOurTx = true;
+    }
+
+    try {
+        // Concurrency protection: Check if user already initialized using FOR UPDATE
+        $checkStmt = $pdo->prepare("
+            SELECT `user_id`, `starter_version`, `songs_cloned` 
+            FROM `user_catalogue_initialization` 
+            WHERE `user_id` = :uid 
+            FOR UPDATE
+        ");
+        $checkStmt->execute([':uid' => $userId]);
+        $existingInit = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingInit) {
+            if ($inOurTx) {
+                $pdo->commit();
+            }
+            return [
+                'success'             => true,
+                'already_initialized' => true,
+                'user_id'             => $userId,
+                'starter_version'     => (int)$existingInit['starter_version'],
+                'songs_cloned'        => (int)$existingInit['songs_cloned']
+            ];
+        }
+
+        // Verify master_starter_songs has records. If not (first boot), seed it from songs <= 2411
+        $masterCountStmt = $pdo->prepare("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = :ver");
+        $masterCountStmt->execute([':ver' => $starterVersion]);
+        $masterCount = (int)$masterCountStmt->fetchColumn();
+
+        if ($masterCount === 0) {
+            $pdo->exec("
+                INSERT INTO `master_starter_songs` (`source_song_id`, `starter_version`, `title`, `artist`)
+                SELECT `song_id`, 1, `title`, `artist`
+                FROM `songs`
+                WHERE `song_id` <= 2411
+                ORDER BY `song_id` ASC
+                ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `artist` = VALUES(`artist`)
+            ");
+            $masterCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+        }
+
+        // Fetch all starter songs ordered by source_song_id
+        $starterSongsStmt = $pdo->prepare("
+            SELECT `source_song_id`, `title`, `artist` 
+            FROM `master_starter_songs` 
+            WHERE `starter_version` = :ver 
+            ORDER BY `source_song_id` ASC
+        ");
+        $starterSongsStmt->execute([':ver' => $starterVersion]);
+        $starterSongs = $starterSongsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($starterSongs)) {
+            if ($inOurTx) {
+                $pdo->rollBack();
+            }
+            return ['success' => false, 'error' => 'Master starter catalogue is empty.'];
+        }
+
+        // Insert cloned songs into songs table under this user_id
+        $insertSong = $pdo->prepare("
+            INSERT INTO `songs` (`user_id`, `title`, `artist`, `is_consolidated`, `deleted_at`)
+            VALUES (:uid, :title, :artist, 0, NULL)
+        ");
+
+        $songIdMap = []; // source_song_id => new_song_id
+        foreach ($starterSongs as $s) {
+            $insertSong->execute([
+                ':uid'    => $userId,
+                ':title'  => $s['title'],
+                ':artist' => $s['artist']
+            ]);
+            $newSongId = (int)$pdo->lastInsertId();
+            $songIdMap[(int)$s['source_song_id']] = $newSongId;
+        }
+
+        // Clone starter media (160 tracks)
+        $mediaClonedCount = 0;
+        $starterMedia = $pdo->query("SELECT * FROM `master_starter_media`")->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($starterMedia)) {
+            $insMedia = $pdo->prepare("
+                INSERT INTO `song_media` (`song_id`, `service`, `video_id`, `title`, `channel_title`, `version_type`, `embed_status`)
+                VALUES (:song_id, :service, :video_id, :title, :channel_title, :version_type, :embed_status)
+            ");
+            foreach ($starterMedia as $m) {
+                $srcId = (int)$m['source_song_id'];
+                if (isset($songIdMap[$srcId])) {
+                    $insMedia->execute([
+                        ':song_id'       => $songIdMap[$srcId],
+                        ':service'       => $m['service'],
+                        ':video_id'      => $m['video_id'],
+                        ':title'         => $m['title'],
+                        ':channel_title' => $m['channel_title'],
+                        ':version_type'  => $m['version_type'],
+                        ':embed_status'  => $m['embed_status']
+                    ]);
+                    $mediaClonedCount++;
+                }
+            }
+        }
+
+        // Clone starter artwork (160 tracks)
+        $artClonedCount = 0;
+        $starterArt = $pdo->query("SELECT * FROM `master_starter_artwork`")->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($starterArt)) {
+            $insArt = $pdo->prepare("
+                INSERT INTO `song_artwork` (`song_id`, `source`, `image_url`, `thumbnail_url`, `is_confirmed`, `status`)
+                VALUES (:song_id, :source, :image_url, :thumbnail_url, :is_confirmed, :status)
+            ");
+            foreach ($starterArt as $a) {
+                $srcId = (int)$a['source_song_id'];
+                if (isset($songIdMap[$srcId])) {
+                    $insArt->execute([
+                        ':song_id'       => $songIdMap[$srcId],
+                        ':source'        => $a['source'],
+                        ':image_url'     => $a['image_url'],
+                        ':thumbnail_url' => $a['thumbnail_url'],
+                        ':is_confirmed'  => $a['is_confirmed'],
+                        ':status'        => $a['status']
+                    ]);
+                    $artClonedCount++;
+                }
+            }
+        }
+
+        // Initialize user_round_progress for this user across all tournament rounds
+        $rounds = $pdo->query("SELECT `round_id`, `status` FROM `rounds` ORDER BY `sequence_no` ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $insUrp = $pdo->prepare("
+            INSERT INTO `user_round_progress` (`user_id`, `round_id`, `status`, `completed_at`)
+            VALUES (:uid, :rid, :st, NULL)
+            ON DUPLICATE KEY UPDATE `status` = VALUES(`status`)
+        ");
+        foreach ($rounds as $idx => $r) {
+            $initStatus = ($idx === 0) ? 'in_progress' : 'upcoming';
+            $insUrp->execute([
+                ':uid' => $userId,
+                ':rid' => $r['round_id'],
+                ':st'  => $initStatus
+            ]);
+        }
+
+        // Record initialization in user_catalogue_initialization
+        $insInit = $pdo->prepare("
+            INSERT INTO `user_catalogue_initialization` (`user_id`, `starter_version`, `songs_cloned`)
+            VALUES (:uid, :ver, :cnt)
+        ");
+        $insInit->execute([
+            ':uid' => $userId,
+            ':ver' => $starterVersion,
+            ':cnt' => count($starterSongs)
+        ]);
+
+        if ($inOurTx) {
+            $pdo->commit();
+        }
+
+        return [
+            'success'             => true,
+            'already_initialized' => false,
+            'user_id'             => $userId,
+            'starter_version'     => $starterVersion,
+            'songs_cloned'        => count($starterSongs),
+            'media_cloned'        => $mediaClonedCount,
+            'artwork_cloned'      => $artClonedCount
+        ];
+    } catch (\Throwable $e) {
+        if ($inOurTx && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("AFM2 initialize_user_starter_catalogue error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'Failed to initialize starter catalogue: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Safely check if the songs table has the deleted_at column
+ */
+function has_song_deleted_at_column(?PDO $pdo = null): bool {
+    static $hasColumn = null;
+    if ($hasColumn !== null) {
+        return $hasColumn;
+    }
+    if ($pdo === null) {
+        $pdo = get_db_connection();
+    }
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM `songs` LIKE 'deleted_at'");
+        $hasColumn = (bool)$stmt->fetch();
+    } catch (\Throwable $e) {
+        $hasColumn = false;
+    }
+    return $hasColumn;
+}
+
+/**
+ * Returns SQL snippet for deleted_at check if column exists, or 1=1 if not yet migrated
+ */
+function song_deleted_sql(string $tableAlias = '', ?PDO $pdo = null): string {
+    if (!has_song_deleted_at_column($pdo)) {
+        return '1=1';
+    }
+    $prefix = $tableAlias !== '' ? "`{$tableAlias}`." : '';
+    return "{$prefix}`deleted_at` IS NULL";
+}
+
+/**
+ * Returns user ownership condition. In unmigrated legacy databases where songs.user_id is NULL,
+ * assigns legacy unassigned songs to Gulshan (user_id = 995).
+ */
+function song_user_scope_sql(int $userId, string $tableAlias = '', ?PDO $pdo = null): string {
+    $prefix = $tableAlias !== '' ? "`{$tableAlias}`." : '';
+    if ($userId === 995) {
+        return "({$prefix}`user_id` = 995 OR {$prefix}`user_id` IS NULL)";
+    }
+    return "{$prefix}`user_id` = " . (int)$userId;
+}
+
+/**
  * Get lightweight total active song count without computing full dashboard statistics.
  * Uses cached dashboard stats if available, or executes a single fast COUNT query.
  * Returns null if the database query fails, avoiding fabricated fallback counts.
@@ -52,29 +303,26 @@ function get_catalogue_song_count(?int $userId = null, bool $forceRefresh = fals
     if ($userId === null && $cache['song_count'] !== null && !$forceRefresh) {
         return $cache['song_count'];
     }
-
-    $cachedStats = $cache['stats'];
-    if ($userId === null && $cachedStats !== null && isset($cachedStats['total_songs']) && !$forceRefresh) {
-        $cache['song_count'] = (int)$cachedStats['total_songs'];
-        return $cache['song_count'];
+    if ($userId !== null && isset($cache['user_count_' . $userId]) && !$forceRefresh) {
+        return $cache['user_count_' . $userId];
     }
 
     try {
         $pdo = get_db_connection();
+        $delSql = song_deleted_sql('', $pdo);
         if ($userId !== null) {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND `user_id` = :uid");
-            $stmt->execute([':uid' => $userId]);
-            return (int)$stmt->fetchColumn();
+            $userSql = song_user_scope_sql($userId, '', $pdo);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+            $stmt->execute();
+            $count = (int)$stmt->fetchColumn();
+            $cache['user_count_' . $userId] = $count;
+            return $count;
         }
-        $count = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+        $count = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
         $cache['song_count'] = $count;
         return $count;
     } catch (\Throwable $e) {
         error_log("AFM2 Catalogue Song Count Error: " . $e->getMessage());
-        $cache['song_count'] = null;
-        if ($forceRefresh) {
-            $cache['stats'] = null;
-        }
         return null;
     }
 }
@@ -98,9 +346,14 @@ function get_dashboard_stats(?int $userId = null, bool $forceRefresh = false): a
     $pdo = get_db_connection();
 
     if ($userId !== null) {
-        // Scoped to specific authenticated user
-        $stmtSongCount = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `user_id` = :uid");
-        $stmtSongCount->execute([':uid' => $userId]);
+        $delSql = song_deleted_sql('', $pdo);
+        $delSqlS = song_deleted_sql('s', $pdo);
+        $userSql = song_user_scope_sql($userId, '', $pdo);
+        $userSqlS = song_user_scope_sql($userId, 's', $pdo);
+
+        // Scoped strictly to specific authenticated user
+        $stmtSongCount = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+        $stmtSongCount->execute();
         $totalSongs = (int)$stmtSongCount->fetchColumn();
 
         $stmtDisc = $pdo->prepare("
@@ -108,11 +361,12 @@ function get_dashboard_stats(?int $userId = null, bool $forceRefresh = false): a
                 SUM(CASE WHEN sd.`status` = 'shortlisted' THEN 1 ELSE 0 END) AS shortlisted_count,
                 SUM(CASE WHEN sd.`status` = 'passed' THEN 1 ELSE 0 END) AS passed_count
             FROM `song_discovery` sd
-            JOIN `songs` s ON sd.`song_id` = s.`song_id`
-            WHERE s.`user_id` = :uid
+            JOIN `songs` s ON sd.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 AND {$delSqlS}
+            WHERE (sd.`user_id` = :uid OR (sd.`user_id` IS NULL AND :uid_g = 995))
+              AND {$userSqlS}
         ");
-        $stmtDisc->execute([':uid' => $userId]);
-        $discovery = $stmtDisc->fetch();
+        $stmtDisc->execute([':uid' => $userId, ':uid_g' => $userId]);
+        $discovery = $stmtDisc->fetch(PDO::FETCH_ASSOC);
         $shortlisted = (int)($discovery['shortlisted_count'] ?? 0);
         $passed = (int)($discovery['passed_count'] ?? 0);
         $reviewed = $shortlisted + $passed;
@@ -121,18 +375,20 @@ function get_dashboard_stats(?int $userId = null, bool $forceRefresh = false): a
         $stmtAud = $pdo->prepare("
             SELECT COUNT(*) 
             FROM `afm_entries` e
-            JOIN `songs` s ON e.`song_id` = s.`song_id`
-            WHERE s.`user_id` = :uid AND e.`status` != 'excluded'
+            JOIN `songs` s ON e.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 AND {$delSqlS}
+            WHERE (e.`user_id` = :uid OR (e.`user_id` IS NULL AND :uid_g = 995))
+              AND {$userSqlS}
+              AND e.`status` != 'excluded'
         ");
-        $stmtAud->execute([':uid' => $userId]);
+        $stmtAud->execute([':uid' => $userId, ':uid_g' => $userId]);
         $auditionsTotal = (int)$stmtAud->fetchColumn();
 
-        $stmtComp = $pdo->prepare("SELECT COUNT(*) FROM `ratings` WHERE `round_id` = 1 AND `user_id` = :uid AND `total` IS NOT NULL");
-        $stmtComp->execute([':uid' => $userId]);
+        $stmtComp = $pdo->prepare("SELECT COUNT(*) FROM `ratings` WHERE `round_id` = 1 AND (user_id = :uid OR (user_id IS NULL AND :uid_g = 995)) AND `total` IS NOT NULL");
+        $stmtComp->execute([':uid' => $userId, ':uid_g' => $userId]);
         $auditionsCompleted = (int)$stmtComp->fetchColumn();
 
-        $stmtIncomp = $pdo->prepare("SELECT COUNT(*) FROM `ratings` WHERE `round_id` = 1 AND `user_id` = :uid AND `total` IS NULL");
-        $stmtIncomp->execute([':uid' => $userId]);
+        $stmtIncomp = $pdo->prepare("SELECT COUNT(*) FROM `ratings` WHERE `round_id` = 1 AND (user_id = :uid OR (user_id IS NULL AND :uid_g = 995)) AND `total` IS NULL");
+        $stmtIncomp->execute([':uid' => $userId, ':uid_g' => $userId]);
         $auditionsIncomplete = (int)$stmtIncomp->fetchColumn();
 
         $rounds = get_tournament_rounds($userId);
@@ -149,15 +405,17 @@ function get_dashboard_stats(?int $userId = null, bool $forceRefresh = false): a
                 sa.`thumbnail_url` AS `artwork_thumbnail_url`,
                 sa.`image_url` AS `artwork_image_url`
             FROM `song_discovery` sd
-            JOIN `songs` s ON sd.`song_id` = s.`song_id`
+            JOIN `songs` s ON sd.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 AND {$delSqlS}
             LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
             LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
-            WHERE s.`user_id` = :uid AND sd.`status` = 'shortlisted'
+            WHERE (sd.`user_id` = :uid OR (sd.`user_id` IS NULL AND :uid_g = 995))
+              AND {$userSqlS}
+              AND sd.`status` = 'shortlisted'
             ORDER BY sd.`reviewed_at` DESC
             LIMIT 6
         ");
-        $stmtRecent->execute([':uid' => $userId]);
-        $recentShortlisted = $stmtRecent->fetchAll();
+        $stmtRecent->execute([':uid' => $userId, ':uid_g' => $userId]);
+        $recentShortlisted = $stmtRecent->fetchAll(PDO::FETCH_ASSOC);
 
         $stats = [
             'total_songs'          => $totalSongs,
@@ -298,13 +556,28 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
         $userId = get_current_user_id();
     }
 
-    $uidVal = $userId !== null ? (int)$userId : null;
-    $whereClauses = [];
-    $params = [];
-
-    if ($uidVal !== null) {
-        $whereClauses[] = "(s.`user_id` = {$uidVal} OR s.`user_id` IS NULL)";
+    if ($userId === null) {
+        return [
+            'songs'        => [],
+            'total'        => 0,
+            'page'         => $page,
+            'per_page'     => $perPage,
+            'sort'         => $sortBy,
+            'total_pages'  => 1,
+            'has_next'     => false,
+            'has_prev'     => false
+        ];
     }
+
+    $uidVal = (int)$userId;
+    $userClause = song_user_scope_sql($userId, 's', $pdo);
+    $delClause = song_deleted_sql('s', $pdo);
+    $whereClauses = [
+        $userClause,
+        $delClause,
+        "s.`is_consolidated` = 0"
+    ];
+    $params = [];
 
     // Search query
     $trimmedQuery = trim($query);
@@ -323,11 +596,17 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
         $whereClauses[] = "sd.`status` = 'passed'";
     }
 
-    $whereSql = !empty($whereClauses) ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
+    $whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
 
-    $discJoinCond = $uidVal !== null ? " AND (sd.`user_id` = {$uidVal} OR sd.`user_id` IS NULL)" : "";
-    $entryJoinCond = $uidVal !== null ? " AND (e.`user_id` = {$uidVal} OR e.`user_id` IS NULL)" : "";
-    $ratingJoinCond = $uidVal !== null ? " AND (r1.`user_id` = {$uidVal} OR r1.`user_id` IS NULL)" : "";
+    $discJoinCond = ($userId === 995)
+        ? " AND (sd.`user_id` = 995 OR sd.`user_id` IS NULL)"
+        : " AND sd.`user_id` = {$uidVal}";
+    $entryJoinCond = ($userId === 995)
+        ? " AND (e.`user_id` = 995 OR e.`user_id` IS NULL)"
+        : " AND e.`user_id` = {$uidVal}";
+    $ratingJoinCond = ($userId === 995)
+        ? " AND (r1.`user_id` = 995 OR r1.`user_id` IS NULL)"
+        : " AND r1.`user_id` = {$uidVal}";
 
     // Count total matches
     $countSql = "
@@ -409,7 +688,7 @@ function search_songs(string $query = '', string $statusFilter = 'all', int $pag
     $dataStmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
     $dataStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $dataStmt->execute();
-    $songs = $dataStmt->fetchAll();
+    $songs = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
 
     $totalPages = (int)ceil($total / $perPage);
 
@@ -433,14 +712,14 @@ function get_song_by_id(int $songId, ?int $userId = null): ?array {
     if ($userId === null && is_authenticated()) {
         $userId = get_current_user_id();
     }
-    if ($userId !== null) {
-        $stmt = $pdo->prepare("SELECT * FROM `songs` WHERE `song_id` = :id AND (`user_id` = :uid OR `user_id` IS NULL)");
-        $stmt->execute([':id' => $songId, ':uid' => $userId]);
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM `songs` WHERE `song_id` = :id");
-        $stmt->execute([':id' => $songId]);
+    if ($userId === null) {
+        return null;
     }
-    $song = $stmt->fetch();
+    $delSql = song_deleted_sql('', $pdo);
+    $userSql = song_user_scope_sql($userId, '', $pdo);
+    $stmt = $pdo->prepare("SELECT * FROM `songs` WHERE `song_id` = :id AND {$userSql} AND {$delSql}");
+    $stmt->execute([':id' => $songId]);
+    $song = $stmt->fetch(PDO::FETCH_ASSOC);
     return $song ?: null;
 }
 
@@ -452,16 +731,21 @@ function update_song_discovery_status(int $songId, string $status, ?int $userId 
     if ($userId === null && is_authenticated()) {
         $userId = get_current_user_id();
     }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
 
     // Verify song exists and belongs to user
-    $stmt = $pdo->prepare("SELECT `song_id`, `user_id`, `title`, `artist`, `is_consolidated`, `consolidated_into_id` FROM `songs` WHERE `song_id` = :id");
+    $delSql = song_deleted_sql('', $pdo);
+    $delSqlS = song_deleted_sql('s', $pdo);
+    $userSql = song_user_scope_sql($userId, '', $pdo);
+    $userSqlS = song_user_scope_sql($userId, 's', $pdo);
+
+    $stmt = $pdo->prepare("SELECT `song_id`, `user_id`, `title`, `artist`, `is_consolidated`, `consolidated_into_id` FROM `songs` WHERE `song_id` = :id AND {$userSql} AND {$delSql}");
     $stmt->execute([':id' => $songId]);
-    $song = $stmt->fetch();
+    $song = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$song) {
-        return ['success' => false, 'error' => 'Song not found in catalogue.'];
-    }
-    if ($userId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
-        return ['success' => false, 'error' => 'Unauthorized: You do not have permission to modify discovery status for another user\'s song.'];
+        return ['success' => false, 'error' => 'Unauthorized: Song not found in your catalogue.'];
     }
 
     if ((int)($song['is_consolidated'] ?? 0) === 1 && $status === 'shortlisted') {
@@ -473,91 +757,110 @@ function update_song_discovery_status(int $songId, string $status, ?int $userId 
         return ['success' => false, 'error' => 'Invalid discovery status.'];
     }
 
+    // SAFEGUARD: If moving from shortlisted to unreviewed or passed, check for active scores or tournament history
+    if ($status !== 'shortlisted') {
+        $scoreCheck = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM `ratings` r 
+            JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` 
+            WHERE e.`song_id` = :id 
+              AND (r.`user_id` = :uid OR (r.`user_id` IS NULL AND :uid_g = 995))
+              AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)
+        ");
+        $scoreCheck->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+        if ((int)$scoreCheck->fetchColumn() > 0) {
+            return [
+                'success' => false,
+                'blocked' => true,
+                'error'   => "Cannot remove \"{$song['title']}\" from your shortlist: It currently has an active audition score. Please reset its score first."
+            ];
+        }
+
+        $rrCheck = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM `round_results` rr 
+            JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` 
+            WHERE e.`song_id` = :id 
+              AND (rr.`user_id` = :uid OR (rr.`user_id` IS NULL AND :uid_g = 995))
+        ");
+        $rrCheck->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+        if ((int)$rrCheck->fetchColumn() > 0) {
+            return [
+                'success' => false,
+                'blocked' => true,
+                'error'   => "Cannot remove \"{$song['title']}\" from competition: This song is referenced in your completed tournament history."
+            ];
+        }
+    } else {
+        // When shortlisting, check if another active entry already exists for the same title and artist for this user
+        $cleanTitle = trim($song['title']);
+        $cleanArtist = trim($song['artist'] ?? '');
+        $dupEntryStmt = $pdo->prepare("
+            SELECT e.`entry_id`, e.`song_id`, s.`title`
+            FROM `afm_entries` e
+            JOIN `songs` s ON e.`song_id` = s.`song_id`
+            WHERE (e.`user_id` = :uid OR (e.`user_id` IS NULL AND :uid_g = 995))
+              AND e.`song_id` != :sid
+              AND LOWER(TRIM(s.`title`)) = LOWER(TRIM(:title))
+              AND LOWER(TRIM(COALESCE(s.`artist`, ''))) = LOWER(TRIM(:artist))
+              AND e.`status` = 'auditioning'
+            LIMIT 1
+        ");
+        $dupEntryStmt->execute([
+            ':uid'    => $userId,
+            ':uid_g'  => $userId,
+            ':sid'    => $songId,
+            ':title'  => $cleanTitle,
+            ':artist' => $cleanArtist
+        ]);
+        $dupEntry = $dupEntryStmt->fetch(PDO::FETCH_ASSOC);
+        if ($dupEntry) {
+            return [
+                'success' => false,
+                'blocked' => true,
+                'error'   => "Cannot shortlist: An active audition entry already exists for \"{$song['title']}\" (Track #{$dupEntry['song_id']}) in your competition."
+            ];
+        }
+    }
+
     try {
         $pdo->beginTransaction();
 
         if ($status === 'unreviewed') {
-            if ($userId !== null) {
-                $del = $pdo->prepare("DELETE FROM `song_discovery` WHERE `song_id` = :id AND (`user_id` = :uid OR `user_id` IS NULL)");
-                $del->execute([':id' => $songId, ':uid' => $userId]);
+            $del = $pdo->prepare("DELETE FROM `song_discovery` WHERE `song_id` = :id AND `user_id` = :uid");
+            $del->execute([':id' => $songId, ':uid' => $userId]);
 
-                // If entry exists in afm_entries and has no recorded ratings, clean it up
+            // If entry exists in afm_entries and has no recorded ratings, clean it up
+            $delEntry = $pdo->prepare("
+                DELETE FROM `afm_entries` 
+                WHERE `song_id` = :id 
+                  AND `user_id` = :uid 
+                  AND `entry_id` NOT IN (SELECT `entry_id` FROM `ratings` WHERE `user_id` = :uid2)
+            ");
+            $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid2' => $userId]);
+        } else {
+            $ins = $pdo->prepare("
+                INSERT INTO `song_discovery` (`song_id`, `user_id`, `status`, `reviewed_at`)
+                VALUES (:id, :uid, :status, NOW())
+                ON DUPLICATE KEY UPDATE `status` = VALUES(`status`), `reviewed_at` = NOW()
+            ");
+            $ins->execute([':id' => $songId, ':uid' => $userId, ':status' => $status]);
+
+            if ($status === 'shortlisted') {
+                $entryStmt = $pdo->prepare("
+                    INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`)
+                    VALUES (:id, :uid, 'auditioning')
+                    ON DUPLICATE KEY UPDATE `status` = 'auditioning'
+                ");
+                $entryStmt->execute([':id' => $songId, ':uid' => $userId]);
+            } else {
                 $delEntry = $pdo->prepare("
                     DELETE FROM `afm_entries` 
                     WHERE `song_id` = :id 
-                      AND (`user_id` = :uid OR `user_id` IS NULL)
+                      AND `user_id` = :uid 
                       AND `entry_id` NOT IN (SELECT `entry_id` FROM `ratings` WHERE `user_id` = :uid2)
                 ");
                 $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid2' => $userId]);
-            } else {
-                $del = $pdo->prepare("DELETE FROM `song_discovery` WHERE `song_id` = :id");
-                $del->execute([':id' => $songId]);
-
-                $delEntry = $pdo->prepare("
-                    DELETE FROM `afm_entries` 
-                    WHERE `song_id` = :id 
-                      AND `entry_id` NOT IN (SELECT `entry_id` FROM `ratings`)
-                ");
-                $delEntry->execute([':id' => $songId]);
-            }
-        } else {
-            if ($userId !== null) {
-                $ins = $pdo->prepare("
-                    INSERT INTO `song_discovery` (`song_id`, `user_id`, `status`, `reviewed_at`)
-                    VALUES (:id, :uid, :status, NOW())
-                    ON DUPLICATE KEY UPDATE `status` = VALUES(`status`), `reviewed_at` = NOW()
-                ");
-                $ins->execute([':id' => $songId, ':uid' => $userId, ':status' => $status]);
-
-                if ($status === 'shortlisted') {
-                    $entryStmt = $pdo->prepare("
-                        INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`)
-                        VALUES (:id, :uid, 'auditioning')
-                        ON DUPLICATE KEY UPDATE `status` = 'auditioning'
-                    ");
-                    $entryStmt->execute([':id' => $songId, ':uid' => $userId]);
-                } else {
-                    $delEntry = $pdo->prepare("
-                        DELETE FROM `afm_entries` 
-                        WHERE `song_id` = :id 
-                          AND (`user_id` = :uid OR `user_id` IS NULL)
-                          AND `entry_id` NOT IN (SELECT `entry_id` FROM `ratings` WHERE `user_id` = :uid2)
-                    ");
-                    $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid2' => $userId]);
-                }
-            } else {
-                $checkStmt = $pdo->prepare("SELECT `discovery_id` FROM `song_discovery` WHERE `song_id` = :id AND `user_id` IS NULL");
-                $checkStmt->execute([':id' => $songId]);
-                $discId = $checkStmt->fetchColumn();
-
-                if ($discId) {
-                    $upd = $pdo->prepare("UPDATE `song_discovery` SET `status` = :status, `reviewed_at` = NOW() WHERE `discovery_id` = :did");
-                    $upd->execute([':status' => $status, ':did' => $discId]);
-                } else {
-                    $ins = $pdo->prepare("INSERT INTO `song_discovery` (`song_id`, `status`, `reviewed_at`) VALUES (:id, :status, NOW())");
-                    $ins->execute([':id' => $songId, ':status' => $status]);
-                }
-
-                if ($status === 'shortlisted') {
-                    $checkEntry = $pdo->prepare("SELECT `entry_id` FROM `afm_entries` WHERE `song_id` = :id AND `user_id` IS NULL");
-                    $checkEntry->execute([':id' => $songId]);
-                    $entryId = $checkEntry->fetchColumn();
-
-                    if ($entryId) {
-                        $updEntry = $pdo->prepare("UPDATE `afm_entries` SET `status` = 'auditioning' WHERE `entry_id` = :eid");
-                        $updEntry->execute([':eid' => $entryId]);
-                    } else {
-                        $entryStmt = $pdo->prepare("INSERT INTO `afm_entries` (`song_id`, `status`) VALUES (:id, 'auditioning')");
-                        $entryStmt->execute([':id' => $songId]);
-                    }
-                } else {
-                    $delEntry = $pdo->prepare("
-                        DELETE FROM `afm_entries` 
-                        WHERE `song_id` = :id 
-                          AND `entry_id` NOT IN (SELECT `entry_id` FROM `ratings`)
-                    ");
-                    $delEntry->execute([':id' => $songId]);
-                }
             }
         }
 
@@ -565,32 +868,24 @@ function update_song_discovery_status(int $songId, string $status, ?int $userId 
         clear_dashboard_stats_cache();
 
         // Get updated counts
-        if ($userId !== null) {
-            $stmtCounts = $pdo->prepare("
-                SELECT 
-                    SUM(CASE WHEN sd.`status` = 'shortlisted' THEN 1 ELSE 0 END) AS shortlisted,
-                    SUM(CASE WHEN sd.`status` = 'passed' THEN 1 ELSE 0 END) AS passed
-                FROM `song_discovery` sd
-                JOIN `songs` s ON sd.`song_id` = s.`song_id`
-                WHERE s.`user_id` = :uid
-            ");
-            $stmtCounts->execute([':uid' => $userId]);
-            $counts = $stmtCounts->fetch();
-            $totStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `user_id` = :uid");
-            $totStmt->execute([':uid' => $userId]);
-            $totalSongs = (int)$totStmt->fetchColumn();
-        } else {
-            $counts = $pdo->query("
-                SELECT 
-                    SUM(CASE WHEN `status` = 'shortlisted' THEN 1 ELSE 0 END) AS shortlisted,
-                    SUM(CASE WHEN `status` = 'passed' THEN 1 ELSE 0 END) AS passed
-                FROM `song_discovery`
-            ")->fetch();
-            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-        }
+        $stmtCounts = $pdo->prepare("
+            SELECT 
+                SUM(CASE WHEN sd.`status` = 'shortlisted' THEN 1 ELSE 0 END) AS shortlisted,
+                SUM(CASE WHEN sd.`status` = 'passed' THEN 1 ELSE 0 END) AS passed
+            FROM `song_discovery` sd
+            JOIN `songs` s ON sd.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 AND {$delSqlS}
+            WHERE (sd.`user_id` = :uid OR (sd.`user_id` IS NULL AND :uid_g = 995))
+              AND {$userSqlS}
+        ");
+        $stmtCounts->execute([':uid' => $userId, ':uid_g' => $userId]);
+        $counts = $stmtCounts->fetch(PDO::FETCH_ASSOC);
 
-        $shortlisted = (int)($counts['shortlisted'] ?? 0);
-        $passed = (int)($counts['passed'] ?? 0);
+        $totStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+        $totStmt->execute();
+        $totalSongs = (int)$totStmt->fetchColumn();
+
+        $shortlisted = (int)($counts['shortlisted_count'] ?? ($counts['shortlisted'] ?? 0));
+        $passed = (int)($counts['passed_count'] ?? ($counts['passed'] ?? 0));
         $unreviewed = max(0, $totalSongs - ($shortlisted + $passed));
 
         return [
@@ -626,8 +921,13 @@ function find_existing_catalogue_song(string $title, ?string $artist = null, ?in
         $cleanArtist = null;
     }
 
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+
     $pdo = get_db_connection();
-    $userScopeSql = $userId !== null ? " AND (`user_id` = :uid_scope OR `user_id` IS NULL)" : "";
+    $delSql = song_deleted_sql('', $pdo);
+    $userScopeSql = $userId !== null ? " AND " . song_user_scope_sql($userId, '', $pdo) . " AND {$delSql}" : " AND {$delSql}";
 
     // 1. If artist is provided, match both Title and Artist
     if ($cleanArtist !== null) {
@@ -645,9 +945,6 @@ function find_existing_catalogue_song(string $title, ?string $artist = null, ?in
             ':title'  => $cleanTitle,
             ':artist' => $cleanArtist
         ];
-        if ($userId !== null) {
-            $params[':uid_scope'] = $userId;
-        }
         $stmt->execute($params);
         $found = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($found) {
@@ -688,9 +985,6 @@ function find_existing_catalogue_song(string $title, ?string $artist = null, ?in
             LIMIT 1
         ");
         $params = [':title' => $cleanTitle];
-        if ($userId !== null) {
-            $params[':uid_scope'] = $userId;
-        }
         $stmt->execute($params);
         $found = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($found) {
@@ -735,6 +1029,13 @@ function create_catalogue_song(
         $thumbnailUrl = $userIdOrThumbnail;
     }
 
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required to add songs to catalogue.'];
+    }
+
     $title = trim($title);
     if ($title === '') {
         return ['success' => false, 'error' => 'Song title is required.'];
@@ -750,15 +1051,53 @@ function create_catalogue_song(
         $discoveryStatus = 'unreviewed';
     }
 
-    // 1. Check if matching song already exists in the catalogue
+    // 1. Check if matching song already exists in user's active catalogue
+    $pdo = get_db_connection();
     $existing = find_existing_catalogue_song($title, $artist, $userId);
+    if ($existing === null && has_song_deleted_at_column($pdo)) {
+        $cleanArtistVal = ($artist !== null && $artist !== '' && $artist !== '-') ? trim($artist) : null;
+        if ($cleanArtistVal !== null) {
+            $archivedStmt = $pdo->prepare("
+                SELECT `song_id`, `title`, `artist`, `is_consolidated`, `user_id`
+                FROM `songs`
+                WHERE `user_id` = :uid
+                  AND LOWER(TRIM(`title`)) = LOWER(TRIM(:title))
+                  AND LOWER(TRIM(`artist`)) = LOWER(TRIM(:artist))
+                  AND `deleted_at` IS NOT NULL
+                ORDER BY `song_id` ASC
+                LIMIT 1
+            ");
+            $archivedStmt->execute([':uid' => $userId, ':title' => trim($title), ':artist' => $cleanArtistVal]);
+        } else {
+            $archivedStmt = $pdo->prepare("
+                SELECT `song_id`, `title`, `artist`, `is_consolidated`, `user_id`
+                FROM `songs`
+                WHERE `user_id` = :uid
+                  AND LOWER(TRIM(`title`)) = LOWER(TRIM(:title))
+                  AND (`artist` IS NULL OR TRIM(`artist`) = '' OR LOWER(TRIM(`artist`)) = 'unknown artist')
+                  AND `deleted_at` IS NOT NULL
+                ORDER BY `song_id` ASC
+                LIMIT 1
+            ");
+            $archivedStmt->execute([':uid' => $userId, ':title' => trim($title)]);
+        }
+        $archived = $archivedStmt->fetch(PDO::FETCH_ASSOC);
+        if ($archived) {
+            $pdo->prepare("
+                UPDATE `songs` 
+                SET `deleted_at` = NULL, `is_consolidated` = 0 
+                WHERE `song_id` = :id AND `user_id` = :uid
+            ")->execute([':id' => $archived['song_id'], ':uid' => $userId]);
+            $existing = $archived;
+        }
+    }
     if ($existing !== null) {
         $existingId = (int)$existing['song_id'];
         $savedMedia = null;
 
         // If a YouTube URL or Video ID was provided, save/update the recording link and artwork
         if (!empty($youtubeUrlOrId)) {
-            $mediaRes = save_song_media($existingId, $youtubeUrlOrId, 'original', null, 'allowed', $existing['title'], $existing['artist']);
+            $mediaRes = save_song_media($existingId, $youtubeUrlOrId, 'original', null, 'allowed', $existing['title'], $existing['artist'], null, $userId);
             if ($mediaRes['success']) {
                 $savedMedia = $mediaRes['media'];
             }
@@ -788,7 +1127,7 @@ function create_catalogue_song(
         // Clear any previous failed lyrics lookup cache so user can fetch fresh
         $savedLyrics = get_saved_song_lyrics($existingId);
         if ($savedLyrics && $savedLyrics['status'] === 'not_found') {
-            clear_song_lyrics_ref($existingId);
+            clear_song_lyrics_ref($existingId, $userId);
         }
 
         $artistDisplay = !empty($existing['artist']) ? $existing['artist'] : 'Unknown Artist';
@@ -809,10 +1148,17 @@ function create_catalogue_song(
     try {
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("
-            INSERT INTO `songs` (`title`, `artist`, `user_id`, `is_consolidated`, `consolidated_into_id`, `consolidated_at`)
-            VALUES (:title, :artist, :user_id, 0, NULL, NULL)
-        ");
+        if (has_song_deleted_at_column($pdo)) {
+            $stmt = $pdo->prepare("
+                INSERT INTO `songs` (`title`, `artist`, `user_id`, `is_consolidated`, `deleted_at`)
+                VALUES (:title, :artist, :user_id, 0, NULL)
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO `songs` (`title`, `artist`, `user_id`, `is_consolidated`)
+                VALUES (:title, :artist, :user_id, 0)
+            ");
+        }
         $stmt->execute([
             ':title'   => $title,
             ':artist'  => $artist,
@@ -823,7 +1169,7 @@ function create_catalogue_song(
         // Optional YouTube media association
         $savedMedia = null;
         if (!empty($youtubeUrlOrId)) {
-            $mediaRes = save_song_media($songId, $youtubeUrlOrId, 'original', null, 'allowed', $title, $artist);
+            $mediaRes = save_song_media($songId, $youtubeUrlOrId, 'original', null, 'allowed', $title, $artist, null, $userId);
             if ($mediaRes['success']) {
                 $savedMedia = $mediaRes['media'];
                 // Also set default artwork from YouTube thumbnail
@@ -897,6 +1243,13 @@ function update_catalogue_song(
         return ['success' => false, 'error' => 'Invalid song ID.'];
     }
 
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
+
     $title = trim($title);
     if ($title === '') {
         return ['success' => false, 'error' => 'Song title cannot be empty.'];
@@ -909,15 +1262,14 @@ function update_catalogue_song(
 
     $pdo = get_db_connection();
 
-    // Verify song exists
-    $check = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id");
+    // Verify song exists and belongs to user
+    $delSql = song_deleted_sql('', $pdo);
+    $userSql = song_user_scope_sql($userId, '', $pdo);
+    $check = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id AND {$userSql} AND {$delSql}");
     $check->execute([':id' => $songId]);
-    $song = $check->fetch();
+    $song = $check->fetch(PDO::FETCH_ASSOC);
     if (!$song) {
-        return ['success' => false, 'error' => 'Song not found in catalogue.'];
-    }
-    if ($userId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
-        return ['success' => false, 'error' => 'Unauthorized: You do not have permission to modify another user\'s song.'];
+        return ['success' => false, 'error' => 'Unauthorized: Song not found in your catalogue.'];
     }
 
     try {
@@ -926,22 +1278,23 @@ function update_catalogue_song(
         $updateStmt = $pdo->prepare("
             UPDATE `songs`
             SET `title` = :title, `artist` = :artist
-            WHERE `song_id` = :id
+            WHERE `song_id` = :id AND `user_id` = :uid
         ");
         $updateStmt->execute([
             ':title'  => $title,
             ':artist' => $artist,
-            ':id'     => $songId
+            ':id'     => $songId,
+            ':uid'    => $userId
         ]);
 
         // Invalidate cached lyrics and negative lookup if title or artist was changed
         if ($song['title'] !== $title || $song['artist'] !== $artist) {
-            clear_song_lyrics_ref($songId);
+            clear_song_lyrics_ref($songId, $userId);
         }
 
         // If YouTube link/id provided, update or create media
         if (!empty($youtubeUrlOrId)) {
-            $mediaRes = save_song_media($songId, $youtubeUrlOrId, 'original', null, 'allowed', $title, $artist, $youtubeUrlOrId);
+            $mediaRes = save_song_media($songId, $youtubeUrlOrId, 'original', null, 'allowed', $title, $artist, $youtubeUrlOrId, $userId);
             if (!$mediaRes['success']) {
                 $pdo->rollBack();
                 return ['success' => false, 'error' => $mediaRes['error']];
@@ -979,7 +1332,9 @@ function update_catalogue_song(
 
 /**
  * Safely delete a song from catalogue.
- * Blocks deletion if the song has completed ratings or tournament results to preserve history.
+ * If tournament history exists, soft-deletes/archives the song so historical scorecards
+ * and results remain intact while excluding it from the active catalogue.
+ * If no history exists, permanently deletes the song row.
  */
 function delete_catalogue_song(int $songId, ?int $userId = null): array {
     if ($songId <= 0) {
@@ -987,57 +1342,114 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
     }
 
     $pdo = get_db_connection();
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
 
-    // Verify song exists
-    $check = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id");
+    // Verify song exists and belongs to user
+    $delSql = song_deleted_sql('', $pdo);
+    $userSql = song_user_scope_sql($userId, '', $pdo);
+    $check = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id AND {$userSql} AND {$delSql}");
     $check->execute([':id' => $songId]);
-    $song = $check->fetch();
+    $song = $check->fetch(PDO::FETCH_ASSOC);
     if (!$song) {
-        return ['success' => false, 'error' => 'Song not found in catalogue.'];
-    }
-    if ($userId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$userId) {
-        return ['success' => false, 'error' => 'Unauthorized: You do not have permission to delete another user\'s song.'];
+        return ['success' => false, 'error' => 'Unauthorized: Song not found in your catalogue.'];
     }
 
-    // Check competition history
-    $checkHistory = $pdo->prepare("
-        SELECT 
-            (SELECT COUNT(*) FROM `ratings` r JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id1 AND r.`total` IS NOT NULL) AS completed_ratings_count,
-            (SELECT COUNT(*) FROM `round_results` rr JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id2) AS results_count
+    // SAFEGUARD 1: Check if song is currently on the Audition Shortlist
+    $checkShortlist = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM `song_discovery` 
+        WHERE `song_id` = :id 
+          AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))
+          AND `status` = 'shortlisted'
     ");
-    $checkHistory->execute([':id1' => $songId, ':id2' => $songId]);
-    $history = $checkHistory->fetch();
-
-    $ratingsCount = (int)($history['completed_ratings_count'] ?? 0);
-    $resultsCount = (int)($history['results_count'] ?? 0);
-
-    if ($ratingsCount > 0 || $resultsCount > 0) {
+    $checkShortlist->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+    $isShortlisted = ((int)$checkShortlist->fetchColumn() > 0);
+    if ($isShortlisted) {
         return [
             'success' => false,
             'blocked' => true,
-            'error'   => "Song #{$songId} (\"{$song['title']}\") cannot be permanently deleted because it has recorded tournament history ({$ratingsCount} official scorecard(s), {$resultsCount} round result(s)). To remove it without corrupting tournament history, mark it as Passed or Excluded instead."
+            'reason'  => 'shortlisted',
+            'error'   => "Cannot delete \"{$song['title']}\": This song is currently on your Audition Shortlist. Remove it from your shortlist first before deleting."
         ];
     }
 
+    // SAFEGUARD 2: Check if song has an active audition score
+    $checkActiveScore = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM `ratings` r 
+        JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` 
+        WHERE e.`song_id` = :id 
+          AND (r.`user_id` = :uid OR (r.`user_id` IS NULL AND :uid_g = 995))
+          AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)
+    ");
+    $checkActiveScore->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+    $hasActiveScore = ((int)$checkActiveScore->fetchColumn() > 0);
+    if ($hasActiveScore) {
+        return [
+            'success' => false,
+            'blocked' => true,
+            'reason'  => 'scored',
+            'error'   => "Cannot delete \"{$song['title']}\": This song has an active audition score. Please reset or clear its score first before deleting."
+        ];
+    }
+
+    // SAFEGUARD 3: Check if song is referenced by completed tournament history
+    $checkResults = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM `round_results` rr 
+        JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` 
+        WHERE e.`song_id` = :id 
+          AND (rr.`user_id` = :uid OR (rr.`user_id` IS NULL AND :uid_g = 995))
+    ");
+    $checkResults->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+    $hasTournamentHistory = ((int)$checkResults->fetchColumn() > 0);
+    if ($hasTournamentHistory) {
+        return [
+            'success' => false,
+            'blocked' => true,
+            'reason'  => 'tournament_history',
+            'error'   => "Cannot delete \"{$song['title']}\": This song is referenced in your completed tournament history and cannot be deleted without compromising tournament integrity."
+        ];
+    }
+
+    // Once cleaned up (unshortlisted, unscored, no historical tournament results): permanently delete
     try {
         $pdo->beginTransaction();
 
-        // Safe to remove any unrated afm_entries
-        $delEntry = $pdo->prepare("DELETE FROM `afm_entries` WHERE `song_id` = :id");
-        $delEntry->execute([':id' => $songId]);
+        // Remove auxiliary song assets and references
+        $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` = :id")->execute([':id' => $songId]);
+        $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` = :id")->execute([':id' => $songId]);
+        $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` = :id")->execute([':id' => $songId]);
+        $pdo->prepare("DELETE FROM `song_youtube_candidates` WHERE `song_id` = :id")->execute([':id' => $songId]);
+        try {
+            $pdo->prepare("DELETE FROM `user_song_lyrics` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))")
+                ->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+        } catch (\Throwable $e) {}
 
-        // Delete from songs (cascades to song_discovery, song_media, song_artwork, song_lyrics_ref, song_consolidation_audit)
-        $delSong = $pdo->prepare("DELETE FROM `songs` WHERE `song_id` = :id");
-        $delSong->execute([':id' => $songId]);
+        // Remove unscored competition entries & discovery records
+        $delEntry = $pdo->prepare("DELETE FROM `afm_entries` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))");
+        $delEntry->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+
+        $delDisc = $pdo->prepare("DELETE FROM `song_discovery` WHERE `song_id` = :id AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))");
+        $delDisc->execute([':id' => $songId, ':uid' => $userId, ':uid_g' => $userId]);
+
+        $delSong = $pdo->prepare("DELETE FROM `songs` WHERE `song_id` = :id AND `user_id` = :uid");
+        $delSong->execute([':id' => $songId, ':uid' => $userId]);
 
         $pdo->commit();
         clear_dashboard_stats_cache();
 
         return [
-            'success' => true,
-            'song_id' => $songId,
-            'title'   => $song['title'],
-            'message' => "Song #{$songId} (\"{$song['title']}\") was permanently deleted from the catalogue."
+            'success'  => true,
+            'song_id'  => $songId,
+            'title'    => $song['title'],
+            'archived' => false,
+            'message'  => "Song #{$songId} (\"{$song['title']}\") was permanently deleted from your catalogue."
         ];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -1050,19 +1462,23 @@ function delete_catalogue_song(int $songId, ?int $userId = null): array {
 /**
  * Permanently delete multiple catalogue songs with competition safeguards
  * 
- * Songs with existing tournament scorecards (ratings with total IS NOT NULL)
- * or recorded round results are strictly blocked from deletion to maintain
- * competition integrity. All other unrated tracks in the selection are deleted
- * within a single atomic database transaction.
+ * Songs currently on shortlist, with active audition scores, or with completed
+ * tournament results are blocked with descriptive explanations.
+ * Only clean, unshortlisted, unscored songs are permanently deleted.
  *
  * @param array $songIds List of song IDs to delete
- * @param int|null $userId Optional user ID to enforce ownership
+ * @param int|null $userId User ID to enforce ownership
  * @return array Result summary with deleted and blocked lists
  */
 function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): array {
     $pdo = get_db_connection();
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
 
-    // Sanitize and deduplicate IDs
     $cleanIds = [];
     foreach ($songIds as $id) {
         $intId = (int)$id;
@@ -1082,22 +1498,20 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
         ];
     }
 
-    // Fetch details for all requested songs
     $inClause = implode(',', array_fill(0, count($cleanIds), '?'));
-    $stmt = $pdo->prepare("SELECT song_id, title, artist, user_id FROM `songs` WHERE `song_id` IN ($inClause)");
+    $delSql = song_deleted_sql('', $pdo);
+    $stmt = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` IN ($inClause) AND {$delSql}");
     $stmt->execute($cleanIds);
     $foundSongs = [];
     $blockedSongs = [];
 
-    while ($row = $stmt->fetch()) {
-        if ($userId !== null && $row['user_id'] !== null && (int)$row['user_id'] !== (int)$userId) {
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        if ((int)$row['user_id'] !== (int)$userId) {
             $blockedSongs[] = [
-                'song_id'       => (int)$row['song_id'],
-                'title'         => $row['title'],
-                'artist'        => $row['artist'],
-                'ratings_count' => 0,
-                'results_count' => 0,
-                'reason'        => 'Unauthorized: Song belongs to another user'
+                'song_id' => (int)$row['song_id'],
+                'title'   => $row['title'],
+                'artist'  => $row['artist'],
+                'reason'  => 'Unauthorized: Song belongs to another user'
             ];
         } else {
             $foundSongs[(int)$row['song_id']] = $row;
@@ -1119,7 +1533,7 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
     if (empty($foundSongs)) {
         return [
             'success'       => false,
-            'error'         => 'None of the requested songs exist in the catalogue.',
+            'error'         => 'None of the requested songs exist in your active catalogue.',
             'deleted_count' => 0,
             'blocked_count' => 0,
             'deleted_ids'   => [],
@@ -1127,41 +1541,57 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
         ];
     }
 
-    // Check tournament history for each eligible song
-    $eligibleIds = [];
-
-    $historyStmt = $pdo->prepare("
+    $checkBlockedStmt = $pdo->prepare("
         SELECT 
-            (SELECT COUNT(*) FROM `ratings` r JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id1 AND r.`total` IS NOT NULL) AS completed_ratings_count,
-            (SELECT COUNT(*) FROM `round_results` rr JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id2) AS results_count
+            (SELECT COUNT(*) FROM `song_discovery` sd WHERE sd.`song_id` = :id1 AND (sd.`user_id` = :uid1 OR (sd.`user_id` IS NULL AND :uid_g1 = 995)) AND sd.`status` = 'shortlisted') AS is_shortlisted,
+            (SELECT COUNT(*) FROM `ratings` r JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id2 AND (r.`user_id` = :uid2 OR (r.`user_id` IS NULL AND :uid_g2 = 995)) AND (r.`total` IS NOT NULL OR r.`melody` IS NOT NULL OR r.`lyrics` IS NOT NULL OR r.`vocals` IS NOT NULL OR r.`emotion` IS NOT NULL OR r.`replayability` IS NOT NULL)) AS active_ratings_count,
+            (SELECT COUNT(*) FROM `round_results` rr JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id` WHERE e.`song_id` = :id3 AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g3 = 995))) AS results_count
     ");
 
-    foreach ($foundSongs as $id => $song) {
-        $historyStmt->execute([':id1' => $id, ':id2' => $id]);
-        $hist = $historyStmt->fetch();
-        $ratingsCount = (int)($hist['completed_ratings_count'] ?? 0);
-        $resultsCount = (int)($hist['results_count'] ?? 0);
+    $hardDeleteIds = [];
 
-        if ($ratingsCount > 0 || $resultsCount > 0) {
+    foreach ($foundSongs as $id => $song) {
+        $checkBlockedStmt->execute([
+            ':id1' => $id, ':uid1' => $userId, ':uid_g1' => $userId,
+            ':id2' => $id, ':uid2' => $userId, ':uid_g2' => $userId,
+            ':id3' => $id, ':uid3' => $userId, ':uid_g3' => $userId
+        ]);
+        $hist = $checkBlockedStmt->fetch(PDO::FETCH_ASSOC);
+        $isShortlisted = (int)($hist['is_shortlisted'] ?? 0);
+        $ratingsCount  = (int)($hist['active_ratings_count'] ?? 0);
+        $resultsCount  = (int)($hist['results_count'] ?? 0);
+
+        if ($isShortlisted > 0) {
             $blockedSongs[] = [
-                'song_id'       => $id,
-                'title'         => $song['title'],
-                'artist'        => $song['artist'],
-                'ratings_count' => $ratingsCount,
-                'results_count' => $resultsCount,
-                'reason'        => "Recorded tournament history ({$ratingsCount} scorecard(s), {$resultsCount} round result(s))"
+                'song_id' => $id,
+                'title'   => $song['title'],
+                'artist'  => $song['artist'],
+                'reason'  => 'Currently on Audition Shortlist. Remove from shortlist first.'
+            ];
+        } elseif ($ratingsCount > 0) {
+            $blockedSongs[] = [
+                'song_id' => $id,
+                'title'   => $song['title'],
+                'artist'  => $song['artist'],
+                'reason'  => 'Has active audition score. Reset score first.'
+            ];
+        } elseif ($resultsCount > 0) {
+            $blockedSongs[] = [
+                'song_id' => $id,
+                'title'   => $song['title'],
+                'artist'  => $song['artist'],
+                'reason'  => 'Referenced in completed tournament history.'
             ];
         } else {
-            $eligibleIds[] = $id;
+            $hardDeleteIds[] = $id;
         }
     }
 
-    // If no songs are eligible to be deleted
-    if (empty($eligibleIds)) {
+    if (empty($hardDeleteIds)) {
         return [
             'success'       => false,
             'blocked'       => true,
-            'error'         => 'All selected songs are protected or unauthorized.',
+            'error'         => 'All selected songs were blocked from deletion due to active shortlist, audition scores, or tournament history.',
             'deleted_count' => 0,
             'blocked_count' => count($blockedSongs),
             'deleted_ids'   => [],
@@ -1172,32 +1602,44 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
     try {
         $pdo->beginTransaction();
 
-        $delInClause = implode(',', array_fill(0, count($eligibleIds), '?'));
+        $delInClause = implode(',', array_fill(0, count($hardDeleteIds), '?'));
+        $params = array_merge([$userId], $hardDeleteIds);
+        $rawSongParams = $hardDeleteIds;
 
-        // Delete unrated entries
-        $delEntry = $pdo->prepare("DELETE FROM `afm_entries` WHERE `song_id` IN ($delInClause)");
-        $delEntry->execute($eligibleIds);
+        // Clean auxiliary tables
+        $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
+        $pdo->prepare("DELETE FROM `song_lyrics_ref` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
+        $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
+        $pdo->prepare("DELETE FROM `song_youtube_candidates` WHERE `song_id` IN ($delInClause)")->execute($rawSongParams);
+        try {
+            $pdo->prepare("DELETE FROM `user_song_lyrics` WHERE `user_id` = ? AND `song_id` IN ($delInClause)")->execute($params);
+        } catch (\Throwable $e) {}
 
-        // Delete from songs (cascades to song_discovery, song_media, song_artwork, song_lyrics_ref, song_consolidation_audit)
-        $delSong = $pdo->prepare("DELETE FROM `songs` WHERE `song_id` IN ($delInClause)");
-        $delSong->execute($eligibleIds);
+        $delEntries = $pdo->prepare("DELETE FROM `afm_entries` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
+        $delEntries->execute($params);
+
+        $delDisc = $pdo->prepare("DELETE FROM `song_discovery` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
+        $delDisc->execute($params);
+
+        $delSongs = $pdo->prepare("DELETE FROM `songs` WHERE `user_id` = ? AND `song_id` IN ($delInClause)");
+        $delSongs->execute($params);
 
         $pdo->commit();
         clear_dashboard_stats_cache();
 
-        $deletedCount = count($eligibleIds);
+        $deletedCount = count($hardDeleteIds);
         $blockedCount = count($blockedSongs);
 
-        $msg = "Successfully deleted {$deletedCount} song(s) from the catalogue.";
+        $msg = "Successfully deleted {$deletedCount} song(s) from your catalogue.";
         if ($blockedCount > 0) {
-            $msg .= " ({$blockedCount} song(s) were protected or unauthorized).";
+            $msg .= " ({$blockedCount} song(s) were blocked due to active shortlist, scores, or tournament history).";
         }
 
         return [
             'success'       => true,
             'deleted_count' => $deletedCount,
             'blocked_count' => $blockedCount,
-            'deleted_ids'   => $eligibleIds,
+            'deleted_ids'   => $hardDeleteIds,
             'blocked_songs' => $blockedSongs,
             'message'       => $msg
         ];
@@ -1205,18 +1647,9 @@ function delete_multiple_catalogue_songs(array $songIds, ?int $userId = null): a
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        return [
-            'success'       => false,
-            'error'         => 'Database error deleting songs: ' . $e->getMessage(),
-            'deleted_count' => 0,
-            'blocked_count' => count($blockedSongs),
-            'deleted_ids'   => [],
-            'blocked_songs' => $blockedSongs
-        ];
+        return ['success' => false, 'error' => 'Database error deleting songs: ' . $e->getMessage()];
     }
 }
-
-
 
 /**
  * Get all shortlisted songs with audition status
@@ -1227,16 +1660,29 @@ function get_shortlisted_songs(int $page = 1, int $perPage = 50, string $query =
     $perPage = max(10, min(200, $perPage));
     $offset = ($page - 1) * $perPage;
 
-    $whereClauses = ["sd.`status` = 'shortlisted'"];
-    $params = [];
-
-    if ($userId !== null) {
-        $whereClauses[] = "(s.`user_id` = :uid_scope OR (s.`user_id` IS NULL AND sd.`user_id` IS NULL))";
-        $whereClauses[] = "(sd.`user_id` = :uid_scope_sd OR sd.`user_id` IS NULL)";
-        $params[':uid_scope'] = $userId;
-        $params[':uid_scope_sd'] = $userId;
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return [
+            'songs'       => [],
+            'total'       => 0,
+            'page'        => 1,
+            'per_page'    => $perPage,
+            'total_pages' => 1
+        ];
     }
 
+    $delSqlS = song_deleted_sql('s', $pdo);
+    $userSqlS = song_user_scope_sql($userId, 's', $pdo);
+    $userSqlSd = ($userId === 995) ? "(sd.`user_id` = 995 OR sd.`user_id` IS NULL)" : "sd.`user_id` = " . (int)$userId;
+    $whereClauses = [
+        "sd.`status` = 'shortlisted'",
+        $userSqlSd,
+        $userSqlS,
+        $delSqlS,
+        "s.`is_consolidated` = 0"
+    ];
     $trimmed = trim($query);
     if ($trimmed !== '') {
         $whereClauses[] = "(s.`title` LIKE :q1 OR s.`artist` LIKE :q2)";
@@ -1254,14 +1700,15 @@ function get_shortlisted_songs(int $page = 1, int $perPage = 50, string $query =
 
     $whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
 
-    $entryJoinSql = $userId !== null 
-        ? "LEFT JOIN `afm_entries` e ON s.`song_id` = e.`song_id` AND (e.`user_id` = :uid_entry OR e.`user_id` IS NULL)"
-        : "LEFT JOIN `afm_entries` e ON s.`song_id` = e.`song_id`";
-    $ratingJoinSql = $userId !== null
-        ? "LEFT JOIN `ratings` r1 ON e.`entry_id` = r1.`entry_id` AND r1.`round_id` = 1 AND (r1.`user_id` = :uid_rating OR r1.`user_id` IS NULL)"
-        : "LEFT JOIN `ratings` r1 ON e.`entry_id` = r1.`entry_id` AND r1.`round_id` = 1";
+    $entryJoinSql = ($userId === 995)
+        ? "LEFT JOIN `afm_entries` e ON s.`song_id` = e.`song_id` AND (e.`user_id` = 995 OR e.`user_id` IS NULL)"
+        : "LEFT JOIN `afm_entries` e ON s.`song_id` = e.`song_id` AND e.`user_id` = :uid_entry";
+    $ratingJoinSql = ($userId === 995)
+        ? "LEFT JOIN `ratings` r1 ON e.`entry_id` = r1.`entry_id` AND r1.`round_id` = 1 AND (r1.`user_id` = 995 OR r1.`user_id` IS NULL)"
+        : "LEFT JOIN `ratings` r1 ON e.`entry_id` = r1.`entry_id` AND r1.`round_id` = 1 AND r1.`user_id` = :uid_rating";
 
-    if ($userId !== null) {
+    $params = [];
+    if ($userId !== 995) {
         $params[':uid_entry'] = $userId;
         $params[':uid_rating'] = $userId;
     }
@@ -1306,7 +1753,7 @@ function get_shortlisted_songs(int $page = 1, int $perPage = 50, string $query =
         LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
         LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
         {$whereSql}
-        ORDER BY s.`title` ASC
+        ORDER BY sd.`reviewed_at` DESC, s.`song_id` ASC
         LIMIT :limit OFFSET :offset
     ";
 
@@ -1317,7 +1764,7 @@ function get_shortlisted_songs(int $page = 1, int $perPage = 50, string $query =
     $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
-    $songs = $stmt->fetchAll();
+    $songs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $totalPages = (int)ceil($total / $perPage);
 
@@ -1361,10 +1808,12 @@ function save_scorecard_rating(
         return ['success' => false, 'error' => 'Entry not found.'];
     }
     if ($userId !== null) {
-        if ($entry['entry_user_id'] !== null && (int)$entry['entry_user_id'] !== (int)$userId) {
+        $entryOwner = $entry['entry_user_id'] !== null ? (int)$entry['entry_user_id'] : 995;
+        $songOwner = $entry['song_user_id'] !== null ? (int)$entry['song_user_id'] : 995;
+        if ($entryOwner !== (int)$userId) {
             return ['success' => false, 'error' => 'Unauthorized: Cannot score another user\'s entry.'];
         }
-        if ($entry['song_user_id'] !== null && (int)$entry['song_user_id'] !== (int)$userId) {
+        if ($songOwner !== (int)$userId) {
             return ['success' => false, 'error' => 'Unauthorized: Cannot score another user\'s song.'];
         }
     }
@@ -1470,6 +1919,103 @@ function save_scorecard_rating(
 }
 
 /**
+ * Reset / unscore a scorecard rating for an entry in a tournament round
+ * 
+ * Removes active scores and returns the scorecard to genuinely unscored state.
+ * Strictly verifies ownership and ensures completed tournament history is protected.
+ *
+ * @param int $entryId The afm_entries ID
+ * @param int $roundId The tournament round ID
+ * @param int|null $userId User ID for strict isolation
+ * @return array Success status and message
+ */
+function reset_scorecard_rating(int $entryId, int $roundId, ?int $userId = null): array {
+    $pdo = get_db_connection();
+
+    if ($userId === null && is_authenticated()) {
+        $userId = get_current_user_id();
+    }
+    if ($userId === null) {
+        return ['success' => false, 'error' => 'Authentication required.'];
+    }
+
+    // Verify entry exists and check ownership
+    $entryStmt = $pdo->prepare("
+        SELECT e.`entry_id`, e.`song_id`, e.`user_id` AS `entry_user_id`, s.`title`, s.`user_id` AS `song_user_id`
+        FROM `afm_entries` e
+        JOIN `songs` s ON e.`song_id` = s.`song_id`
+        WHERE e.`entry_id` = :id
+    ");
+    $entryStmt->execute([':id' => $entryId]);
+    $entry = $entryStmt->fetch();
+    if (!$entry) {
+        return ['success' => false, 'error' => 'Entry not found.'];
+    }
+
+    $entryOwner = $entry['entry_user_id'] !== null ? (int)$entry['entry_user_id'] : 995;
+    $songOwner  = $entry['song_user_id'] !== null ? (int)$entry['song_user_id'] : 995;
+    if ($entryOwner !== (int)$userId && $songOwner !== (int)$userId) {
+        return ['success' => false, 'error' => 'Unauthorized: Cannot reset score for another user\'s entry.'];
+    }
+
+    // SAFEGUARD: Check if this entry and round have been finalized into completed round_results
+    $historyCheck = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM `round_results` 
+        WHERE `entry_id` = :eid 
+          AND `round_id` = :rid 
+          AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))
+    ");
+    $historyCheck->execute([':eid' => $entryId, ':rid' => $roundId, ':uid' => $userId, ':uid_g' => $userId]);
+    $isFinalized = ((int)$historyCheck->fetchColumn() > 0);
+
+    if ($isFinalized) {
+        return [
+            'success' => false,
+            'blocked' => true,
+            'error'   => "Cannot reset score: Stage results for \"{$entry['title']}\" have already been finalized in your tournament history. Resetting would compromise historical tournament integrity."
+        ];
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $delRating = $pdo->prepare("
+            DELETE FROM `ratings` 
+            WHERE `entry_id` = :eid 
+              AND `round_id` = :rid 
+              AND (`user_id` = :uid OR (`user_id` IS NULL AND :uid_g = 995))
+        ");
+        $delRating->execute([
+            ':eid'   => $entryId, 
+            ':rid'   => $roundId, 
+            ':uid'   => $userId, 
+            ':uid_g' => $userId
+        ]);
+
+        $pdo->commit();
+        clear_dashboard_stats_cache();
+
+        return [
+            'success'     => true,
+            'entry_id'    => $entryId,
+            'round_id'    => $roundId,
+            'song_id'     => (int)$entry['song_id'],
+            'title'       => $entry['title'],
+            'is_complete' => false,
+            'total'       => null,
+            'message'     => "Scorecard for \"{$entry['title']}\" has been reset to an unscored state."
+        ];
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("AFM2 reset_scorecard_rating error: " . $e->getMessage());
+        return ['success' => false, 'error' => 'Database error resetting scorecard rating: ' . $e->getMessage()];
+    }
+}
+
+/**
  * Get tournament round leaderboard (completed scores only, with tie-break ranking)
  */
 function get_round_rankings(int $roundId, ?int $userId = null): array {
@@ -1492,55 +2038,92 @@ function get_round_rankings(int $roundId, ?int $userId = null): array {
     // 5. Vocals (0-10)
     // 6. Lyrics (0-10)
     // 7. Entry ID ASC (stable tie-breaker)
-    $stmt = $pdo->prepare("
-        SELECT 
-            e.`entry_id`,
-            s.`song_id`,
-            s.`title`,
-            COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
-            r.`rating_id`,
-            r.`round_id`,
-            r.`melody`,
-            r.`lyrics`,
-            r.`vocals`,
-            r.`emotion`,
-            r.`replayability`,
-            r.`total`,
-            rr.`result`,
-            rr.`rank_position`,
-            rr.`reason`
-        FROM `ratings` r
-        JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id`
-        JOIN `songs` s ON e.`song_id` = s.`song_id`
-        LEFT JOIN `round_results` rr ON e.`entry_id` = rr.`entry_id` AND rr.`round_id` = :r_res
-             AND (:uid_rr IS NULL OR rr.`user_id` = :uid_rr2 OR rr.`user_id` IS NULL)
-        WHERE r.`round_id` = :r_id
-          AND r.`total` IS NOT NULL
-          AND (:uid_filter IS NULL OR (
-                (r.`user_id` = :uid_r OR (r.`user_id` IS NULL AND (e.`user_id` = :uid_e OR e.`user_id` IS NULL)))
-                AND (e.`user_id` = :uid_e2 OR e.`user_id` IS NULL)
-                AND (s.`user_id` = :uid_s OR s.`user_id` IS NULL)
-          ))
-        ORDER BY 
-            r.`total` DESC, 
-            r.`emotion` DESC, 
-            r.`replayability` DESC, 
-            r.`melody` DESC, 
-            r.`vocals` DESC, 
-            r.`lyrics` DESC, 
-            e.`entry_id` ASC
-    ");
-    $stmt->execute([
-        ':r_id'       => $roundId, 
-        ':r_res'      => $roundId,
-        ':uid_rr'     => $userId,
-        ':uid_rr2'    => $userId,
-        ':uid_filter' => $userId,
-        ':uid_r'      => $userId,
-        ':uid_e'      => $userId,
-        ':uid_e2'     => $userId,
-        ':uid_s'      => $userId
-    ]);
+    if ($userId !== null) {
+        $scopeR = song_user_scope_sql($userId, 'r', $pdo);
+        $scopeE = song_user_scope_sql($userId, 'e', $pdo);
+        $scopeS = song_user_scope_sql($userId, 's', $pdo);
+        $scopeRr = ($userId === 995) 
+            ? "AND (rr.`user_id` = 995 OR rr.`user_id` IS NULL)" 
+            : "AND rr.`user_id` = " . (int)$userId;
+
+        $stmt = $pdo->prepare("
+            SELECT 
+                e.`entry_id`,
+                s.`song_id`,
+                s.`title`,
+                COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
+                r.`rating_id`,
+                r.`round_id`,
+                r.`melody`,
+                r.`lyrics`,
+                r.`vocals`,
+                r.`emotion`,
+                r.`replayability`,
+                r.`total`,
+                rr.`result`,
+                rr.`rank_position`,
+                rr.`reason`
+            FROM `ratings` r
+            JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id`
+            JOIN `songs` s ON e.`song_id` = s.`song_id`
+            LEFT JOIN `round_results` rr ON e.`entry_id` = rr.`entry_id` AND rr.`round_id` = :r_res
+                 {$scopeRr}
+            WHERE r.`round_id` = :r_id
+              AND r.`total` IS NOT NULL
+              AND {$scopeR}
+              AND {$scopeE}
+              AND {$scopeS}
+            ORDER BY 
+                r.`total` DESC, 
+                r.`emotion` DESC, 
+                r.`replayability` DESC, 
+                r.`melody` DESC, 
+                r.`vocals` DESC, 
+                r.`lyrics` DESC, 
+                e.`entry_id` ASC
+        ");
+        $stmt->execute([
+            ':r_id'   => $roundId, 
+            ':r_res'  => $roundId
+        ]);
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT 
+                e.`entry_id`,
+                s.`song_id`,
+                s.`title`,
+                COALESCE(s.`artist`, 'Unknown Artist') AS `artist`,
+                r.`rating_id`,
+                r.`round_id`,
+                r.`melody`,
+                r.`lyrics`,
+                r.`vocals`,
+                r.`emotion`,
+                r.`replayability`,
+                r.`total`,
+                rr.`result`,
+                rr.`rank_position`,
+                rr.`reason`
+            FROM `ratings` r
+            JOIN `afm_entries` e ON r.`entry_id` = e.`entry_id`
+            JOIN `songs` s ON e.`song_id` = s.`song_id`
+            LEFT JOIN `round_results` rr ON e.`entry_id` = rr.`entry_id` AND rr.`round_id` = :r_res
+            WHERE r.`round_id` = :r_id
+              AND r.`total` IS NOT NULL
+            ORDER BY 
+                r.`total` DESC, 
+                r.`emotion` DESC, 
+                r.`replayability` DESC, 
+                r.`melody` DESC, 
+                r.`vocals` DESC, 
+                r.`lyrics` DESC, 
+                e.`entry_id` ASC
+        ");
+        $stmt->execute([
+            ':r_id'  => $roundId, 
+            ':r_res' => $roundId
+        ]);
+    }
     $rows = $stmt->fetchAll();
 
     // Compute rank positions and detect ties at cutoff
@@ -1851,10 +2434,19 @@ function get_historical_results(?int $userId = null): array {
 
     $whereSql = "";
     $params = [];
+    $ratingJoinCondition = "";
     if ($userId !== null) {
-        $whereSql = "WHERE (rr.`user_id` = :uid OR (rr.`user_id` IS NULL AND (e.`user_id` = :uid_e OR e.`user_id` IS NULL)))";
-        $params[':uid'] = $userId;
-        $params[':uid_e'] = $userId;
+        if ($userId === 995) {
+            $whereSql = "WHERE (rr.`user_id` = 995 OR rr.`user_id` IS NULL) AND (e.`user_id` = 995 OR e.`user_id` IS NULL) AND (s.`user_id` = 995 OR s.`user_id` IS NULL)";
+            $ratingJoinCondition = "AND (rt.`user_id` = 995 OR rt.`user_id` IS NULL)";
+        } else {
+            $whereSql = "WHERE rr.`user_id` = :uid AND e.`user_id` = :uid_e AND s.`user_id` = :uid_s";
+            $params[':uid'] = $userId;
+            $params[':uid_e'] = $userId;
+            $params[':uid_s'] = $userId;
+            $ratingJoinCondition = "AND rt.`user_id` = :uid_rt";
+            $params[':uid_rt'] = $userId;
+        }
     }
 
     $stmt = $pdo->prepare("
@@ -1883,14 +2475,11 @@ function get_historical_results(?int $userId = null): array {
         JOIN `rounds` r ON rr.`round_id` = r.`round_id`
         JOIN `afm_entries` e ON rr.`entry_id` = e.`entry_id`
         JOIN `songs` s ON e.`song_id` = s.`song_id`
-        LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = r.`round_id`
-             AND (:uid_rt IS NULL OR rt.`user_id` = :uid_rt2 OR rt.`user_id` IS NULL)
+        LEFT JOIN `ratings` rt ON e.`entry_id` = rt.`entry_id` AND rt.`round_id` = r.`round_id` {$ratingJoinCondition}
         {$whereSql}
         ORDER BY r.`sequence_no` ASC, rr.`rank_position` ASC
     ");
 
-    $params[':uid_rt'] = $userId;
-    $params[':uid_rt2'] = $userId;
     $stmt->execute($params);
 
     $resultsByRound = [];
@@ -1924,23 +2513,38 @@ function get_tournament_rounds(?int $userId = null): array {
                 r.`round_id`, 
                 r.`round_name`, 
                 r.`sequence_no`, 
-                COALESCE(urp.`status`, r.`status`) AS `status`, 
+                CASE 
+                    WHEN urp.`status` IS NOT NULL THEN urp.`status`
+                    WHEN :uid_g1 = 995 THEN r.`status`
+                    WHEN r.`sequence_no` = 1 THEN 'in_progress'
+                    ELSE 'upcoming'
+                END AS `status`, 
                 r.`target_count`,
-                COALESCE(urp.`completed_at`, r.`completed_at`) AS `completed_at`,
-                (SELECT COUNT(*) FROM `ratings` rt WHERE rt.`round_id` = r.`round_id` AND rt.`total` IS NOT NULL AND (rt.`user_id` = :uid1 OR rt.`user_id` IS NULL)) AS completed_scores_count,
-                (SELECT COUNT(*) FROM `ratings` rt WHERE rt.`round_id` = r.`round_id` AND rt.`total` IS NULL AND (rt.`user_id` = :uid2 OR rt.`user_id` IS NULL)) AS incomplete_scores_count,
-                (SELECT COUNT(*) FROM `round_results` rr WHERE rr.`round_id` = r.`round_id` AND rr.`result` IN ('qualified', 'winner') AND (rr.`user_id` = :uid3 OR rr.`user_id` IS NULL)) AS qualified_count,
-                (SELECT COUNT(*) FROM `round_results` rr WHERE rr.`round_id` = r.`round_id` AND rr.`result` = 'eliminated' AND (rr.`user_id` = :uid4 OR rr.`user_id` IS NULL)) AS eliminated_count
+                CASE 
+                    WHEN urp.`status` IS NOT NULL THEN urp.`completed_at`
+                    WHEN :uid_g2 = 995 THEN r.`completed_at`
+                    ELSE NULL
+                END AS `completed_at`,
+                (SELECT COUNT(*) FROM `ratings` rt WHERE rt.`round_id` = r.`round_id` AND rt.`total` IS NOT NULL AND (rt.`user_id` = :uid1 OR (rt.`user_id` IS NULL AND :uid_g3 = 995))) AS completed_scores_count,
+                (SELECT COUNT(*) FROM `ratings` rt WHERE rt.`round_id` = r.`round_id` AND rt.`total` IS NULL AND (rt.`user_id` = :uid2 OR (rt.`user_id` IS NULL AND :uid_g4 = 995))) AS incomplete_scores_count,
+                (SELECT COUNT(*) FROM `round_results` rr WHERE rr.`round_id` = r.`round_id` AND rr.`result` IN ('qualified', 'winner') AND (rr.`user_id` = :uid3 OR (rr.`user_id` IS NULL AND :uid_g5 = 995))) AS qualified_count,
+                (SELECT COUNT(*) FROM `round_results` rr WHERE rr.`round_id` = r.`round_id` AND rr.`result` = 'eliminated' AND (rr.`user_id` = :uid4 OR (rr.`user_id` IS NULL AND :uid_g6 = 995))) AS eliminated_count
             FROM `rounds` r
             LEFT JOIN `user_round_progress` urp ON r.`round_id` = urp.`round_id` AND urp.`user_id` = :uid0
             ORDER BY r.`sequence_no` ASC
         ");
         $stmt->execute([
-            ':uid0' => $userId,
-            ':uid1' => $userId,
-            ':uid2' => $userId,
-            ':uid3' => $userId,
-            ':uid4' => $userId
+            ':uid0'   => $userId,
+            ':uid_g1' => $userId,
+            ':uid_g2' => $userId,
+            ':uid1'   => $userId,
+            ':uid_g3' => $userId,
+            ':uid2'   => $userId,
+            ':uid_g4' => $userId,
+            ':uid3'   => $userId,
+            ':uid_g5' => $userId,
+            ':uid4'   => $userId,
+            ':uid_g6' => $userId
         ]);
         return $stmt->fetchAll();
     }
@@ -1963,14 +2567,30 @@ function get_tournament_rounds(?int $userId = null): array {
 }
 
 /**
- * Get a single tournament round by ID
+ * Get a single tournament round by ID, optionally scoped to a user's progression state.
  */
-function get_round_by_id(int $roundId): ?array {
+function get_round_by_id(int $roundId, ?int $userId = null): ?array {
     $pdo = get_db_connection();
     $stmt = $pdo->prepare("SELECT * FROM `rounds` WHERE `round_id` = :id");
     $stmt->execute([':id' => $roundId]);
     $res = $stmt->fetch();
-    return $res ?: null;
+    if (!$res) {
+        return null;
+    }
+    if ($userId !== null) {
+        $urpStmt = $pdo->prepare("SELECT `status`, `completed_at` FROM `user_round_progress` WHERE `user_id` = :uid AND `round_id` = :rid");
+        $urpStmt->execute([':uid' => $userId, ':rid' => $roundId]);
+        $urp = $urpStmt->fetch();
+        if ($urp) {
+            $res['status'] = $urp['status'];
+            $res['completed_at'] = $urp['completed_at'];
+        } else {
+            // Uninitialized progress defaults: Stage 1 in_progress, others upcoming
+            $res['status'] = ((int)$res['sequence_no'] === 1) ? 'in_progress' : 'upcoming';
+            $res['completed_at'] = null;
+        }
+    }
+    return $res;
 }
 
 /**
@@ -1992,6 +2612,29 @@ function get_active_round(?int $userId = null): array {
         if ($activeUserRound) {
             return $activeUserRound;
         }
+
+        if ($userId === 995) {
+            $active = $pdo->query("
+                SELECT * FROM `rounds` 
+                WHERE `status` = 'in_progress' 
+                ORDER BY `sequence_no` ASC 
+                LIMIT 1
+            ")->fetch();
+            if ($active) {
+                return $active;
+            }
+        }
+
+        // For any other user without in_progress user_round_progress: default to Round 1
+        $first = $pdo->query("
+            SELECT * FROM `rounds` 
+            ORDER BY `sequence_no` ASC 
+            LIMIT 1
+        ")->fetch();
+        if ($first) {
+            $first['status'] = 'in_progress';
+            return $first;
+        }
     }
 
     $active = $pdo->query("
@@ -2008,6 +2651,7 @@ function get_active_round(?int $userId = null): array {
             LIMIT 1
         ")->fetch();
     }
+
     return $active;
 }
 
@@ -2045,55 +2689,70 @@ function get_audition_entries(
     $fromJoinSql = "";
     $baseWhere = [];
     $baseParams = [
-        ':curr_round_id' => $roundId,
-        ':uid_r'         => $userId,
-        ':uid_r2'        => $userId
+        ':curr_round_id' => $roundId
     ];
 
+    $delSqlS = song_deleted_sql('s', $pdo);
+    $baseWhere[] = $delSqlS;
+    $baseWhere[] = "s.`is_consolidated` = 0";
+
     if ($userId !== null) {
-        $baseWhere[] = "(e.`user_id` = :uid_scope OR (e.`user_id` IS NULL AND (s.`user_id` = :uid_scope_s OR s.`user_id` IS NULL)))";
-        $baseWhere[] = "(s.`user_id` = :uid_scope_s2 OR s.`user_id` IS NULL)";
-        $baseParams[':uid_scope'] = $userId;
-        $baseParams[':uid_scope_s'] = $userId;
-        $baseParams[':uid_scope_s2'] = $userId;
+        $userScopeE = song_user_scope_sql($userId, 'e', $pdo);
+        $userScopeS = song_user_scope_sql($userId, 's', $pdo);
+        $baseWhere[] = $userScopeE;
+        $baseWhere[] = $userScopeS;
     }
 
     if ($seq === 1) {
+        $sdUserJoin = ($userId !== null) 
+            ? (($userId === 995) ? "AND (sd.`user_id` = 995 OR sd.`user_id` IS NULL)" : "AND sd.`user_id` = :uid_sd")
+            : "";
+        $rUserJoin = ($userId !== null) 
+            ? (($userId === 995) ? "AND (r.`user_id` = 995 OR r.`user_id` IS NULL)" : "AND r.`user_id` = :uid_r")
+            : "";
         $fromJoinSql = "
             FROM `afm_entries` e
             JOIN `songs` s ON e.`song_id` = s.`song_id`
-            JOIN `song_discovery` sd ON s.`song_id` = sd.`song_id` AND sd.`status` = 'shortlisted'
-                 AND (:uid_sd IS NULL OR sd.`user_id` = :uid_sd2 OR sd.`user_id` IS NULL)
-            LEFT JOIN `ratings` r ON e.`entry_id` = r.`entry_id` AND r.`round_id` = :curr_round_id
-                 AND (:uid_r IS NULL OR r.`user_id` = :uid_r2 OR r.`user_id` IS NULL)
+            JOIN `song_discovery` sd ON s.`song_id` = sd.`song_id` AND sd.`status` = 'shortlisted' {$sdUserJoin}
+            LEFT JOIN `ratings` r ON e.`entry_id` = r.`entry_id` AND r.`round_id` = :curr_round_id {$rUserJoin}
             LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
             LEFT JOIN `song_lyrics_ref` slr ON s.`song_id` = slr.`song_id`
             LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
         ";
-        $baseParams[':uid_sd'] = $userId;
-        $baseParams[':uid_sd2'] = $userId;
+        if ($userId !== null && $userId !== 995) {
+            $baseParams[':uid_sd'] = $userId;
+            $baseParams[':uid_r'] = $userId;
+        }
         $baseWhere[] = "e.`status` != 'excluded'";
     } else {
         $prevRoundStmt = $pdo->prepare("SELECT `round_id` FROM `rounds` WHERE `sequence_no` = :prev_seq");
         $prevRoundStmt->execute([':prev_seq' => $seq - 1]);
         $prevRoundId = (int)$prevRoundStmt->fetchColumn();
 
+        $prevRrUserJoin = ($userId !== null) 
+            ? (($userId === 995) ? "AND (prev_rr.`user_id` = 995 OR prev_rr.`user_id` IS NULL)" : "AND prev_rr.`user_id` = :uid_prev_rr")
+            : "";
+        $rUserJoin = ($userId !== null) 
+            ? (($userId === 995) ? "AND (r.`user_id` = 995 OR r.`user_id` IS NULL)" : "AND r.`user_id` = :uid_r")
+            : "";
         $fromJoinSql = "
             FROM `afm_entries` e
             JOIN `round_results` prev_rr ON e.`entry_id` = prev_rr.`entry_id` 
                  AND prev_rr.`round_id` = :prev_round_id 
                  AND prev_rr.`result` IN ('qualified', 'winner')
-                 AND (:uid_prev_rr IS NULL OR prev_rr.`user_id` = :uid_prev_rr2 OR prev_rr.`user_id` IS NULL)
+                 {$prevRrUserJoin}
             JOIN `songs` s ON e.`song_id` = s.`song_id`
             LEFT JOIN `ratings` r ON e.`entry_id` = r.`entry_id` AND r.`round_id` = :curr_round_id
-                 AND (:uid_r IS NULL OR r.`user_id` = :uid_r2 OR r.`user_id` IS NULL)
+                 {$rUserJoin}
             LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
             LEFT JOIN `song_lyrics_ref` slr ON s.`song_id` = slr.`song_id`
             LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
         ";
         $baseParams[':prev_round_id'] = $prevRoundId;
-        $baseParams[':uid_prev_rr'] = $userId;
-        $baseParams[':uid_prev_rr2'] = $userId;
+        if ($userId !== null && $userId !== 995) {
+            $baseParams[':uid_prev_rr'] = $userId;
+            $baseParams[':uid_r'] = $userId;
+        }
     }
 
     $trimmed = trim($query);
@@ -2375,5 +3034,23 @@ function render_accessible_pagination(
     <?php
     return ob_get_clean();
 }
+
+/**
+ * Format a UTC database timestamp in Asia/Kolkata local time.
+ */
+if (!function_exists('format_local_timestamp')) {
+    function format_local_timestamp(?string $timestamp, string $format = 'M d, Y H:i'): string {
+        if (empty($timestamp)) {
+            return 'Never';
+        }
+        try {
+            $dt = new DateTimeImmutable($timestamp, new DateTimeZone('UTC'));
+            return $dt->setTimezone(new DateTimeZone('Asia/Kolkata'))->format($format);
+        } catch (\Throwable $e) {
+            return htmlspecialchars((string)$timestamp);
+        }
+    }
+}
+
 
 

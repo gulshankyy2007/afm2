@@ -13,7 +13,11 @@ require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 require_once dirname(__DIR__) . '/includes/artwork_helper.php';
 
-require_auth();
+// If visitor is unauthenticated, serve the public landing page!
+if (!is_authenticated()) {
+    require __DIR__ . '/landing.php';
+    exit;
+}
 
 $stats = get_dashboard_stats();
 $pageTitle = 'Journal — AFM#2 Annual Musical Finale 2026';
@@ -105,7 +109,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 <span class="stream-beacon">((●))</span>
                                 <span class="stream-title">Featured Shortlist Contender</span>
                             </div>
-                            <?php if ($featuredSong['total'] !== null): ?>
+                            <?php if (isset($featuredSong['total']) && $featuredSong['total'] !== null): ?>
                                 <span class="total-score-badge complete">
                                     <?= (int)$featuredSong['total'] ?> / 50
                                 </span>
@@ -160,7 +164,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <a href="tournament.php" class="journal-section-link">View Full Board &rarr;</a>
         </div>
 
-        <div class="stages-timeline">
+        <div class="stages-timeline milestones-timeline">
             <?php foreach ($stats['rounds'] as $r): 
                 $nodeClass = '';
                 if ($r['status'] === 'completed') {
@@ -216,7 +220,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                          class="shelf-thumb" 
                          loading="lazy"
                          onerror="this.onerror=null; this.src='assets/img/artwork-fallback.svg';">
-                    <?php if ($item['total'] !== null): ?>
+                    <?php if (isset($item['total']) && $item['total'] !== null): ?>
                         <span class="shelf-badge badge-score"><?= (int)$item['total'] ?>/50</span>
                     <?php else: ?>
                         <span class="shelf-badge badge-pending">Audition</span>

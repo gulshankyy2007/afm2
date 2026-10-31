@@ -401,6 +401,16 @@ function establish_authenticated_session(int $userId): array {
         // Clear failed rate limit attempts
         clear_rate_limits($user['username']);
 
+        // Ensure user starter catalogue is initialized
+        require_once __DIR__ . '/db_helper.php';
+        if (function_exists('initialize_user_starter_catalogue')) {
+            try {
+                initialize_user_starter_catalogue((int)$user['user_id'], 1, $pdo);
+            } catch (Exception $e) {
+                error_log("AFM2 initialize_user_starter_catalogue warning: " . $e->getMessage());
+            }
+        }
+
         return [
             'success'  => true,
             'user_id'  => (int)$user['user_id'],
