@@ -223,12 +223,12 @@ function send_security_headers(): void {
 
     // 5. Content Security Policy (narrowly scoped to legitimate AFM#2 requirements and hosting compatibility)
     $csp = "default-src 'self'; "
-        . "script-src 'self' 'unsafe-inline'; "
+        . "script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; "
         . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         . "font-src 'self' https://fonts.gstatic.com data:; "
         . "img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://yt3.ggpht.com https://images.unsplash.com https://coverartarchive.org https://archive.org https://*.archive.org; "
         . "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
-        . "connect-src 'self'; "
+        . "connect-src 'self' https://www.youtube.com; "
         . "object-src 'none'; "
         . "base-uri 'self'; "
         . "form-action 'self'; "

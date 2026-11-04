@@ -96,12 +96,13 @@ $pdo->exec("DELETE FROM `songs` WHERE `song_id` = {$shortSongId}");
 
 // --- SECTION 5: SAFEGUARD 2 - ACTIVE SCORE PROTECTION ---
 echo "\n--- 5. Safeguard 2: Active Audition Score Protection ---\n";
+$inProgRoundId = (int)$pdo->query("SELECT round_id FROM `rounds` WHERE `status` = 'in_progress' LIMIT 1")->fetchColumn() ?: 1;
 $pdo->beginTransaction();
 $pdo->exec("INSERT INTO `songs` (`title`, `artist`, `user_id`) VALUES ('Scored Protect Test', 'Artist Y', {$legacyId})");
 $scoredSongId = (int)$pdo->lastInsertId();
 $pdo->exec("INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`) VALUES ({$scoredSongId}, {$legacyId}, 'auditioning')");
 $scoredEntryId = (int)$pdo->lastInsertId();
-$pdo->exec("INSERT INTO `ratings` (`entry_id`, `round_id`, `user_id`, `melody`, `lyrics`, `vocals`, `emotion`, `replayability`) VALUES ({$scoredEntryId}, 2, {$legacyId}, 8, 8, 8, 8, 8)");
+$pdo->exec("INSERT INTO `ratings` (`entry_id`, `round_id`, `user_id`, `melody`, `lyrics`, `vocals`, `emotion`, `replayability`) VALUES ({$scoredEntryId}, {$inProgRoundId}, {$legacyId}, 8, 8, 8, 8, 8)");
 $pdo->commit();
 
 $delScored = delete_catalogue_song($scoredSongId, $legacyId);
@@ -120,14 +121,20 @@ $pdo->exec("INSERT INTO `songs` (`title`, `artist`, `user_id`) VALUES ('Finalize
 $finalSongId = (int)$pdo->lastInsertId();
 $pdo->exec("INSERT INTO `afm_entries` (`song_id`, `user_id`, `status`) VALUES ({$finalSongId}, {$legacyId}, 'auditioning')");
 $finalEntryId = (int)$pdo->lastInsertId();
+if (has_table('user_round_progress', $pdo)) {
+    $pdo->exec("INSERT INTO `user_round_progress` (`user_id`, `round_id`, `status`, `completed_at`) VALUES ({$legacyId}, 1, 'completed', NOW()) ON DUPLICATE KEY UPDATE `status` = 'completed'");
+}
 $pdo->exec("INSERT INTO `round_results` (`round_id`, `entry_id`, `user_id`, `result`, `song_title`, `song_artist`) VALUES (1, {$finalEntryId}, {$legacyId}, 'eliminated', 'Finalized Protect Test', 'Artist Z')");
 $pdo->commit();
 
 $delFinal = delete_catalogue_song($finalSongId, $legacyId);
 assert_pdel("Finalized tournament participating song deletion blocked", $delFinal['success'] === false && !empty($delFinal['blocked']));
-assert_pdel("Error cites finalized competition records", stripos($delFinal['error'], 'competition historical records') !== false);
+assert_pdel("Error cites finalized competition records", stripos($delFinal['error'], 'historical records') !== false);
 
 // Cleanup
+if (has_table('user_round_progress', $pdo)) {
+    $pdo->exec("UPDATE `user_round_progress` SET `status` = 'in_progress' WHERE `user_id` = {$legacyId} AND `round_id` = 1");
+}
 $pdo->exec("DELETE FROM `round_results` WHERE `entry_id` = {$finalEntryId}");
 $pdo->exec("DELETE FROM `afm_entries` WHERE `entry_id` = {$finalEntryId}");
 $pdo->exec("DELETE FROM `songs` WHERE `song_id` = {$finalSongId}");

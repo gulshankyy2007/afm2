@@ -471,11 +471,22 @@ assert_test("Path B (Live results.php export): All exported rows free of unescap
 // =====================================================================
 echo "\n12. Mandatory Catalogue Preservation Invariants\n";
 
-$catalogueCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-assert_test("Catalogue count strictly intact at 2,411 songs", $catalogueCount === 2411, "Found: {$catalogueCount}");
+$hasMaster = (bool)$pdo->query("SHOW TABLES LIKE 'master_starter_songs'")->fetchColumn();
+if ($hasMaster) {
+    $catalogueCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    assert_test("Catalogue count strictly intact at 2,411 songs", $catalogueCount === 2411, "Found: {$catalogueCount}");
 
-$nullArtistSongs = $pdo->query("SELECT song_id FROM `songs` WHERE artist IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
-assert_test("NULL-artist songs strictly preserved [1546, 2015, 2196]", $nullArtistSongs === [1546, 2015, 2196], "Found: " . json_encode($nullArtistSongs));
+    $nullArtistSongs = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id` ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $nullArtistIds = array_map('intval', $nullArtistSongs);
+    assert_test("NULL-artist songs strictly preserved [1546, 2015, 2196]", $nullArtistIds === [1546, 2015, 2196], "Found: " . json_encode($nullArtistIds));
+} else {
+    $catalogueCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    assert_test("Catalogue count strictly intact at 2,411 songs", $catalogueCount === 2411, "Found: {$catalogueCount}");
+
+    $nullArtistSongs = $pdo->query("SELECT song_id FROM `songs` WHERE artist IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $nullArtistIds = array_map('intval', $nullArtistSongs);
+    assert_test("NULL-artist songs strictly preserved [1546, 2015, 2196]", $nullArtistIds === [1546, 2015, 2196], "Found: " . json_encode($nullArtistIds));
+}
 
 // =====================================================================
 // SUMMARY

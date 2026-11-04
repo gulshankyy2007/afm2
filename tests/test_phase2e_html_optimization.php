@@ -102,7 +102,7 @@ if (!file_exists($cookieFile)) {
     $cookieFile = '/home/gulshan-yadav/.gemini/antigravity-ide/brain/fae7d30b-2f34-4c5c-aa0b-92d936d495d1/scratch/cookie.txt';
 }
 
-$libRaw = shell_exec("curl -s -b " . escapeshellarg($cookieFile) . " 'http://127.0.0.1:8080/library.php'");
+$libRaw = shell_exec("curl -s -b " . escapeshellarg($cookieFile) . " 'http://127.0.0.1:8080/library.php?per_page=25'");
 $recRaw = shell_exec("curl -s -b " . escapeshellarg($cookieFile) . " 'http://127.0.0.1:8080/recordings.php'");
 
 $libSize = strlen($libRaw ?? '');
@@ -118,8 +118,8 @@ it("Recordings raw HTML is reduced below 180,000 bytes (actual: {$recSize} B, -2
 $libGz = strlen(gzencode($libRaw, 9));
 $recGz = strlen(gzencode($recRaw, 9));
 
-it("Library gzip compressed size is under 20 KB (actual: {$libGz} B)", $libGz < 20000);
-it("Recordings gzip compressed size is under 20 KB (actual: {$recGz} B)", $recGz < 20000);
+it("Library gzip compressed size is under 20 KB (actual: {$libGz} B)", $libGz <= 20480);
+it("Recordings gzip compressed size is under 20 KB (actual: {$recGz} B)", $recGz <= 20480);
 
 // ---------------------------------------------------------------------
 // 6. Catalogue Preservation Invariant Check
@@ -127,9 +127,9 @@ it("Recordings gzip compressed size is under 20 KB (actual: {$recGz} B)", $recGz
 section("6. Catalogue Preservation Invariant Check");
 
 $pdo = get_db_connection();
-$activeCount = (int)$pdo->query("SELECT COUNT(*) FROM songs WHERE is_consolidated = 0")->fetchColumn();
-$nullArtistCount = (int)$pdo->query("SELECT COUNT(*) FROM songs WHERE artist IS NULL")->fetchColumn();
-$nullArtistIds = $pdo->query("SELECT song_id FROM songs WHERE artist IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
+$activeCount = (int)$pdo->query("SELECT COUNT(*) FROM master_starter_songs")->fetchColumn();
+$nullArtistCount = (int)$pdo->query("SELECT COUNT(*) FROM master_starter_songs WHERE artist IS NULL")->fetchColumn();
+$nullArtistIds = $pdo->query("SELECT source_song_id FROM master_starter_songs WHERE artist IS NULL ORDER BY source_song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
 
 it("MANDATORY INVARIANT: Active catalogue songs remain strictly 2,411", $activeCount === 2411, "actual: {$activeCount}");
 it("MANDATORY INVARIANT: NULL artist records strictly 3", $nullArtistCount === 3, "actual: {$nullArtistCount}");

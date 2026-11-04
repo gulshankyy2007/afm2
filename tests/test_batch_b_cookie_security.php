@@ -469,8 +469,8 @@ assert_test("Logout emits expired Set-Cookie header", !empty($logoutCookieHeader
 assert_test("Logout Set-Cookie preserves Path=/", stripos($logoutCookieHeader, 'Path=/') !== false);
 assert_test("Logout Set-Cookie preserves SameSite=Lax", stripos($logoutCookieHeader, 'SameSite=Lax') !== false);
 
-// Post-logout request is denied
-$postLogout = test_http("http://127.0.0.1:8080/index.php", 'GET', null, ['Cookie' => $sessionCookie]);
+// Post-logout request to protected route is denied
+$postLogout = test_http("http://127.0.0.1:8080/library.php", 'GET', null, ['Cookie' => $sessionCookie]);
 assert_test("Subsequent request with invalidated session cookie is rejected (HTTP 302 -> login.php)", $postLogout['status'] === 302);
 
 // =====================================================================

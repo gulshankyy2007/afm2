@@ -104,40 +104,41 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
                     <!-- Right: Metadata & Direct Action -->
                     <div class="tactile-meta-col">
-                        <div class="tactile-header-bar">
-                            <div class="tactile-stream-badge">
-                                <span class="stream-beacon">((●))</span>
-                                <span class="stream-title">Featured Shortlist Contender</span>
+                        <div class="tactile-info-group">
+                            <div class="tactile-header-bar">
+                                <?php if (isset($featuredSong['total']) && $featuredSong['total'] !== null): ?>
+                                    <span class="total-score-badge complete">
+                                        <?= (int)$featuredSong['total'] ?> / 50
+                                    </span>
+                                <?php else: ?>
+                                    <span class="total-score-badge">
+                                        Awaiting Score
+                                    </span>
+                                <?php endif; ?>
                             </div>
-                            <?php if (isset($featuredSong['total']) && $featuredSong['total'] !== null): ?>
-                                <span class="total-score-badge complete">
-                                    <?= (int)$featuredSong['total'] ?> / 50
-                                </span>
-                            <?php else: ?>
-                                <span class="total-score-badge">
-                                    Awaiting Score
-                                </span>
-                            <?php endif; ?>
-                        </div>
 
-                        <div class="tactile-song-info">
-                            <h2 class="tactile-title"><?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?></h2>
-                            <div class="tactile-artist"><?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="tactile-details">Catalogue Track #<?= (int)$featuredSong['song_id'] ?> &bull; Shortlisted for Auditions</div>
+                            <div class="tactile-song-info">
+                                <h2 class="tactile-title"><?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?></h2>
+                                <div class="tactile-artist"><?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="tactile-details">Catalogue Track #<?= (int)$featuredSong['song_id'] ?> &bull; Shortlisted for Auditions</div>
+                            </div>
                         </div>
 
                         <div class="featured-actions-row">
-                            <a href="auditions.php?q=<?= urlencode($featuredSong['title']) ?>" class="btn btn-primary btn-sm">
-                                <span class="btn-icon">🎧</span> Open Audition Scorecard
+                            <a href="auditions.php?q=<?= urlencode($featuredSong['title']) ?>" class="btn btn-primary btn-sm btn-featured-scoreboard" aria-label="Open Audition Scorecard for <?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>">
+                                <span class="btn-icon">🎧</span>
+                                <span class="btn-text-desktop">Open Audition Scorecard</span>
+                                <span class="btn-text-mobile">Scoreboard</span>
                             </a>
                             <button type="button" 
                                     class="btn btn-secondary btn-sm btn-quick-lyrics btn-lyrics-quick-view" 
                                     data-song-id="<?= (int)$featuredSong['song_id'] ?>" 
                                     data-song-title="<?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?>">
+                                    data-song-artist="<?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-label="Read Lyrics for <?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>">
                                 <span class="btn-icon">📜</span> Read Lyrics
                             </button>
-                            <a href="<?= htmlspecialchars($featYtSearch, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external">
+                            <a href="<?= htmlspecialchars($featYtSearch, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external btn-featured-yt" aria-label="Search and play on YouTube">
                                 YouTube ↗
                             </a>
                         </div>

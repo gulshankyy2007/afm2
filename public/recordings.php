@@ -293,17 +293,16 @@ require_once dirname(__DIR__) . '/includes/header.php';
         <table class="recordings-table" id="recordingsTable">
             <thead>
                 <tr>
-                    <th class="th-index" style="width: 48px; text-align: center;">#</th>
-                    <th class="th-track" style="width: 32%;">Title</th>
+                    <th class="th-track" style="width: 35%;">Title</th>
                     <th class="th-media" style="width: 25%;">Linked Recording</th>
                     <th class="th-candidate" style="width: 25%;">Top Candidate / Suggestions</th>
-                    <th class="th-actions" style="width: 18%; text-align: right;">Actions</th>
+                    <th class="th-actions" style="width: 15%; text-align: right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($items)): ?>
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 3rem 1rem;">
+                        <td colspan="4" style="text-align: center; padding: 3rem 1rem;">
                             <div class="empty-state" style="padding: 1rem 0;">
                                 <div class="empty-icon">🎬</div>
                                 <h3 class="empty-title">No Tracks Found</h3>
@@ -326,27 +325,29 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         $artistAttr = htmlspecialchars($row['artist'] ?? '', ENT_QUOTES, 'UTF-8');
                     ?>
                         <tr id="row-song-<?= $sId ?>" class="rec-table-row" data-song-id="<?= $sId ?>" data-title="<?= $titleEsc ?>" data-artist="<?= $artistAttr ?>">
-                            <td class="rec-col-index"><span class="track-index-num"><?= $sId ?></span></td>
                             <td class="rec-col-track">
-                                <div class="spotify-track-flex">
-                                    <div class="spotify-thumb-box">
-                                        <?php 
-                                            $thumb = $row['artwork_thumbnail_url'] ?? $row['artwork_image_url'] ?? null;
-                                            if (empty($thumb) && !empty($row['video_id'])) {
-                                                $thumb = "https://img.youtube.com/vi/{$row['video_id']}/hqdefault.jpg";
-                                            }
-                                            if (empty($thumb) && !empty($row['top_cand_thumb'])) {
-                                                $thumb = $row['top_cand_thumb'];
-                                            }
-                                            if (empty($thumb)) {
-                                                $thumb = 'assets/img/artwork-fallback.svg';
-                                            }
-                                        ?>
-                                        <img src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" alt="" width="40" height="40" class="spotify-track-thumb" loading="lazy">
-                                    </div>
-                                    <div class="spotify-track-meta">
-                                        <div class="spotify-track-title" title="<?= $titleEsc ?>"><?= $titleEsc ?></div>
-                                        <div class="spotify-track-artist" title="<?= $artistEsc ?>"><?= $artistEsc ?></div>
+                                <div class="rec-track-composite">
+                                    <span class="rec-catalogue-num">#<?= $sId ?></span>
+                                    <div class="spotify-track-flex">
+                                        <div class="spotify-thumb-box">
+                                            <?php 
+                                                $thumb = $row['artwork_thumbnail_url'] ?? $row['artwork_image_url'] ?? null;
+                                                if (empty($thumb) && !empty($row['video_id'])) {
+                                                    $thumb = "https://img.youtube.com/vi/{$row['video_id']}/hqdefault.jpg";
+                                                }
+                                                if (empty($thumb) && !empty($row['top_cand_thumb'])) {
+                                                    $thumb = $row['top_cand_thumb'];
+                                                }
+                                                if (empty($thumb)) {
+                                                    $thumb = 'assets/img/artwork-fallback.svg';
+                                                }
+                                            ?>
+                                            <img src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" alt="" width="40" height="40" class="spotify-track-thumb" loading="lazy">
+                                        </div>
+                                        <div class="spotify-track-meta">
+                                            <div class="spotify-track-title" title="<?= $titleEsc ?>"><?= $titleEsc ?></div>
+                                            <div class="spotify-track-artist" title="<?= $artistEsc ?>"><?= $artistEsc ?></div>
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -356,10 +357,10 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 ?>
                                     <div class="rec-linked-card">
                                         <div class="rec-linked-top">
-                                            <a href="https://www.youtube.com/watch?v=<?= $vidEsc ?>" target="_blank" rel="noopener noreferrer" class="rec-yt-link" title="Open YouTube video (<?= $vidEsc ?>) in new tab">
-                                                <span class="rec-yt-play-icon">▶</span>
-                                                <span class="rec-yt-code"><?= $vidEsc ?></span>
-                                                <span class="rec-yt-arrow">↗</span>
+                                            <a href="https://www.youtube.com/watch?v=<?= $vidEsc ?>" target="_blank" rel="noopener noreferrer" class="rec-yt-link" title="Open on YouTube" aria-label="Open on YouTube">
+                                                <svg class="rec-yt-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                                </svg>
                                             </a>
                                         </div>
                                         <div class="rec-badges-row">
@@ -387,7 +388,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <td class="rec-col-candidate" id="cand-cell-<?= $sId ?>">
+                            <td class="rec-col-candidate <?= $candCount === 0 ? 'rec-cand-zero' : '' ?>" id="cand-cell-<?= $sId ?>" data-label="Top Candidate">
                                 <?php if ($candCount > 0): 
                                     $topScore = (float)($row['top_cand_score'] ?? 0);
                                     $scoreBadgeClass = $topScore >= 78 ? 'cand-badge-high' : ($topScore >= 50 ? 'cand-badge-medium' : 'cand-badge-low');
@@ -407,18 +408,17 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                     </div>
                                 <?php else: ?>
                                     <div class="rec-candidate-empty">
-                                        <span class="rec-empty-dot"></span>
-                                        <span class="rec-empty-text">No candidates scanned</span>
+                                        <span class="rec-empty-dash text-muted">&mdash;</span>
                                     </div>
                                 <?php endif; ?>
                             </td>
                             <td class="rec-col-actions" style="text-align: right;">
                                 <div class="rec-actions-flex">
-                                    <button type="button" class="btn btn-secondary btn-xs btn-open-candidates" data-song-id="<?= $sId ?>" title="Review, rank, or scan candidate YouTube videos"><span>⚡</span> Candidates (<?= $candCount ?>)</button>
-                                    <button type="button" class="btn btn-secondary btn-xs btn-open-manual" data-song-id="<?= $sId ?>" data-current-url="<?= htmlspecialchars($row['user_url'] ?? ($hasRecording ? 'https://www.youtube.com/watch?v=' . $row['video_id'] : ''), ENT_QUOTES, 'UTF-8') ?>" title="Manually paste or correct YouTube URL"><span>🔗</span> URL</button>
+                                    <button type="button" class="btn btn-secondary btn-xs btn-open-candidates" data-song-id="<?= $sId ?>" title="Review candidate YouTube videos (<?= $candCount ?>)" aria-label="Candidate videos (<?= $candCount ?>)"><span class="rec-btn-icon">⚡</span> <span class="cand-badge"><?= $candCount ?></span></button>
+                                    <button type="button" class="btn btn-secondary btn-xs btn-open-manual" data-song-id="<?= $sId ?>" data-current-url="<?= htmlspecialchars($row['user_url'] ?? ($hasRecording ? 'https://www.youtube.com/watch?v=' . $row['video_id'] : ''), ENT_QUOTES, 'UTF-8') ?>" title="Manually paste or edit YouTube URL" aria-label="Edit recording URL"><span class="rec-btn-icon">🔗</span></button>
                                     <?php if ($hasRecording): ?>
-                                        <button type="button" class="btn btn-secondary btn-xs btn-preview-video" data-video-id="<?= htmlspecialchars($row['video_id'], ENT_QUOTES, 'UTF-8') ?>" data-title="<?= $titleEsc ?>" title="Preview playback inside player">▶</button>
-                                        <button type="button" class="btn btn-danger-subtle btn-xs btn-clear-rec" data-song-id="<?= $sId ?>" title="Clear recording link (preserves song)">&times;</button>
+                                        <button type="button" class="btn btn-secondary btn-xs btn-preview-video" data-video-id="<?= htmlspecialchars($row['video_id'], ENT_QUOTES, 'UTF-8') ?>" data-title="<?= $titleEsc ?>" title="Preview playback inside player" aria-label="Play recording"><span class="rec-btn-icon">▶</span></button>
+                                        <button type="button" class="btn btn-danger-subtle btn-xs btn-clear-rec" data-song-id="<?= $sId ?>" title="Clear recording link (preserves song)" aria-label="Clear recording link">&times;</button>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -458,31 +458,38 @@ require_once dirname(__DIR__) . '/includes/header.php';
 <!-- 1. Candidate Review Modal -->
 <div class="modal-overlay" id="candidateReviewModal" role="dialog" aria-modal="true" aria-labelledby="candModalTitle">
     <div class="modal-content candidate-modal-content">
-        <div class="modal-header">
-            <div>
+        <div class="modal-header cand-modal-header">
+            <!-- Row 1: Header title, Scan Again, and Close -->
+            <div class="cand-header-primary-row">
                 <h3 class="modal-title font-brand" id="candModalTitle"><span>🎯</span> YouTube Candidates</h3>
-                <p class="modal-subtitle" id="candModalSubtitle">Evaluating ranked recordings</p>
+                <div class="cand-header-controls">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnRescanCandidates" title="Trigger a fresh live search on YouTube">
+                        <span>⚡</span> Scan Again
+                    </button>
+                    <button type="button" class="modal-close" id="btnCloseCandModal" aria-label="Close dialog">&times;</button>
+                </div>
             </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <button type="button" class="btn btn-secondary btn-sm" id="btnRescanCandidates" title="Trigger a fresh live search on YouTube">
-                    <span>⚡</span> Scan Again
-                </button>
-                <button type="button" class="modal-close" id="btnCloseCandModal" aria-label="Close dialog">&times;</button>
+            <!-- Row 2: Full-width Song Title, Artist Name, and Catalogue Track # -->
+            <div class="cand-header-song-row">
+                <div class="cand-song-title font-bold" id="candSongTitle"></div>
+                <div class="cand-song-meta text-muted" id="candSongMeta">
+                    <span id="candSongArtist"></span> &bull; <span id="candSongTrack"></span>
+                </div>
             </div>
         </div>
 
         <div class="modal-body">
-            <div id="candLoadingState" style="display: none; text-align: center; padding: 2.5rem 1rem;">
-                <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
+            <div id="candLoadingState" class="cand-loading-state-box" style="display: none;">
+                <div class="loading-spinner"></div>
                 <div class="font-bold">Discovering &amp; Ranking YouTube Candidates...</div>
-                <div class="text-muted" style="font-size: 0.85rem; margin-top: 0.35rem;">Fetching search results and calculating 7-signal compatibility scores</div>
+                <div class="text-muted" style="font-size: 0.825rem; margin-top: 0.35rem;">Fetching search results and calculating 7-signal compatibility scores</div>
             </div>
 
-            <div id="candEmptyState" style="display: none; text-align: center; padding: 2.5rem 1rem;">
-                <div class="empty-icon">🔍</div>
-                <h4 style="margin: 0.5rem 0;">No Candidates Discovered</h4>
-                <p class="text-muted" style="font-size: 0.85rem;">No candidates are cached for this track yet. You can scan YouTube now or enter a link manually.</p>
-                <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
+            <div id="candEmptyState" class="cand-empty-state-box" style="display: none;">
+                <div class="empty-icon-compact">🔍</div>
+                <h4 class="cand-empty-title">No Candidates Discovered</h4>
+                <p class="cand-empty-desc text-muted">No candidates are cached for this track yet. You can scan YouTube now or enter a link manually.</p>
+                <div class="cand-empty-actions">
                     <button type="button" class="btn btn-primary btn-sm" id="btnDiscoverFromEmpty">
                         <span>⚡</span> Discover Candidates
                     </button>
@@ -577,7 +584,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
 <!-- 3. Video Playback Preview Modal -->
 <div class="modal-overlay" id="videoPreviewModal" role="dialog" aria-modal="true" aria-labelledby="previewModalTitle">
-    <div class="modal-content" style="max-width: 720px; width: 95vw;">
+    <div class="modal-content video-preview-modal-content">
         <div class="modal-header">
             <div>
                 <h3 class="modal-title font-brand" id="previewModalTitle"><span>▶</span> Recording Playback Preview</h3>

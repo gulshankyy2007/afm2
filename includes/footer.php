@@ -346,6 +346,116 @@
         </div>
     </footer>
 
+    <?php if (is_authenticated()): 
+        $isMoreActive = in_array($currentPage, ['recordings.php', 'discovery.php', 'results.php', 'import.php', 'account.php', 'users.php'], true);
+    ?>
+    <!-- Persistent Mobile 5-Destination Bottom Navigation Dock (<= 768px Viewports) -->
+    <nav class="mobile-bottom-dock" id="mobileBottomDock" aria-label="Mobile Navigation">
+        <a href="index.php" class="mobile-dock-item <?= $currentPage === 'index.php' ? 'active' : '' ?>" id="dockHome" aria-label="Journal Home" <?= $currentPage === 'index.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">⌂</span>
+            <span class="dock-label">Journal</span>
+        </a>
+        <a href="library.php" class="mobile-dock-item <?= $currentPage === 'library.php' ? 'active' : '' ?>" id="dockLibrary" aria-label="Music Library" <?= $currentPage === 'library.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">♫</span>
+            <span class="dock-label">Library</span>
+        </a>
+        <a href="auditions.php" class="mobile-dock-item <?= $currentPage === 'auditions.php' ? 'active' : '' ?>" id="dockAuditions" aria-label="Formal Auditions" <?= $currentPage === 'auditions.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">🎧</span>
+            <span class="dock-label">Auditions</span>
+        </a>
+        <a href="tournament.php" class="mobile-dock-item <?= $currentPage === 'tournament.php' ? 'active' : '' ?>" id="dockTournament" aria-label="Tournament Progression" <?= $currentPage === 'tournament.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">🏆</span>
+            <span class="dock-label">Tournament</span>
+        </a>
+        <button type="button" class="mobile-dock-item <?= $isMoreActive ? 'active' : '' ?>" id="btnOpenMobileMore" aria-label="More destinations and preferences" aria-haspopup="dialog" aria-expanded="false" <?= $isMoreActive ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">⋯</span>
+            <span class="dock-label">More</span>
+        </button>
+    </nav>
+
+    <!-- Accessible Mobile Slide-up "More" Sheet -->
+    <div class="modal-overlay mobile-more-modal" id="mobileMoreModal" role="dialog" aria-modal="true" aria-labelledby="moreSheetTitle">
+        <div class="modal-content mobile-more-content">
+            <div class="modal-header">
+                <div class="mobile-more-title-wrap">
+                    <span class="eyebrow-tag"><span class="eyebrow-dot"></span> Navigation</span>
+                    <h3 class="modal-title" id="moreSheetTitle">More Destinations</h3>
+                </div>
+                <button type="button" class="modal-close" id="btnMoreClose" data-modal-close aria-label="Close navigation sheet">&times;</button>
+            </div>
+            <div class="modal-body mobile-more-body">
+                <div class="mobile-more-grid">
+                    <a href="recordings.php" class="more-nav-tile <?= $currentPage === 'recordings.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">🎬</span>
+                        <div class="tile-text">
+                            <strong>Recordings</strong>
+                            <span>YouTube link matching</span>
+                        </div>
+                    </a>
+                    <a href="discovery.php" class="more-nav-tile <?= $currentPage === 'discovery.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">★</span>
+                        <div class="tile-text">
+                            <strong>Shortlist</strong>
+                            <span>Audition candidates</span>
+                        </div>
+                    </a>
+                    <a href="results.php" class="more-nav-tile <?= $currentPage === 'results.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">📜</span>
+                        <div class="tile-text">
+                            <strong>Archive</strong>
+                            <span>Hall of fame & history</span>
+                        </div>
+                    </a>
+                    <a href="import.php" class="more-nav-tile <?= $currentPage === 'import.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">📁</span>
+                        <div class="tile-text">
+                            <strong>Import / Export</strong>
+                            <span>CSV data transfers</span>
+                        </div>
+                    </a>
+                    <button type="button" class="more-nav-tile" id="btnMoreOpenAppearance">
+                        <span class="tile-icon">🎨</span>
+                        <div class="tile-text">
+                            <strong>Appearance</strong>
+                            <span>8 atmospheric themes</span>
+                        </div>
+                    </button>
+                    <a href="account.php" class="more-nav-tile <?= $currentPage === 'account.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">🛡️</span>
+                        <div class="tile-text">
+                            <strong>Account</strong>
+                            <span>Passkeys & security</span>
+                        </div>
+                    </a>
+                    <?php if (is_admin()): ?>
+                    <a href="users.php" class="more-nav-tile <?= $currentPage === 'users.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">👥</span>
+                        <div class="tile-text">
+                            <strong>Users</strong>
+                            <span>User administration</span>
+                        </div>
+                    </a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="mobile-more-user-strip">
+                    <div class="more-user-badge">
+                        <span class="status-indicator online"></span>
+                        <span class="more-user-name"><?= htmlspecialchars(get_current_username() ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="role-pill"><?= is_admin() ? 'Admin' : 'Judge' ?></span>
+                    </div>
+                    <form action="logout.php" method="POST" style="margin: 0;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(get_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="submit" class="btn btn-secondary btn-sm" id="btnMobileMoreSignout">
+                            Sign Out
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php
     $appJsFile = dirname(__DIR__) . '/public/assets/js/app.js';
     $appJsVer = '4.1.' . (file_exists($appJsFile) ? filemtime($appJsFile) : '20261029');

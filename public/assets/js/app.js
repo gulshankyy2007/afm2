@@ -5,6 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     initNavToggle();
+    initHeaderMusicVisualizer();
     initDiscoveryActions();
     initScorecards();
     initModals();
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAppearanceModal();
     initArtworkPickerModal();
     initSongManagement();
+    initLibraryViewToggle();
     initAccessiblePagination();
     initArchiveStageNavigation();
 });
@@ -79,6 +81,95 @@ function initNavToggle() {
 
     bindToggle('navToggle', 'appNav');
     bindToggle('navToggleGuest', 'guestNav');
+
+    // Bind Mobile Bottom Dock "More" Trigger & Sheet
+    const btnOpenMore = document.getElementById('btnOpenMobileMore');
+    const moreModal = document.getElementById('mobileMoreModal');
+    const btnMoreAppearance = document.getElementById('btnMoreOpenAppearance');
+    const appModal = document.getElementById('appearanceModal');
+
+    if (btnOpenMore && moreModal) {
+        btnOpenMore.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            moreModal.classList.add('active');
+            moreModal.setAttribute('aria-hidden', 'false');
+            btnOpenMore.setAttribute('aria-expanded', 'true');
+            document.body.classList.add('modal-open');
+        });
+
+        moreModal.addEventListener('modal:close', () => {
+            moreModal.setAttribute('aria-hidden', 'true');
+            btnOpenMore.setAttribute('aria-expanded', 'false');
+            if (!document.querySelector('.modal-overlay.active')) {
+                document.body.classList.remove('modal-open');
+            }
+        });
+
+        if (btnMoreAppearance && appModal) {
+            btnMoreAppearance.addEventListener('click', (e) => {
+                e.preventDefault();
+                moreModal.classList.remove('active');
+                moreModal.setAttribute('aria-hidden', 'true');
+                btnOpenMore.setAttribute('aria-expanded', 'false');
+                appModal.classList.add('active');
+                appModal.setAttribute('aria-hidden', 'false');
+            });
+        }
+    }
+}
+
+/**
+ * Header Music Visualizer & Cinematic Music Strip: Playback-Aware & Ambient State Synchronizer
+ */
+function initHeaderMusicVisualizer() {
+    const viz = document.getElementById('headerMusicVisualizer');
+    const strip = document.getElementById('headerMusicStrip');
+
+    window.setVisualizerPlaybackState = function(state) {
+        if (viz) {
+            viz.classList.remove('state-idle', 'state-playing', 'state-paused');
+            if (state === 'playing') {
+                viz.classList.add('state-playing');
+                viz.setAttribute('title', 'AFM#2 Acoustic Visualizer: Playing');
+            } else if (state === 'paused') {
+                viz.classList.add('state-paused');
+                viz.setAttribute('title', 'AFM#2 Acoustic Visualizer: Paused');
+            } else {
+                viz.classList.add('state-idle');
+                viz.setAttribute('title', 'AFM#2 Acoustic Visualizer: Ready');
+            }
+        }
+        if (strip) {
+            strip.classList.remove('state-idle', 'state-playing', 'state-paused');
+            if (state === 'playing') {
+                strip.classList.add('state-playing');
+                strip.setAttribute('title', 'AFM#2 Grand Piano: Playing');
+            } else if (state === 'paused') {
+                strip.classList.add('state-paused');
+                strip.setAttribute('title', 'AFM#2 Grand Piano: Paused');
+            } else {
+                strip.classList.add('state-idle');
+                strip.setAttribute('title', 'AFM#2 Grand Piano (Live)');
+            }
+        }
+    };
+
+    // Pause animations when document is hidden (conserves CPU/battery)
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (strip) strip.classList.add('animation-paused');
+            if (viz) viz.classList.add('animation-paused');
+        } else {
+            if (strip) strip.classList.remove('animation-paused');
+            if (viz) viz.classList.remove('animation-paused');
+        }
+    });
+
+    // Track HTML5 audio/video elements across application if present
+    document.addEventListener('play', () => window.setVisualizerPlaybackState && window.setVisualizerPlaybackState('playing'), true);
+    document.addEventListener('pause', () => window.setVisualizerPlaybackState && window.setVisualizerPlaybackState('paused'), true);
+    document.addEventListener('ended', () => window.setVisualizerPlaybackState && window.setVisualizerPlaybackState('idle'), true);
 }
 
 /**
@@ -239,6 +330,11 @@ function updateDiscoveryCounters(data) {
 function initScorecards() {
     const cards = document.querySelectorAll('.scorecard-card');
     cards.forEach(card => {
+        // Enforce genuine immutability for finalized/frozen historical scorecards
+        if (card.getAttribute('data-finalized') === '1' || card.classList.contains('is-finalized') || card.classList.contains('is-frozen')) {
+            return;
+        }
+
         const inputs = card.querySelectorAll('.criterion-input');
         // Synchronize inputs and range sliders
         const fields = card.querySelectorAll('.criterion-field');
@@ -280,6 +376,32 @@ function initScorecards() {
                     }
                 });
             }
+
+            // Increment / Decrement Steppers
+            const btnDown = field.querySelector('.btn-step-down');
+            const btnUp = field.querySelector('.btn-step-up');
+            if (btnDown && input) {
+                btnDown.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let cur = input.value.trim() === '' ? 5 : parseInt(input.value, 10);
+                    if (isNaN(cur)) cur = 5;
+                    cur = Math.max(0, cur - 1);
+                    input.value = cur;
+                    if (range) range.value = cur;
+                    calculateCardTotal(card);
+                });
+            }
+            if (btnUp && input) {
+                btnUp.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    let cur = input.value.trim() === '' ? 5 : parseInt(input.value, 10);
+                    if (isNaN(cur)) cur = 5;
+                    cur = Math.min(10, cur + 1);
+                    input.value = cur;
+                    if (range) range.value = cur;
+                    calculateCardTotal(card);
+                });
+            }
         });
 
         // Save on button click
@@ -312,9 +434,16 @@ function initScorecards() {
 }
 
 function calculateCardTotal(card) {
+    if (!card || card.getAttribute('data-finalized') === '1' || card.classList.contains('is-finalized') || card.classList.contains('is-frozen')) {
+        return;
+    }
+
     const inputs = card.querySelectorAll('.criterion-input');
     const totalBadge = card.querySelector('.total-score-badge');
     const meterFill = card.querySelector('.total-score-fill');
+    const critAggregateBox = card.querySelector('.criterion-aggregate-box');
+    const critAggregateVal = card.querySelector('.aggregate-score-val');
+    const critAggregateStatus = card.querySelector('.aggregate-score-status');
     if (!totalBadge) return;
 
     let sum = 0;
@@ -342,19 +471,49 @@ function calculateCardTotal(card) {
         }
     }
 
+    const scoreDisplay = complete ? `${sum} / 50` : (anyFilled ? `${sum}* / 50` : '— / 50');
+
     if (complete) {
-        totalBadge.textContent = `${sum} / 50`;
+        totalBadge.textContent = scoreDisplay;
         totalBadge.classList.add('complete');
         card.classList.add('complete');
         card.classList.remove('incomplete');
+
+        if (critAggregateBox) {
+            critAggregateBox.classList.add('complete');
+            critAggregateBox.classList.remove('incomplete');
+        }
+        if (critAggregateVal) {
+            critAggregateVal.textContent = scoreDisplay;
+        }
+        if (critAggregateStatus) {
+            critAggregateStatus.textContent = '✓ Complete';
+            critAggregateStatus.className = 'aggregate-score-status text-xs text-success font-bold';
+        }
     } else {
-        totalBadge.textContent = anyFilled ? `${sum}* / 50` : '— / 50';
+        totalBadge.textContent = scoreDisplay;
         totalBadge.classList.remove('complete');
         card.classList.remove('complete');
         if (anyFilled) {
             card.classList.add('incomplete');
         } else {
             card.classList.remove('incomplete');
+        }
+
+        if (critAggregateBox) {
+            critAggregateBox.classList.remove('complete');
+            if (anyFilled) {
+                critAggregateBox.classList.add('incomplete');
+            } else {
+                critAggregateBox.classList.remove('incomplete');
+            }
+        }
+        if (critAggregateVal) {
+            critAggregateVal.textContent = scoreDisplay;
+        }
+        if (critAggregateStatus) {
+            critAggregateStatus.textContent = anyFilled ? '⏳ Incomplete' : '○ Unscored';
+            critAggregateStatus.className = anyFilled ? 'aggregate-score-status text-xs text-gold' : 'aggregate-score-status text-xs text-muted';
         }
     }
 }
@@ -426,7 +585,8 @@ function applyConfirmedMediaToPanel(panel, m) {
     // Update Player Container with strict origin and enablejsapi=1
     const playerContainer = panel.querySelector('.player-container');
     if (playerContainer) {
-        const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(m.video_id)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0&playsinline=1`;
+        const appOrigin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+        const embedSrc = `https://www.youtube.com/embed/${encodeURIComponent(m.video_id)}?enablejsapi=1&playsinline=1&rel=0&origin=${encodeURIComponent(appOrigin)}`;
         playerContainer.innerHTML = `
             <div class="player-wrapper">
                 <iframe 
@@ -438,7 +598,7 @@ function applyConfirmedMediaToPanel(panel, m) {
                     referrerpolicy="strict-origin-when-cross-origin"
                     loading="lazy" 
                     title="AFM#2 Audio Player: ${escapeHtml(songTitle)}" 
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
                     allowfullscreen
                 ></iframe>
                 <div class="player-footer">
@@ -508,6 +668,10 @@ function applyConfirmedMediaToPanel(panel, m) {
 }
 
 async function saveScorecard(card) {
+    if (!card || card.getAttribute('data-finalized') === '1' || card.classList.contains('is-finalized') || card.classList.contains('is-frozen')) {
+        return;
+    }
+
     const entryId = card.getAttribute('data-entry-id');
     const songId = card.getAttribute('data-song-id');
     const roundId = card.getAttribute('data-round-id') || 1;
@@ -609,6 +773,10 @@ async function saveScorecard(card) {
  * Reset / Unscore scorecard rating
  */
 async function resetScorecard(card) {
+    if (!card || card.getAttribute('data-finalized') === '1' || card.classList.contains('is-finalized') || card.classList.contains('is-frozen')) {
+        return;
+    }
+
     const entryId = card.getAttribute('data-entry-id');
     const songId = card.getAttribute('data-song-id');
     const roundId = card.getAttribute('data-round-id') || 1;
@@ -762,6 +930,10 @@ function initModals() {
             const modal = closer.closest('.modal-overlay');
             if (modal) {
                 modal.classList.remove('active');
+                modal.setAttribute('aria-hidden', 'true');
+                if (!document.querySelector('.modal-overlay.active')) {
+                    document.body.classList.remove('modal-open');
+                }
                 modal.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { closer } }));
             }
             return;
@@ -774,6 +946,8 @@ function initModals() {
             const modal = document.getElementById(targetId);
             if (modal) {
                 modal.classList.add('active');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('modal-open');
                 modal.dispatchEvent(new CustomEvent('modal:open', { bubbles: true, detail: { opener } }));
             }
             return;
@@ -782,6 +956,10 @@ function initModals() {
         // Close when clicking directly on the backdrop overlay
         if (e.target.classList.contains('modal-overlay') && e.target.classList.contains('active')) {
             e.target.classList.remove('active');
+            e.target.setAttribute('aria-hidden', 'true');
+            if (!document.querySelector('.modal-overlay.active')) {
+                document.body.classList.remove('modal-open');
+            }
             e.target.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { backdrop: true } }));
         }
     });
@@ -792,6 +970,10 @@ function initModals() {
             const activeModal = document.querySelector('.modal-overlay.active');
             if (activeModal) {
                 activeModal.classList.remove('active');
+                activeModal.setAttribute('aria-hidden', 'true');
+                if (!document.querySelector('.modal-overlay.active')) {
+                    document.body.classList.remove('modal-open');
+                }
                 activeModal.dispatchEvent(new CustomEvent('modal:close', { bubbles: true, detail: { key: 'Escape' } }));
             }
         }
@@ -1866,14 +2048,16 @@ window.onYouTubeIframeAPIReady = function() {
 /**
  * Attach YT.Player to the iframe of an audition panel to track playback & sync lyrics
  */
-function attachYouTubePlayerToPanel(panel, songId, forceReinit = false) {
+function attachYouTubePlayerToPanel(panel, songId, forceReinit = false, retryCount = 0) {
     const iframe = panel.querySelector('.yt-embed-frame');
     if (!iframe) return;
     if (!iframe.id) iframe.id = `yt-player-${songId}`;
 
     if (!window.YT || !window.YT.Player) {
         ensureYouTubeIframeApi();
-        setTimeout(() => attachYouTubePlayerToPanel(panel, songId, forceReinit), 500);
+        if (retryCount < 10) {
+            setTimeout(() => attachYouTubePlayerToPanel(panel, songId, forceReinit, retryCount + 1), 500);
+        }
         return;
     }
 
@@ -1902,14 +2086,23 @@ function attachYouTubePlayerToPanel(panel, songId, forceReinit = false) {
                     if (event.data === 1) {
                         setPlaybackStatus(songId, 'status-playing', 'Playing');
                         startSyncedLyricsTracker(panel, songId, player);
+                        if (typeof window.setVisualizerPlaybackState === 'function') {
+                            window.setVisualizerPlaybackState('playing');
+                        }
                     } else if (event.data === 2) {
                         setPlaybackStatus(songId, 'status-paused', 'Paused');
                         stopSyncedLyricsTracker(songId);
+                        if (typeof window.setVisualizerPlaybackState === 'function') {
+                            window.setVisualizerPlaybackState('paused');
+                        }
                     } else if (event.data === 3) {
                         setPlaybackStatus(songId, 'status-buffering', 'Buffering...');
                     } else if (event.data === 0) {
                         setPlaybackStatus(songId, 'status-ended', 'Ended');
                         stopSyncedLyricsTracker(songId);
+                        if (typeof window.setVisualizerPlaybackState === 'function') {
+                            window.setVisualizerPlaybackState('idle');
+                        }
                     } else if (event.data === 5) {
                         setPlaybackStatus(songId, 'status-ready', 'Ready to Play');
                         stopSyncedLyricsTracker(songId);
@@ -1920,7 +2113,6 @@ function attachYouTubePlayerToPanel(panel, songId, forceReinit = false) {
                     // 100: Video not found/removed, 2: Invalid video ID
                     console.warn(`YouTube Player error (${event.data}) on song ${songId}`);
                     setPlaybackStatus(songId, 'status-restricted', 'Restricted');
-                    handleEmbedErrorFallback(panel, songId, event.data);
                 }
             }
         });
@@ -2103,6 +2295,15 @@ function initAuditionMediaAndLyrics() {
         const drawer = panel.querySelector('.audition-drawer');
         const iframe = panel.querySelector('.yt-embed-frame');
 
+        // Ensure embedded player container is visible across mobile and desktop
+        const playerContainer = panel.querySelector('.player-container');
+        if (playerContainer) {
+            playerContainer.style.display = 'block';
+        }
+        if (drawer) {
+            drawer.classList.add('player-expanded');
+        }
+
         if (iframe && iframe.getAttribute('src')) {
             attachYouTubePlayerToPanel(panel, songId);
         }
@@ -2160,12 +2361,17 @@ function initAuditionMediaAndLyrics() {
             if (isOpen) {
                 if (playerContainer) playerContainer.style.display = 'none';
                 if (matcherBox) matcherBox.style.display = 'none';
+                if (drawer) drawer.classList.remove('player-expanded');
                 togglePlayerBtn.classList.remove('active');
-                togglePlayerBtn.querySelector('.player-toggle-label').textContent = 'Show Player';
+                const lbl = togglePlayerBtn.querySelector('.player-toggle-label');
+                if (lbl) lbl.textContent = 'Show Player';
             } else {
                 if (playerContainer) playerContainer.style.display = 'block';
                 if (matcherBox) matcherBox.style.display = 'none';
-                drawer.style.display = 'grid';
+                if (drawer) {
+                    drawer.classList.add('player-expanded');
+                    if (window.innerWidth > 768) drawer.style.display = 'grid';
+                }
 
                 // Lazy load iframe src if needed
                 if (iframe && !iframe.getAttribute('src') && iframe.dataset.src) {
@@ -2176,7 +2382,8 @@ function initAuditionMediaAndLyrics() {
                 attachYouTubePlayerToPanel(panel, songId);
 
                 togglePlayerBtn.classList.add('active');
-                togglePlayerBtn.querySelector('.player-toggle-label').textContent = 'Hide Player';
+                const lbl = togglePlayerBtn.querySelector('.player-toggle-label');
+                if (lbl) lbl.textContent = 'Hide Player';
             }
             return;
         }
@@ -2521,7 +2728,8 @@ function initAuditionMediaAndLyrics() {
 
                 panel.dataset.embedStatus = 'allowed';
                 const vId = panel.dataset.videoId;
-                const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vId)}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&autoplay=0&playsinline=1`;
+                const appOrigin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+                const embedSrc = `https://www.youtube.com/embed/${encodeURIComponent(vId)}?enablejsapi=1&playsinline=1&rel=0&origin=${encodeURIComponent(appOrigin)}`;
 
                 playerContainer.innerHTML = `
                     <div class="player-wrapper">
@@ -2534,7 +2742,7 @@ function initAuditionMediaAndLyrics() {
                             referrerpolicy="strict-origin-when-cross-origin"
                             loading="lazy" 
                             title="AFM#2 Audio Player: ${escapeHtml(songTitle)}" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
                             allowfullscreen
                         ></iframe>
                         <div class="player-footer">
@@ -3816,6 +4024,16 @@ function initArtworkPickerModal() {
 }
 
 /**
+ * Library View Mode (One Unified Compact Song List)
+ */
+function initLibraryViewToggle() {
+    const tableView = document.getElementById('libraryTableView');
+    if (tableView) {
+        tableView.style.display = '';
+    }
+}
+
+/**
  * Library Song Management: Add (Manual or YouTube), Edit, and Delete
  */
 function initSongManagement() {
@@ -4455,8 +4673,12 @@ function initSongManagement() {
 
     // 4. MULTI-SELECT & BULK DELETION IN LIBRARY
     const selectAllSongs = document.getElementById('selectAllSongs');
+    const mobileSelectAllSongs = document.getElementById('mobileSelectAllSongs');
+    const mobileSelectSummary = document.getElementById('mobileSelectSummary');
     const bulkActionsBar = document.getElementById('bulkActionsBar');
     const bulkSelectedCount = document.getElementById('bulkSelectedCount');
+    const btnBulkShortlist = document.getElementById('btnBulkShortlist');
+    const btnBulkPass = document.getElementById('btnBulkPass');
     const btnBulkDelete = document.getElementById('btnBulkDelete');
     const btnBulkClear = document.getElementById('btnBulkClear');
     const bulkDeleteModal = document.getElementById('bulkDeleteModal');
@@ -4466,6 +4688,11 @@ function initSongManagement() {
     const bulkDeleteTotalCount = document.getElementById('bulkDeleteTotalCount');
     const bulkDeleteListPreview = document.getElementById('bulkDeleteListPreview');
     const bulkDeleteError = document.getElementById('bulkDeleteError');
+
+    // Ensure bulk actions bar is attached directly to document.body so position:fixed is strictly anchored to the viewport
+    if (bulkActionsBar && bulkActionsBar.parentElement !== document.body) {
+        document.body.appendChild(bulkActionsBar);
+    }
 
     function updateBulkSelectionState() {
         const checkboxes = document.querySelectorAll('.song-select-checkbox');
@@ -4484,6 +4711,10 @@ function initSongManagement() {
             bulkSelectedCount.textContent = count;
         }
 
+        if (mobileSelectSummary) {
+            mobileSelectSummary.textContent = `${count} selected`;
+        }
+
         if (bulkActionsBar) {
             bulkActionsBar.style.display = count > 0 ? 'block' : 'none';
         }
@@ -4492,11 +4723,26 @@ function initSongManagement() {
             selectAllSongs.checked = count > 0 && count === checkboxes.length;
             selectAllSongs.indeterminate = count > 0 && count < checkboxes.length;
         }
+
+        if (mobileSelectAllSongs) {
+            mobileSelectAllSongs.checked = count > 0 && count === checkboxes.length;
+            mobileSelectAllSongs.indeterminate = count > 0 && count < checkboxes.length;
+        }
     }
 
     if (selectAllSongs) {
         selectAllSongs.addEventListener('change', () => {
             const isChecked = selectAllSongs.checked;
+            document.querySelectorAll('.song-select-checkbox').forEach(cb => {
+                cb.checked = isChecked;
+            });
+            updateBulkSelectionState();
+        });
+    }
+
+    if (mobileSelectAllSongs) {
+        mobileSelectAllSongs.addEventListener('change', () => {
+            const isChecked = mobileSelectAllSongs.checked;
             document.querySelectorAll('.song-select-checkbox').forEach(cb => {
                 cb.checked = isChecked;
             });
@@ -4519,163 +4765,389 @@ function initSongManagement() {
         });
     }
 
-    // Open Bulk Delete Modal
-    if (btnBulkDelete && bulkDeleteModal) {
-        btnBulkDelete.addEventListener('click', () => {
-            const checkedBoxes = Array.from(document.querySelectorAll('.song-select-checkbox:checked'));
-            if (checkedBoxes.length === 0) return;
+    // =========================================================================
+    // Unified Bulk Actions Workflow: Pre-Action Eligibility & Confirmation
+    // (Shortlist, Pass, Delete)
+    // Strictly Authoritative DOM Mutation - ZERO Speculative UI State
+    // =========================================================================
 
-            if (bulkDeleteTotalCount) {
-                bulkDeleteTotalCount.textContent = checkedBoxes.length;
-            }
+    const bulkActionConfirmModal = document.getElementById('bulkActionConfirmModal');
+    const bulkActionModalIcon    = document.getElementById('bulkActionModalIcon');
+    const bulkActionModalHeading = document.getElementById('bulkActionModalHeading');
+    const bulkActionLoading      = document.getElementById('bulkActionLoading');
+    const bulkActionDetails      = document.getElementById('bulkActionDetails');
+    const bulkStatSelected       = document.getElementById('bulkStatSelected');
+    const bulkStatEligible       = document.getElementById('bulkStatEligible');
+    const bulkStatIneligible     = document.getElementById('bulkStatIneligible');
+    const bulkExplanationBanner  = document.getElementById('bulkExplanationBanner');
+    const bulkExplanationText    = document.getElementById('bulkExplanationText');
+    const bulkIneligibleSection  = document.getElementById('bulkIneligibleSection');
+    const bulkIneligibleCountText= document.getElementById('bulkIneligibleCountText');
+    const bulkIneligibleList     = document.getElementById('bulkIneligibleList');
+    const bulkEligibleSection    = document.getElementById('bulkEligibleSection');
+    const bulkEligibleCountText  = document.getElementById('bulkEligibleCountText');
+    const bulkEligibleList       = document.getElementById('bulkEligibleList');
+    const bulkActionError        = document.getElementById('bulkActionError');
+    const btnCancelBulkAction    = document.getElementById('btnCancelBulkAction');
+    const btnConfirmBulkAction   = document.getElementById('btnConfirmBulkAction');
+    const btnCloseBulkActionModal= document.getElementById('btnCloseBulkActionModal');
 
-            if (bulkDeleteListPreview) {
-                bulkDeleteListPreview.innerHTML = '';
-                checkedBoxes.forEach(cb => {
-                    const row = cb.closest('tr');
-                    const songId = cb.getAttribute('data-song-id') || row?.getAttribute('data-song-id') || cb.value;
-                    const title = cb.getAttribute('data-song-title') || row?.getAttribute('data-song-title') || 'Song';
-                    const artist = cb.getAttribute('data-song-artist') || row?.getAttribute('data-song-artist') || 'Unknown Artist';
-
-                    const item = document.createElement('div');
-                    item.className = 'bulk-delete-item';
-                    item.innerHTML = `
-                        <span class="bulk-delete-item-id">#${escapeHtml(songId)}</span>
-                        <span class="bulk-delete-item-title">${escapeHtml(title)}</span>
-                        <span class="bulk-delete-item-artist">${escapeHtml(artist)}</span>
-                    `;
-                    bulkDeleteListPreview.appendChild(item);
-                });
-            }
-
-            if (bulkDeleteError) {
-                bulkDeleteError.style.display = 'none';
-                bulkDeleteError.textContent = '';
-            }
-
-            bulkDeleteModal.classList.add('active');
-        });
+    // Ensure modal is directly attached to document.body so position:fixed is strictly immune to ancestor transforms
+    if (bulkActionConfirmModal && bulkActionConfirmModal.parentElement !== document.body) {
+        document.body.appendChild(bulkActionConfirmModal);
     }
 
-    if (closeBulkDeleteBtn && bulkDeleteModal) closeBulkDeleteBtn.addEventListener('click', () => bulkDeleteModal.classList.remove('active'));
-    if (cancelBulkDeleteBtn && bulkDeleteModal) cancelBulkDeleteBtn.addEventListener('click', () => bulkDeleteModal.classList.remove('active'));
+    let currentBulkOperation = null;
+    let currentEligibilityData = null;
 
-    // Execute Bulk Deletion
-    if (confirmBulkDeleteBtn && bulkDeleteModal) {
-        confirmBulkDeleteBtn.addEventListener('click', async () => {
-            const checkedBoxes = Array.from(document.querySelectorAll('.song-select-checkbox:checked'));
-            const songIds = checkedBoxes.map(cb => {
-                const row = cb.closest('tr');
-                return parseInt(cb.getAttribute('data-song-id') || row?.getAttribute('data-song-id') || cb.value, 10);
-            }).filter(id => id > 0);
+    async function openBulkActionConfirmation(operation) {
+        const checkedBoxes = Array.from(document.querySelectorAll('.song-select-checkbox:checked'));
+        if (checkedBoxes.length === 0) return;
 
-            if (songIds.length === 0) return;
+        const songIds = checkedBoxes.map(cb => {
+            const row = cb.closest('tr');
+            return parseInt(cb.getAttribute('data-song-id') || row?.getAttribute('data-song-id') || cb.value, 10);
+        }).filter(id => id > 0);
 
-            confirmBulkDeleteBtn.disabled = true;
-            confirmBulkDeleteBtn.textContent = 'Deleting...';
+        if (songIds.length === 0) return;
 
-            try {
-                const res = await fetch('api.php?action=delete_multiple_songs', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCsrfToken()
-                    },
-                    body: JSON.stringify({ song_ids: songIds })
-                });
+        currentBulkOperation = operation;
+        currentEligibilityData = null;
 
-                let data = null;
-                const contentType = res.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
+        // Configure modal titles and styling
+        if (bulkActionModalIcon && bulkActionModalHeading) {
+            if (operation === 'shortlist') {
+                bulkActionModalIcon.textContent = '⭐';
+                bulkActionModalHeading.textContent = 'Shortlist Selected Tracks';
+            } else if (operation === 'pass') {
+                bulkActionModalIcon.textContent = '✕';
+                bulkActionModalHeading.textContent = 'Pass Selected Tracks';
+            } else if (operation === 'delete') {
+                bulkActionModalIcon.textContent = '🗑️';
+                bulkActionModalHeading.textContent = 'Delete Selected Tracks';
+            }
+        }
+
+        // Configure confirm button styling
+        if (btnConfirmBulkAction) {
+            btnConfirmBulkAction.className = 'btn btn-sm ' + (
+                operation === 'delete' ? 'btn-danger' : (operation === 'shortlist' ? 'btn-primary' : 'btn-secondary')
+            );
+            btnConfirmBulkAction.disabled = true;
+            btnConfirmBulkAction.textContent = 'Checking Eligibility...';
+            btnConfirmBulkAction.style.display = 'inline-flex';
+        }
+
+        if (btnCancelBulkAction) {
+            btnCancelBulkAction.textContent = 'Cancel';
+        }
+
+        // Show loading state
+        if (bulkActionLoading) bulkActionLoading.style.display = 'flex';
+        if (bulkActionDetails) bulkActionDetails.style.display = 'none';
+        if (bulkActionError) {
+            bulkActionError.style.display = 'none';
+            bulkActionError.textContent = '';
+        }
+
+        // Open modal immediately
+        if (bulkActionConfirmModal) {
+            bulkActionConfirmModal.classList.add('active');
+        }
+
+        try {
+            const res = await fetch('api.php?action=check_bulk_eligibility', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    operation: operation,
+                    song_ids: songIds
+                })
+            });
+
+            const data = await res.json();
+
+            if (bulkActionLoading) bulkActionLoading.style.display = 'none';
+            if (bulkActionDetails) bulkActionDetails.style.display = 'block';
+
+            if (!data.success) {
+                if (bulkActionError) {
+                    bulkActionError.textContent = data.error || 'Failed to check track eligibility.';
+                    bulkActionError.style.display = 'block';
+                }
+                if (btnConfirmBulkAction) {
+                    btnConfirmBulkAction.disabled = true;
+                    btnConfirmBulkAction.style.display = 'none';
+                }
+                if (btnCancelBulkAction) {
+                    btnCancelBulkAction.textContent = 'Close';
+                }
+                return;
+            }
+
+            currentEligibilityData = data;
+
+            // Populate counts
+            if (bulkStatSelected) bulkStatSelected.textContent = data.total_selected;
+            if (bulkStatEligible) bulkStatEligible.textContent = data.eligible_count;
+            if (bulkStatIneligible) bulkStatIneligible.textContent = data.ineligible_count;
+
+            const opPast = operation === 'shortlist' ? 'shortlisted' : (operation === 'pass' ? 'passed' : 'deleted');
+            const opNoun = operation === 'shortlist' ? 'Shortlisting' : (operation === 'pass' ? 'Passing' : 'Deletion');
+
+            // Explanation Banner
+            if (bulkExplanationBanner && bulkExplanationText) {
+                bulkExplanationBanner.className = 'bulk-explanation-banner';
+                if (data.eligible_count === 0) {
+                    bulkExplanationBanner.classList.add('banner-blocked');
+                    bulkExplanationText.innerHTML = `<strong>None of the ${data.total_selected} selected track(s) are eligible</strong> for ${operation}. Review the protection reasons below.`;
+                } else if (data.ineligible_count > 0) {
+                    bulkExplanationBanner.classList.add('banner-warning');
+                    bulkExplanationText.innerHTML = `Only the <strong>${data.eligible_count}</strong> eligible track${data.eligible_count === 1 ? '' : 's'} will be ${opPast}. <strong>${data.ineligible_count}</strong> ineligible track${data.ineligible_count === 1 ? '' : 's'} will be skipped.`;
+                } else {
+                    bulkExplanationBanner.classList.add('banner-success');
+                    bulkExplanationText.innerHTML = `All <strong>${data.eligible_count}</strong> selected track${data.eligible_count === 1 ? '' : 's'} are eligible for ${opNoun.toLowerCase()}.`;
+                }
+            }
+
+            // Ineligible section
+            if (bulkIneligibleSection && bulkIneligibleList) {
+                if (data.ineligible_count > 0) {
+                    bulkIneligibleSection.style.display = 'block';
+                    if (bulkIneligibleCountText) bulkIneligibleCountText.textContent = data.ineligible_count;
+                    bulkIneligibleList.innerHTML = (data.ineligible_songs || []).map(s => `
+                        <div class="bulk-list-item bulk-ineligible-item">
+                            <div class="bulk-item-meta">
+                                <span class="bulk-item-id">#${escapeHtml(String(s.song_id))}</span>
+                                <span class="bulk-item-title">${escapeHtml(s.title || 'Song')}</span>
+                                <span class="bulk-item-artist">${escapeHtml(s.artist || 'Unknown Artist')}</span>
+                            </div>
+                            <div class="bulk-item-reason"><span class="badge badge-reason">${escapeHtml(s.reason || 'Restricted')}</span></div>
+                        </div>
+                    `).join('');
+                } else {
+                    bulkIneligibleSection.style.display = 'none';
+                    bulkIneligibleList.innerHTML = '';
+                }
+            }
+
+            // Eligible section
+            if (bulkEligibleSection && bulkEligibleList) {
+                if (data.eligible_count > 0) {
+                    bulkEligibleSection.style.display = 'block';
+                    if (bulkEligibleCountText) bulkEligibleCountText.textContent = data.eligible_count;
+                    const previewList = (data.eligible_songs || []).slice(0, 25);
+                    const remaining = data.eligible_count - previewList.length;
+                    bulkEligibleList.innerHTML = previewList.map(s => `
+                        <div class="bulk-list-item bulk-eligible-item">
+                            <div class="bulk-item-meta">
+                                <span class="bulk-item-id">#${escapeHtml(String(s.song_id))}</span>
+                                <span class="bulk-item-title">${escapeHtml(s.title || 'Song')}</span>
+                                <span class="bulk-item-artist">${escapeHtml(s.artist || 'Unknown Artist')}</span>
+                            </div>
+                            <div class="bulk-item-status"><span class="badge badge-eligible">Eligible</span></div>
+                        </div>
+                    `).join('') + (remaining > 0 ? `<div class="bulk-more-text">+ ${remaining} more eligible track${remaining === 1 ? '' : 's'}</div>` : '');
+                } else {
+                    bulkEligibleSection.style.display = 'none';
+                    bulkEligibleList.innerHTML = '';
+                }
+            }
+
+            // Configure confirm button based on eligibility
+            if (btnConfirmBulkAction) {
+                if (data.eligible_count === 0) {
+                    btnConfirmBulkAction.disabled = true;
+                    btnConfirmBulkAction.style.display = 'none';
+                    if (btnCancelBulkAction) btnCancelBulkAction.textContent = 'Review Selection';
+                } else {
+                    btnConfirmBulkAction.disabled = false;
+                    btnConfirmBulkAction.style.display = 'inline-flex';
+                    if (operation === 'shortlist') {
+                        btnConfirmBulkAction.textContent = `Confirm Shortlisting (${data.eligible_count})`;
+                    } else if (operation === 'pass') {
+                        btnConfirmBulkAction.textContent = `Confirm Passing (${data.eligible_count})`;
+                    } else if (operation === 'delete') {
+                        btnConfirmBulkAction.textContent = `Delete ${data.eligible_count} Eligible Track${data.eligible_count === 1 ? '' : 's'}`;
+                    }
+                    if (btnCancelBulkAction) btnCancelBulkAction.textContent = 'Cancel';
+                }
+            }
+
+        } catch (err) {
+            console.error('AFM2 bulk eligibility check error:', err);
+            if (bulkActionLoading) bulkActionLoading.style.display = 'none';
+            if (bulkActionDetails) bulkActionDetails.style.display = 'block';
+            if (bulkActionError) {
+                bulkActionError.textContent = 'Network error: Unable to check track eligibility. Please try again.';
+                bulkActionError.style.display = 'block';
+            }
+            if (btnConfirmBulkAction) {
+                btnConfirmBulkAction.disabled = true;
+                btnConfirmBulkAction.style.display = 'none';
+            }
+            if (btnCancelBulkAction) btnCancelBulkAction.textContent = 'Close';
+        }
+    }
+
+    // Modal Close Handlers
+    function closeBulkActionModal() {
+        if (bulkActionConfirmModal) bulkActionConfirmModal.classList.remove('active');
+        currentBulkOperation = null;
+        currentEligibilityData = null;
+    }
+
+    if (btnCancelBulkAction) btnCancelBulkAction.addEventListener('click', closeBulkActionModal);
+    if (btnCloseBulkActionModal) btnCloseBulkActionModal.addEventListener('click', closeBulkActionModal);
+
+    // Confirm Execution
+    if (btnConfirmBulkAction) {
+        btnConfirmBulkAction.addEventListener('click', async () => {
+            if (!currentBulkOperation || !currentEligibilityData) return;
+            const eligibleIds = currentEligibilityData.eligible_ids || [];
+            if (eligibleIds.length === 0) return;
+
+            btnConfirmBulkAction.disabled = true;
+            btnConfirmBulkAction.textContent = 'Processing...';
+
+            if (currentBulkOperation === 'delete') {
+                // Bulk Delete Execution
+                try {
+                    const res = await fetch('api.php?action=delete_multiple_songs', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCsrfToken()
+                        },
+                        body: JSON.stringify({ song_ids: eligibleIds })
+                    });
+
+                    let data = null;
                     try {
                         data = await res.json();
-                    } catch (parseErr) {
-                        data = null;
-                    }
-                } else {
-                    const rawText = await res.text();
-                    try {
-                        data = JSON.parse(rawText);
                     } catch (e) {
                         data = null;
                     }
+
+                    closeBulkActionModal();
+
+                    if (!data || !data.success) {
+                        const errMsg = data?.error || 'A server error occurred during bulk deletion.';
+                        showToast(errMsg, 'danger');
+                        return;
+                    }
+
+                    showToast(data.message || `${data.deleted_count} tracks deleted successfully.`, 'success');
+
+                    // Mutate DOM strictly for server-confirmed deleted IDs
+                    const deletedIds = data.deleted_ids || [];
+                    deletedIds.forEach(id => {
+                        const row = document.querySelector(`tr[data-song-id="${id}"]`);
+                        if (row) {
+                            row.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+                            row.style.opacity = '0';
+                            row.style.transform = 'scaleY(0.5)';
+                            setTimeout(() => row.remove(), 250);
+                        }
+                    });
+
+                    setTimeout(() => {
+                        updateBulkSelectionState();
+                        const remainingRows = document.querySelectorAll('#songsTable tbody tr');
+                        if (remainingRows.length === 0) {
+                            window.location.reload();
+                        }
+                    }, 300);
+
+                } catch (err) {
+                    console.error('Bulk delete execution error:', err);
+                    closeBulkActionModal();
+                    showToast('Network error during bulk deletion. No tracks were deleted.', 'danger');
                 }
 
-                confirmBulkDeleteBtn.disabled = false;
-                confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
+            } else {
+                // Bulk Shortlist / Pass Execution
+                const targetStatus = currentBulkOperation === 'shortlist' ? 'shortlisted' : 'passed';
+                try {
+                    const res = await fetch('api.php?action=bulk_discovery_update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCsrfToken()
+                        },
+                        body: JSON.stringify({
+                            operation: targetStatus,
+                            song_ids: eligibleIds
+                        })
+                    });
 
-                if (!data) {
-                    let errMsg = 'Failed to delete selected songs.';
-                    if (res.status === 403) {
-                        errMsg = 'Permission denied: You do not have authorization to delete these songs.';
-                    } else if (res.status === 404) {
-                        errMsg = 'One or more songs were not found in your catalogue.';
-                    } else if (res.status === 409) {
-                        errMsg = 'Bulk deletion blocked by competition safeguards.';
-                    } else if (res.status >= 500) {
-                        errMsg = 'A database or server error occurred during bulk deletion. The technical incident has been logged.';
-                    } else {
-                        errMsg = `Server returned error (${res.status}). Please try again.`;
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = null;
                     }
-                    if (bulkDeleteError) {
-                        bulkDeleteError.textContent = errMsg;
-                        bulkDeleteError.style.display = 'block';
-                    }
-                    return;
-                }
 
-                if (!data.success) {
-                    let errMsg = data.error || 'Failed to delete selected songs.';
-                    // Never expose raw SQL errors or internal database details to users
-                    if (/SQLSTATE|Illegal mix of collations|General error|PDOException|Table.*doesn't exist/i.test(errMsg)) {
-                        errMsg = 'A database error occurred during bulk deletion. The technical incident has been logged. Please contact support.';
-                    }
-                    if (bulkDeleteError) {
-                        bulkDeleteError.textContent = errMsg;
-                        bulkDeleteError.style.display = 'block';
-                    }
-                    return;
-                }
+                    closeBulkActionModal();
 
-                showToast(data.message || `${data.deleted_count} tracks deleted successfully.`, 'success');
-                bulkDeleteModal.classList.remove('active');
-
-                // Animate removal of deleted rows from DOM
-                const deletedIds = data.deleted_ids || [];
-                deletedIds.forEach(id => {
-                    const row = document.querySelector(`tr[data-song-id="${id}"]`);
-                    if (row) {
-                        row.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-                        row.style.opacity = '0';
-                        row.style.transform = 'scaleY(0.5)';
-                        setTimeout(() => row.remove(), 250);
+                    if (!data || !data.success) {
+                        const errMsg = data?.error || data?.message || 'Failed to update discovery status.';
+                        showToast(errMsg, 'danger');
+                        return;
                     }
-                });
 
-                // Clear selection
-                setTimeout(() => {
+                    // STRICT AUTHORITATIVE DOM MUTATION:
+                    // Mutate DOM ONLY for tracks returned in data.updated_ids!
+                    // Ineligible or skipped tracks are NEVER touched.
+                    const updatedIds = data.updated_ids || [];
+                    updatedIds.forEach(id => {
+                        const row = document.querySelector(`tr[data-song-id="${id}"]`);
+                        if (row) {
+                            updateRowDiscoveryState(row, targetStatus);
+                        }
+                    });
+
+                    if (data.shortlisted_count !== undefined) {
+                        updateDiscoveryCounters(data);
+                    }
+
+                    showToast(data.message, 'success');
+
+                    // Uncheck selected boxes and update bar
+                    document.querySelectorAll('.song-select-checkbox:checked').forEach(cb => {
+                        cb.checked = false;
+                    });
                     updateBulkSelectionState();
-                    // If table is now empty, reload to show next page or empty state
-                    const remainingRows = document.querySelectorAll('#songsTable tbody tr');
-                    if (remainingRows.length === 0) {
-                        window.location.reload();
-                    }
-                }, 300);
 
-            } catch (err) {
-                confirmBulkDeleteBtn.disabled = false;
-                confirmBulkDeleteBtn.textContent = 'Delete Eligible Tracks';
-                console.error('Bulk delete connection error:', err);
-                if (bulkDeleteError) {
-                    bulkDeleteError.textContent = 'Network error: Unable to connect to the server. Please check your internet connection.';
-                    bulkDeleteError.style.display = 'block';
+                } catch (err) {
+                    console.error('Bulk discovery update error:', err);
+                    closeBulkActionModal();
+                    showToast('Network error during bulk update. No speculative changes applied.', 'danger');
                 }
             }
         });
     }
 
+    // Attach bulk action triggers
+    if (btnBulkShortlist) {
+        btnBulkShortlist.addEventListener('click', () => openBulkActionConfirmation('shortlist'));
+    }
+    if (btnBulkPass) {
+        btnBulkPass.addEventListener('click', () => openBulkActionConfirmation('pass'));
+    }
+    if (btnBulkDelete) {
+        btnBulkDelete.addEventListener('click', () => openBulkActionConfirmation('delete'));
+    }
+
+    // Legacy bulkDeleteModal triggers (kept for safety)
+    if (closeBulkDeleteBtn && bulkDeleteModal) closeBulkDeleteBtn.addEventListener('click', () => bulkDeleteModal.classList.remove('active'));
+    if (cancelBulkDeleteBtn && bulkDeleteModal) cancelBulkDeleteBtn.addEventListener('click', () => bulkDeleteModal.classList.remove('active'));
+
     // Modal background click handling
-    [addModal, editModal, deleteModal, bulkDeleteModal].forEach(modal => {
+    [addModal, editModal, deleteModal, bulkDeleteModal, bulkActionConfirmModal].forEach(modal => {
         if (!modal) return;
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -4947,8 +5419,12 @@ function initArchiveStageNavigation() {
                         const href = item.getAttribute('href');
                         if (href === `#${id}`) {
                             item.classList.add('active');
-                            // Ensure visible in horizontal scroll on mobile
-                            item.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+                            // Ensure visible in horizontal scroll container on mobile without interrupting window touch gestures
+                            const navContainer = navWrap.querySelector('.archive-stage-nav');
+                            if (navContainer && typeof navContainer.scrollTo === 'function') {
+                                const itemLeft = item.offsetLeft - navContainer.offsetLeft;
+                                navContainer.scrollTo({ left: Math.max(0, itemLeft - 24), behavior: 'smooth' });
+                            }
                         } else {
                             item.classList.remove('active');
                         }

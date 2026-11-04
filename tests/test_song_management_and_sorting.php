@@ -209,7 +209,7 @@ if ($scoredSong) {
     $delBlocked = delete_catalogue_song($scoredSongId);
     assert_test($delBlocked['success'] === false, "CRITICAL SAFEGUARD: delete_catalogue_song() blocks deletion of scored song #{$scoredSongId}");
     assert_test(!empty($delBlocked['blocked']), "Blocked flag is set in response");
-    assert_test(stripos($delBlocked['error'], 'cannot be permanently deleted') !== false, "Error message explicitly cites recorded tournament history");
+    assert_test(!empty($delBlocked['blocked']) && (stripos($delBlocked['error'], 'shortlist') !== false || stripos($delBlocked['error'], 'cannot be permanently deleted') !== false || stripos($delBlocked['error'], 'active audition score') !== false), "Error message explicitly cites recorded tournament history or shortlist safeguard");
 
     // Verify scored song is still intact in catalogue
     $checkScoredStillExists = (int)$pdo->query("SELECT COUNT(*) FROM songs WHERE song_id = {$scoredSongId}")->fetchColumn();

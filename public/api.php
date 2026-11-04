@@ -69,6 +69,79 @@ switch ($action) {
         echo json_encode($result);
         break;
 
+    case 'check_bulk_eligibility':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $operation = isset($input['operation']) ? trim((string)$input['operation']) : '';
+        $rawSongIds = $input['song_ids'] ?? [];
+
+        if (!in_array($operation, ['shortlist', 'pass', 'delete'], true)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid bulk action operation. Must be shortlist, pass, or delete.']);
+            exit;
+        }
+
+        if (!is_array($rawSongIds) || empty($rawSongIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'No song IDs provided for eligibility check.']);
+            exit;
+        }
+
+        try {
+            $eligibility = check_bulk_songs_eligibility($operation, $rawSongIds, $currentUserId);
+            echo json_encode($eligibility);
+        } catch (\Throwable $e) {
+            error_log("AFM2 check_bulk_eligibility exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred while verifying track eligibility. Please try again later.'
+            ]);
+        }
+        break;
+
+    case 'bulk_discovery_update':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $status = isset($input['status']) ? trim((string)$input['status']) : (isset($input['operation']) ? trim((string)$input['operation']) : '');
+        $rawSongIds = $input['song_ids'] ?? [];
+
+        if (!is_array($rawSongIds) || empty($rawSongIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'No song IDs provided for bulk status update.']);
+            exit;
+        }
+
+        try {
+            $res = bulk_update_song_discovery($status, $rawSongIds, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
+            }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 bulk_discovery_update exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred during bulk status update. The technical incident has been logged. Please try again.'
+            ]);
+        }
+        break;
+
     case 'save_rating':
         if ($method !== 'POST') {
             http_response_code(405);
@@ -102,7 +175,7 @@ switch ($action) {
             $currentUserId
         );
 
-        if (!$result['success'] && strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
+        if (!$result['success'] && (!empty($result['blocked']) || strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false)) {
             http_response_code(403);
             echo json_encode($result);
             break;
@@ -152,7 +225,7 @@ switch ($action) {
 
         $result = reset_scorecard_rating($entryId, $roundId, $currentUserId);
         if (!$result['success']) {
-            if (strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
+            if (!empty($result['blocked']) || strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
                 http_response_code(403);
             } else {
                 http_response_code(400);

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" data-visual-direction="midnight_muse" data-theme="midnight_ember">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFM#2 — High-Fidelity Mobile UI Prototypes</title>
+    <!-- Google Fonts Matching AFM#2 Production -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/prototype.css">
+</head>
+<body>
+
+    <!-- Top Workbench Control Bar -->
+    <header class="workbench-toolbar">
+        <div class="workbench-brand">
+            <img src="img/afm2-logo.png" alt="AFM#2" class="workbench-logo" onerror="this.style.display='none'">
+            <div class="workbench-title-group">
+                <h1>AFM#2 Mobile UI Prototypes</h1>
+            </div>
+            <span class="workbench-badge">Design Phase 0</span>
+            <span class="synthetic-data-pill" title="All songs, ratings, and scores in this prototype are synthetic demonstration records">
+                ⚠️ SYNTHETIC DEMONSTRATION DATA &bull; NOT PRODUCTION DATABASE
+            </span>
+        </div>
+
+        <div class="workbench-controls">
+            <!-- Breakpoint Continuum Switcher (Mobile -> Tablet -> Desktop -> Ultrawide) -->
+            <div class="control-pill-group">
+                <button type="button" class="control-btn width-toggle-btn" data-width="320" title="Compact Mobile (iPhone SE)">320</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="360" title="Standard Android">360</button>
+                <button type="button" class="control-btn width-toggle-btn active" data-width="390" title="Mobile Baseline (iPhone 13/14/15)">390 (Mobile)</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="430" title="Large Mobile (Pro Max)">430</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="768" title="Tablet Portrait / iPad">768 (Tablet)</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="1024" title="Laptop / Tablet Landscape">1024</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="1280" title="Standard Desktop Workstation">1280 (Desktop)</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="1440" title="Wide Desktop Workstation">1440</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="1920" title="Ultrawide Monitor">1920 (Ultra)</button>
+                <button type="button" class="control-btn width-toggle-btn" data-width="fluid" title="Fluid Responsive">Fluid</button>
+            </div>
+
+            <!-- Visual Direction Switcher -->
+            <select id="directionSelect" class="control-select" title="Switch Visual Direction">
+                <option value="midnight_muse" selected>Direction A: Midnight Muse (Dark Amber)</option>
+                <option value="soft_frequency">Direction B: Soft Frequency (Warm Editorial)</option>
+                <option value="chromatic_sound">Direction C: Chromatic Sound (Electric Cyan)</option>
+            </select>
+
+            <!-- Atmospheric Theme Switcher (All 8 Themes) -->
+            <select id="themeSelect" class="control-select" title="Select Production Theme">
+                <option value="midnight_ember" selected>Theme 1: Midnight Ember (Default)</option>
+                <option value="velvet_amethyst">Theme 2: Velvet Amethyst (Dark Cosmic)</option>
+                <option value="emerald_forest">Theme 3: Emerald Forest (Dark Botanical)</option>
+                <option value="vintage_paper">Theme 4: Vintage Parchment (Warm Light)</option>
+                <option value="nordic_frost">Theme 5: Nordic Frost (High Contrast Light)</option>
+                <option value="solar_terracotta">Theme 6: Solar Terracotta (Tuscan Sunset)</option>
+                <option value="oceanic">Theme 7: Oceanic Dusk (Dark Marine)</option>
+                <option value="quiet_minimal">Theme 8: Quiet Minimal (Alabaster Studio)</option>
+            </select>
+
+            <!-- Screen Jump -->
+            <select id="screenJumpSelect" class="control-select" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
+                <option value="screen-home">Screen 1: Home / Dashboard</option>
+                <option value="screen-library-discover">Screen 2: Library Discover (Pinterest)</option>
+                <option value="screen-library-manage">Screen 3: Library Manage (SoundCloud)</option>
+                <option value="screen-song-detail">Screen 4: Song Detail (Immersive)</option>
+                <option value="screen-auditions">Screen 5: Formal Auditions (1-Song Focus)</option>
+                <option value="screen-recordings">Screen 6: Recordings (YouTube Matcher)</option>
+                <option value="screen-tournament">Screen 7: Tournament (Leaderboard)</option>
+                <option value="screen-qualification">Screen 8: Qualification Wizard (3-Step)</option>
+                <option value="screen-archive">Screen 9: Archive (Historical Stages)</option>
+                <option value="screen-champion">Screen 10: Champion Presentation</option>
+            </select>
+
+            <!-- Desktop Comparison Link -->
+            <a href="desktop-comparison.html" class="control-btn" style="background: rgba(255, 255, 255, 0.08); text-decoration: none;">
+                <span>🖥️</span> Desktop Comparison &rarr;
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Emulator Stage -->
+    <main class="emulator-stage">
+        <!-- Smartphone Hardware Shell -->
+        <div class="device-phone" id="devicePhone" data-width="390" data-visual-direction="midnight_muse" data-theme="midnight_ember">
+            <!-- Hardware Dynamic Island / Notch -->
+            <div class="device-notch"></div>
+
+            <!-- iOS Status Bar -->
+            <div class="device-status-bar">
+                <span id="statusTime">22:18</span>
+                <div class="status-icons">
+                    <span>5G</span>
+                    <span>📶</span>
+                    <span>🔋</span>
+                </div>
+            </div>
+
+            <!-- Synthetic Data In-Emulator Disclosure Strip -->
+            <div class="emulator-synthetic-strip">
+                ⚠️ SYNTHETIC EVALUATION DEMO &bull; NOT PRODUCTION DATA
+            </div>
+
+            <!-- Compact Mobile App Header -->
+            <header class="mobile-app-header">
+                <a href="#home" class="brand-monogram" onclick="switchScreen('screen-home'); return false;">
+                    <img src="img/afm2-logo.png" alt="AFM#2" class="monogram-logo" onerror="this.style.display='none'">
+                    <span class="font-brand" style="font-weight: 800; font-size: 1rem; letter-spacing: -0.02em;">AFM#2</span>
+                    <div class="sound-equalizer" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </a>
+
+                <div class="header-stage-pill font-mono">
+                    Top 200 ● Active
+                </div>
+
+                <div style="display: flex; gap: 0.25rem;">
+                    <button type="button" class="header-action-btn" onclick="switchScreen('screen-library-discover')" title="Search catalogue">
+                        🔍
+                    </button>
+                    <button type="button" class="header-action-btn" onclick="openMoreSheet()" title="More options">
+                        🎨
+                    </button>
+                </div>
+            </header>
+
+            <!-- Scrollable Dynamic Screen Container -->
+            <div class="screen-scroll-container" id="screenContent">
+                <!-- Dynamically populated by prototype.js -->
+            </div>
+
+            <!-- Persistent 5-Destination Bottom Navigation -->
+            <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile Navigation">
+                <button type="button" class="nav-tab-item active" data-screen="screen-home" id="tabHome">
+                    <span class="nav-icon">⌂</span>
+                    <span>Home</span>
+                </button>
+                <button type="button" class="nav-tab-item" data-screen="screen-library-discover" id="tabLibrary">
+                    <span class="nav-icon">♫</span>
+                    <span>Library</span>
+                </button>
+                <button type="button" class="nav-tab-item" data-screen="screen-auditions" id="tabAuditions">
+                    <span class="nav-icon">🎧</span>
+                    <span>Auditions</span>
+                </button>
+                <button type="button" class="nav-tab-item" data-screen="screen-tournament" id="tabTournament">
+                    <span class="nav-icon">🏆</span>
+                    <span>Bracket</span>
+                </button>
+                <button type="button" class="nav-tab-item" data-screen="sheet-more" id="tabMore">
+                    <span class="nav-icon">⋯</span>
+                    <span>More</span>
+                </button>
+            </nav>
+        </div>
+    </main>
+
+    <!-- "More" Contextual Modal Bottom Sheet -->
+    <div class="modal-bottom-sheet" id="moreModalSheet">
+        <div class="bottom-sheet-dialog">
+            <div class="bottom-sheet-handle"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h3 style="font-size: 1rem; font-weight: 700;">AFM#2 Navigation</h3>
+                <button type="button" class="btn btn-xs btn-secondary btn-sheet-close">✕ Close</button>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.85rem;">Secondary application destinations and settings.</p>
+
+            <div class="sheet-menu-grid">
+                <a href="#recordings" class="sheet-menu-item" data-jump-screen="screen-recordings">
+                    <span class="sheet-menu-icon">🎬</span>
+                    <div>
+                        <div>Recordings</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">YouTube Matching</div>
+                    </div>
+                </a>
+
+                <a href="#archive" class="sheet-menu-item" data-jump-screen="screen-archive">
+                    <span class="sheet-menu-icon">📜</span>
+                    <div>
+                        <div>Archive</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">Historical Stages</div>
+                    </div>
+                </a>
+
+                <a href="#champion" class="sheet-menu-item" data-jump-screen="screen-champion">
+                    <span class="sheet-menu-icon">👑</span>
+                    <div>
+                        <div>Champion</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">Hall of Fame</div>
+                    </div>
+                </a>
+
+                <a href="#shortlist" class="sheet-menu-item" data-jump-screen="screen-home">
+                    <span class="sheet-menu-icon">★</span>
+                    <div>
+                        <div>Shortlist</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">Contender Queue</div>
+                    </div>
+                </a>
+
+                <a href="#account" class="sheet-menu-item" data-jump-screen="screen-home">
+                    <span class="sheet-menu-icon">⚙️</span>
+                    <div>
+                        <div>Account</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">Passkeys &amp; Security</div>
+                    </div>
+                </a>
+
+                <a href="#theme" class="sheet-menu-item" onclick="document.getElementById('themeSelect').focus(); return false;">
+                    <span class="sheet-menu-icon">🎨</span>
+                    <div>
+                        <div>Themes</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">8 Mood Presets</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prototype Toast Notifications Container -->
+    <div class="prototype-toast-container" id="toastContainer"></div>
+
+    <script src="js/prototype.js"></script>
+</body>
+</html>

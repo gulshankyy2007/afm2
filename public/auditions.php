@@ -277,10 +277,15 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 $entryId = (int)$item['entry_id'];
                 $isComplete = !empty($item['is_complete']);
                 $isIncomplete = !empty($item['is_incomplete']);
+                $isFinalized = !empty($item['is_finalized']);
+                $finalizedResult = $item['finalized_result'] ?? null;
+                $finalizedRank = $item['finalized_rank'] ?? null;
                 $totalScore = $item['total'];
 
                 $cardClass = '';
-                if ($isComplete) {
+                if ($isFinalized) {
+                    $cardClass = 'complete is-finalized is-frozen';
+                } elseif ($isComplete) {
                     $cardClass = 'complete';
                 } elseif ($isIncomplete) {
                     $cardClass = 'incomplete';
@@ -307,29 +312,24 @@ require_once dirname(__DIR__) . '/includes/header.php';
                     $artworkAttribution = $item['artwork_attribution_url'] ?? '';
                 }
 
-                $versionIcons = [
-                    'original' => '💿 Studio Original',
-                    'live'     => '🎤 Live Performance',
-                    'acoustic' => '🎸 Acoustic Version',
-                    'cover'    => '👥 Cover Recording',
-                    'remaster' => '✨ Remastered',
-                    'other'    => '🏷️ Other'
+                $versionLabels = [
+                    'original' => 'Studio Original',
+                    'live'     => 'Live Performance',
+                    'acoustic' => 'Acoustic Version',
+                    'cover'    => 'Cover Recording',
+                    'remaster' => 'Remastered',
+                    'other'    => 'Other Recording'
                 ];
-                $versionLabel = $versionIcons[$mediaVersion] ?? '💿 Recording';
+                $versionLabel = $versionLabels[$mediaVersion] ?? 'Confirmed Recording';
             ?>
             <div class="scorecard-wrapper mb-5">
-                <!-- Poetic Overhead Quote -->
-                <div class="poetic-banner">
-                    <span class="script-quote">Let's get lost somewhere.</span>
-                    <span class="heart-dot">♥</span>
-                </div>
-
                 <div 
                     class="scorecard-card tactile-player-card <?= $cardClass ?>" 
                     id="entry-<?= $entryId ?>"
                     data-entry-id="<?= $entryId ?>"
                     data-song-id="<?= $songId ?>"
                     data-round-id="<?= (int)$selectedRoundId ?>"
+                    data-finalized="<?= $isFinalized ? '1' : '0' ?>"
                     data-song-title="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>"
                     data-song-artist="<?= htmlspecialchars($item['artist'], ENT_QUOTES, 'UTF-8') ?>"
                 >
@@ -367,6 +367,11 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 <div class="tactile-stream-badge">
                                     <span class="stream-beacon">((●))</span>
                                     <span class="stream-title">AFM#2 Audition</span>
+                                    <?php if ($isFinalized): ?>
+                                        <span class="badge-finalized-pill" title="Finalized scorecard" aria-label="Finalized scorecard">
+                                            <span class="lock-icon" aria-hidden="true">🔒</span> <span class="badge-finalized-text">FINALIZED</span>
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="scorecard-total-box">
                                     <?php
@@ -379,8 +384,8 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                         if ($item['replayability'] !== null) $partialSum += (int)$item['replayability'];
                                     }
                                     ?>
-                                    <div class="total-score-badge <?= $isComplete ? 'complete' : '' ?>">
-                                        <?php if ($isComplete): ?>
+                                    <div class="total-score-badge <?= ($isComplete || $isFinalized) ? 'complete' : '' ?> <?= $isFinalized ? 'is-finalized' : '' ?>">
+                                        <?php if ($isFinalized || $isComplete): ?>
                                             <?= (int)$totalScore ?> / 50
                                         <?php elseif ($isIncomplete): ?>
                                             <?= $partialSum ?>* / 50
@@ -388,11 +393,19 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                             — / 50
                                         <?php endif; ?>
                                     </div>
-                                    <div class="total-score-label">
-                                        <?= $isComplete ? 'Complete' : ($isIncomplete ? 'Incomplete' : 'Unscored') ?>
+                                    <div class="total-score-label <?= $isFinalized ? 'text-finalized' : '' ?>">
+                                        <?php if ($isFinalized): ?>
+                                            <span class="lock-icon" aria-hidden="true">🔒</span> Finalized
+                                        <?php elseif ($isComplete): ?>
+                                            Complete
+                                        <?php elseif ($isIncomplete): ?>
+                                            Incomplete
+                                        <?php else: ?>
+                                            Unscored
+                                        <?php endif; ?>
                                     </div>
                                     <div class="total-score-meter" title="Total score progress">
-                                        <div class="total-score-fill" style="width: <?= $isComplete ? min(100, round(($totalScore / 50) * 100)) : ($isIncomplete ? min(100, round(($partialSum / 50) * 100)) : 0) ?>%;"></div>
+                                        <div class="total-score-fill <?= $isFinalized ? 'fill-finalized' : '' ?>" style="width: <?= ($isComplete || $isFinalized) ? min(100, round(($totalScore / 50) * 100)) : ($isIncomplete ? min(100, round(($partialSum / 50) * 100)) : 0) ?>%;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -402,19 +415,21 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                 <div class="tactile-artist"><?= htmlspecialchars($item['artist'], ENT_QUOTES, 'UTF-8') ?></div>
                                 <div class="tactile-details">Tournament Stage: <?= htmlspecialchars($currentRound['round_name'], ENT_QUOTES, 'UTF-8') ?> &bull; Catalogue Track #<?= (int)$songId ?></div>
                             </div>
+                        </div><!-- /.tactile-meta-col -->
+                    </div><!-- /.tactile-hero-row -->
 
-                            <!-- Audio Playback & Lyrics Experience Panel -->
-                <div class="scorecard-media-panel" 
-                     data-song-id="<?= $songId ?>" 
-                     data-entry-id="<?= $entryId ?>"
-                     data-song-title="<?= htmlspecialchars($item['title'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                     data-song-artist="<?= htmlspecialchars($item['artist'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                     data-video-id="<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>"
-                     data-user-url="<?= htmlspecialchars($item['media_user_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                     data-version-type="<?= htmlspecialchars($mediaVersion, ENT_QUOTES, 'UTF-8') ?>"
-                     data-version-notes="<?= htmlspecialchars($mediaNotes, ENT_QUOTES, 'UTF-8') ?>"
-                     data-embed-status="<?= htmlspecialchars($mediaEmbedStatus, ENT_QUOTES, 'UTF-8') ?>"
-                >
+                    <!-- Audio Playback & Lyrics Experience Panel -->
+                    <div class="scorecard-media-panel" 
+                         data-song-id="<?= $songId ?>" 
+                         data-entry-id="<?= $entryId ?>"
+                         data-song-title="<?= htmlspecialchars($item['title'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                         data-song-artist="<?= htmlspecialchars($item['artist'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                         data-video-id="<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>"
+                         data-user-url="<?= htmlspecialchars($item['media_user_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                         data-version-type="<?= htmlspecialchars($mediaVersion, ENT_QUOTES, 'UTF-8') ?>"
+                         data-version-notes="<?= htmlspecialchars($mediaNotes, ENT_QUOTES, 'UTF-8') ?>"
+                         data-embed-status="<?= htmlspecialchars($mediaEmbedStatus, ENT_QUOTES, 'UTF-8') ?>"
+                    >
                     <div class="media-toolbar">
                         <div class="media-toolbar-left">
                             <!-- Live Playback Status Pill -->
@@ -425,47 +440,33 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
                             <div class="audio-match-indicator">
                                 <?php if ($hasMedia): ?>
-                                    <span class="media-badge media-badge-confirmed" title="<?= htmlspecialchars($mediaNotes ? "Notes: {$mediaNotes}" : $versionLabel) ?>">
-                                        <?= htmlspecialchars($versionLabel) ?>
+                                    <span class="media-badge media-badge-confirmed" title="<?= htmlspecialchars($mediaNotes ? "Notes: {$mediaNotes}" : "Confirmed {$versionLabel}") ?>" aria-label="<?= htmlspecialchars($versionLabel) ?>" data-tooltip="<?= htmlspecialchars($versionLabel) ?>">
+                                        <svg class="btn-svg-icon icon-disc" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg> <span class="version-name"><?= htmlspecialchars($versionLabel) ?></span>
                                     </span>
-                                    <button type="button" class="btn-xs btn-primary-subtle btn-toggle-player active" title="Play or hide embedded player">
-                                        <span class="btn-icon">▶</span> <span class="player-toggle-label">Hide Player</span>
+                                    <button type="button" class="btn-xs btn-primary-subtle btn-toggle-player active" title="Play or hide embedded player" aria-label="Toggle audio player" aria-pressed="true" data-tooltip="Toggle Player">
+                                        <svg class="btn-svg-icon icon-play" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg> <span class="btn-text player-toggle-label">Hide Player</span>
                                     </button>
-                                    <button type="button" class="btn-xs btn-secondary btn-edit-media" title="Change recording version or video ID">
-                                        <span class="btn-icon">🔁</span> Change Recording
+                                    <button type="button" class="btn-xs btn-secondary btn-edit-media" title="Change recording version or video ID" aria-label="Change recording link" data-tooltip="Change Recording">
+                                        <svg class="btn-svg-icon icon-edit" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> <span class="btn-text">Change Recording</span>
                                     </button>
                                 <?php else: ?>
                                     <span class="media-badge media-badge-unmatched">○ No recording selected</span>
-                                    <button type="button" class="btn-xs btn-primary-subtle btn-match-media" title="Select and confirm recording">
-                                        <span class="btn-icon">🎧</span> Select Recording
+                                    <button type="button" class="btn-xs btn-primary-subtle btn-match-media" title="Select and confirm recording" aria-label="Select and confirm recording" data-tooltip="Select Recording">
+                                        <svg class="btn-svg-icon icon-audio" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg> <span class="btn-text">Select Recording</span>
                                     </button>
                                 <?php endif; ?>
                             </div>
-
-                            <!-- Direct Recording Links (Secondary Reference) -->
-                            <?php if ($hasMedia): ?>
-                                <a href="https://www.youtube.com/watch?v=<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube">
-                                    YouTube ↗
-                                </a>
-                                <a href="https://music.youtube.com/watch?v=<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube Music">
-                                    YT Music ↗
-                                </a>
-                            <?php else: ?>
-                                <a href="<?= htmlspecialchars($ytSearch) ?>" target="_blank" rel="noopener noreferrer" class="link-external text-muted" title="Search YouTube to locate an official recording link">
-                                    Find Link ↗
-                                </a>
-                            <?php endif; ?>
                         </div>
 
                         <div class="media-toolbar-right">
-                            <button type="button" class="btn-xs btn-toggle-lyrics active" title="View lyrics from LRCLIB">
-                                <span class="btn-icon">📜</span> <span class="lyrics-toggle-label">Lyrics</span>
+                            <button type="button" class="btn-xs btn-toggle-lyrics active" title="View lyrics from LRCLIB" aria-label="Toggle lyrics panel" aria-pressed="true" data-tooltip="Toggle Lyrics">
+                                <svg class="btn-svg-icon icon-lyrics" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> <span class="btn-text lyrics-toggle-label">Lyrics</span>
                             </button>
                         </div>
                     </div>
 
                     <!-- Integrated Player & Lyrics Experience Container (Always Mounted & Visible) -->
-                    <div class="audition-drawer audio-active lyrics-active" style="display: grid;">
+                    <div class="audition-drawer audio-active lyrics-active">
                         <!-- Left Column: Official Embedded Player / Matcher -->
                         <div class="drawer-col-audio">
                             <!-- Player Box -->
@@ -494,17 +495,21 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                         </div>
                                     <?php else: ?>
                                         <div class="player-wrapper">
-                                            <!-- Embedded official YouTube IFrame with strict origin & enablejsapi=1 -->
+                                            <!-- Embedded official YouTube IFrame with enablejsapi=1 -->
+                                            <?php
+                                                $appOrigin = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+                                                $embedSrc = "https://www.youtube.com/embed/" . rawurlencode($mediaVideoId) . "?enablejsapi=1&amp;playsinline=1&amp;rel=0&amp;origin=" . rawurlencode($appOrigin);
+                                            ?>
                                             <iframe 
                                                 class="yt-embed-frame" 
                                                 id="yt-player-<?= (int)$songId ?>" 
                                                 data-video-id="<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>"
-                                                data-src="https://www.youtube-nocookie.com/embed/<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>?enablejsapi=1&origin=<?= urlencode($appOrigin) ?>&rel=0&autoplay=0&playsinline=1" 
-                                                src="https://www.youtube-nocookie.com/embed/<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>?enablejsapi=1&origin=<?= urlencode($appOrigin) ?>&rel=0&autoplay=0&playsinline=1" 
+                                                data-src="<?= $embedSrc ?>" 
+                                                src="<?= $embedSrc ?>" 
                                                 referrerpolicy="strict-origin-when-cross-origin"
                                                 loading="lazy" 
                                                 title="AFM#2 Audio Player: <?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
                                                 allowfullscreen
                                             ></iframe>
                                             <div class="player-footer">
@@ -645,12 +650,16 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                             <option value="lyrics_ovh">Lyrics.ovh (Plain)</option>
                                             <option value="manual">My Manual Lyrics</option>
                                         </select>
-                                        <div class="lyrics-tab-group">
-                                            <button type="button" class="lyrics-tab active" data-view="plain">Plain</button>
-                                            <button type="button" class="lyrics-tab" data-view="synced">Synced</button>
-                                            <button type="button" class="lyrics-tab" data-view="manual" title="Write or paste your own lyrics">✏️ Manual</button>
-                                            <button type="button" class="lyrics-tab btn-lyrics-find-alt" title="Find another version">Alts ▾</button>
-                                            <button type="button" class="lyrics-tab btn-lyrics-toggle-override" title="Search with corrected song or artist name">🔍 Edit Search</button>
+                                        <div class="lyrics-tab-group" role="tablist" aria-label="Lyrics display modes">
+                                            <div class="lyrics-tab-row lyrics-tab-row-primary">
+                                                <button type="button" class="lyrics-tab active" data-view="plain" aria-label="Plain text lyrics" aria-pressed="true" role="tab" data-tooltip="Plain lyrics">Plain</button>
+                                                <button type="button" class="lyrics-tab" data-view="synced" aria-label="Synchronized lyrics" aria-pressed="false" role="tab" data-tooltip="Synced lyrics">Synced</button>
+                                                <button type="button" class="lyrics-tab" data-view="manual" title="Write or paste your own lyrics" aria-label="Manual personal lyrics editor" aria-pressed="false" role="tab" data-tooltip="Personal editor"><svg class="btn-svg-icon icon-edit" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> <span class="btn-text">Manual</span></button>
+                                            </div>
+                                            <div class="lyrics-tab-row lyrics-tab-row-secondary">
+                                                <button type="button" class="lyrics-tab btn-lyrics-find-alt" title="Find another version" aria-label="Find alternative lyrics versions" data-tooltip="Alternate versions"><span class="btn-text">Alts</span> ▾</button>
+                                                <button type="button" class="lyrics-tab btn-lyrics-toggle-override" title="Search with corrected song or artist name" aria-label="Edit song or artist name for lyrics search" data-tooltip="Edit search query"><svg class="btn-svg-icon icon-search" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> <span class="btn-text">Edit Search</span></button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -690,151 +699,226 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         </div><!-- /.drawer-col-lyrics -->
                     </div><!-- /.audition-drawer -->
                 </div><!-- /.scorecard-media-panel -->
-            </div><!-- /.tactile-meta-col -->
-        </div><!-- /.tactile-hero-row -->
 
-                <!-- 5 Criteria Inputs Grid with Range Sliders & Presets -->
-                <div class="scorecard-grid">
+                <!-- 5 Criteria Scoring Matrix (Compact Horizontal Instrument) -->
+                <div class="scorecard-grid scorecard-matrix <?= $isFinalized ? 'is-matrix-finalized' : '' ?>">
                     <!-- 1. Melody -->
-                    <div class="criterion-field">
+                    <div class="criterion-field" data-criterion="melody">
                         <div class="criterion-header">
-                            <label for="mel-<?= $entryId ?>"><span class="criterion-icon">🎵</span> Melody</label>
+                            <label for="mel-<?= $entryId ?>"><span class="criterion-icon">🎵</span> <span class="criterion-name">Melody</span></label>
+                            <div class="criterion-stepper">
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-down" aria-label="Decrease Melody score" title="Decrease score">&minus;</button>
+                                <?php endif; ?>
+                                <input 
+                                    type="number" 
+                                    id="mel-<?= $entryId ?>" 
+                                    class="criterion-input <?= $isFinalized ? 'is-readonly' : '' ?>" 
+                                    data-criterion="melody"
+                                    min="0" 
+                                    max="10" 
+                                    step="1" 
+                                    <?= $isFinalized ? 'readonly disabled aria-disabled="true"' : 'placeholder="0-10"' ?>
+                                    value="<?= $item['melody'] !== null ? (int)$item['melody'] : '' ?>"
+                                    aria-label="Melody score out of 10<?= $isFinalized ? ' (Finalized)' : '' ?>"
+                                >
+                                <span class="criterion-max">/10</span>
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-up" aria-label="Increase Melody score" title="Increase score">&plus;</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (!$isFinalized): ?>
                             <input 
-                                type="number" 
-                                id="mel-<?= $entryId ?>" 
-                                class="criterion-input" 
-                                data-criterion="melody"
+                                type="range" 
+                                class="criterion-range" 
                                 min="0" 
                                 max="10" 
                                 step="1" 
-                                placeholder="0-10" 
-                                value="<?= $item['melody'] !== null ? (int)$item['melody'] : '' ?>"
+                                value="<?= $item['melody'] !== null ? (int)$item['melody'] : 5 ?>"
+                                aria-label="Melody slider"
                             >
-                        </div>
-                        <input 
-                            type="range" 
-                            class="criterion-range" 
-                            min="0" 
-                            max="10" 
-                            step="1" 
-                            value="<?= $item['melody'] !== null ? (int)$item['melody'] : 5 ?>"
-                            aria-label="Melody slider"
-                        >
+                        <?php endif; ?>
                     </div>
 
                     <!-- 2. Lyrics -->
-                    <div class="criterion-field">
+                    <div class="criterion-field" data-criterion="lyrics">
                         <div class="criterion-header">
-                            <label for="lyr-<?= $entryId ?>"><span class="criterion-icon">✍️</span> Lyrics</label>
+                            <label for="lyr-<?= $entryId ?>"><span class="criterion-icon">✍️</span> <span class="criterion-name">Lyrics</span></label>
+                            <div class="criterion-stepper">
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-down" aria-label="Decrease Lyrics score" title="Decrease score">&minus;</button>
+                                <?php endif; ?>
+                                <input 
+                                    type="number" 
+                                    id="lyr-<?= $entryId ?>" 
+                                    class="criterion-input <?= $isFinalized ? 'is-readonly' : '' ?>" 
+                                    data-criterion="lyrics"
+                                    min="0" 
+                                    max="10" 
+                                    step="1" 
+                                    <?= $isFinalized ? 'readonly disabled aria-disabled="true"' : 'placeholder="0-10"' ?>
+                                    value="<?= $item['lyrics'] !== null ? (int)$item['lyrics'] : '' ?>"
+                                    aria-label="Lyrics score out of 10<?= $isFinalized ? ' (Finalized)' : '' ?>"
+                                >
+                                <span class="criterion-max">/10</span>
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-up" aria-label="Increase Lyrics score" title="Increase score">&plus;</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (!$isFinalized): ?>
                             <input 
-                                type="number" 
-                                id="lyr-<?= $entryId ?>" 
-                                class="criterion-input" 
-                                data-criterion="lyrics"
+                                type="range" 
+                                class="criterion-range" 
                                 min="0" 
                                 max="10" 
                                 step="1" 
-                                placeholder="0-10" 
-                                value="<?= $item['lyrics'] !== null ? (int)$item['lyrics'] : '' ?>"
+                                value="<?= $item['lyrics'] !== null ? (int)$item['lyrics'] : 5 ?>"
+                                aria-label="Lyrics slider"
                             >
-                        </div>
-                        <input 
-                            type="range" 
-                            class="criterion-range" 
-                            min="0" 
-                            max="10" 
-                            step="1" 
-                            value="<?= $item['lyrics'] !== null ? (int)$item['lyrics'] : 5 ?>"
-                            aria-label="Lyrics slider"
-                        >
+                        <?php endif; ?>
                     </div>
 
                     <!-- 3. Vocals -->
-                    <div class="criterion-field">
+                    <div class="criterion-field" data-criterion="vocals">
                         <div class="criterion-header">
-                            <label for="voc-<?= $entryId ?>"><span class="criterion-icon">🎤</span> Vocals</label>
+                            <label for="voc-<?= $entryId ?>"><span class="criterion-icon">🎤</span> <span class="criterion-name">Vocals</span></label>
+                            <div class="criterion-stepper">
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-down" aria-label="Decrease Vocals score" title="Decrease score">&minus;</button>
+                                <?php endif; ?>
+                                <input 
+                                    type="number" 
+                                    id="voc-<?= $entryId ?>" 
+                                    class="criterion-input <?= $isFinalized ? 'is-readonly' : '' ?>" 
+                                    data-criterion="vocals"
+                                    min="0" 
+                                    max="10" 
+                                    step="1" 
+                                    <?= $isFinalized ? 'readonly disabled aria-disabled="true"' : 'placeholder="0-10"' ?>
+                                    value="<?= $item['vocals'] !== null ? (int)$item['vocals'] : '' ?>"
+                                    aria-label="Vocals score out of 10<?= $isFinalized ? ' (Finalized)' : '' ?>"
+                                >
+                                <span class="criterion-max">/10</span>
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-up" aria-label="Increase Vocals score" title="Increase score">&plus;</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (!$isFinalized): ?>
                             <input 
-                                type="number" 
-                                id="voc-<?= $entryId ?>" 
-                                class="criterion-input" 
-                                data-criterion="vocals"
+                                type="range" 
+                                class="criterion-range" 
                                 min="0" 
                                 max="10" 
                                 step="1" 
-                                placeholder="0-10" 
-                                value="<?= $item['vocals'] !== null ? (int)$item['vocals'] : '' ?>"
+                                value="<?= $item['vocals'] !== null ? (int)$item['vocals'] : 5 ?>"
+                                aria-label="Vocals slider"
                             >
-                        </div>
-                        <input 
-                            type="range" 
-                            class="criterion-range" 
-                            min="0" 
-                            max="10" 
-                            step="1" 
-                            value="<?= $item['vocals'] !== null ? (int)$item['vocals'] : 5 ?>"
-                            aria-label="Vocals slider"
-                        >
+                        <?php endif; ?>
                     </div>
 
                     <!-- 4. Emotion -->
-                    <div class="criterion-field">
+                    <div class="criterion-field" data-criterion="emotion">
                         <div class="criterion-header">
-                            <label for="emo-<?= $entryId ?>"><span class="criterion-icon">❤️</span> Emotion</label>
+                            <label for="emo-<?= $entryId ?>"><span class="criterion-icon">❤️</span> <span class="criterion-name">Emotion</span></label>
+                            <div class="criterion-stepper">
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-down" aria-label="Decrease Emotion score" title="Decrease score">&minus;</button>
+                                <?php endif; ?>
+                                <input 
+                                    type="number" 
+                                    id="emo-<?= $entryId ?>" 
+                                    class="criterion-input <?= $isFinalized ? 'is-readonly' : '' ?>" 
+                                    data-criterion="emotion"
+                                    min="0" 
+                                    max="10" 
+                                    step="1" 
+                                    <?= $isFinalized ? 'readonly disabled aria-disabled="true"' : 'placeholder="0-10"' ?>
+                                    value="<?= $item['emotion'] !== null ? (int)$item['emotion'] : '' ?>"
+                                    aria-label="Emotion score out of 10<?= $isFinalized ? ' (Finalized)' : '' ?>"
+                                >
+                                <span class="criterion-max">/10</span>
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-up" aria-label="Increase Emotion score" title="Increase score">&plus;</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (!$isFinalized): ?>
                             <input 
-                                type="number" 
-                                id="emo-<?= $entryId ?>" 
-                                class="criterion-input" 
-                                data-criterion="emotion"
+                                type="range" 
+                                class="criterion-range" 
                                 min="0" 
                                 max="10" 
                                 step="1" 
-                                placeholder="0-10" 
-                                value="<?= $item['emotion'] !== null ? (int)$item['emotion'] : '' ?>"
+                                value="<?= $item['emotion'] !== null ? (int)$item['emotion'] : 5 ?>"
+                                aria-label="Emotion slider"
                             >
-                        </div>
-                        <input 
-                            type="range" 
-                            class="criterion-range" 
-                            min="0" 
-                            max="10" 
-                            step="1" 
-                            value="<?= $item['emotion'] !== null ? (int)$item['emotion'] : 5 ?>"
-                            aria-label="Emotion slider"
-                        >
+                        <?php endif; ?>
                     </div>
 
                     <!-- 5. Replayability -->
-                    <div class="criterion-field">
+                    <div class="criterion-field" data-criterion="replayability">
                         <div class="criterion-header">
-                            <label for="rep-<?= $entryId ?>"><span class="criterion-icon">🔁</span> Replay</label>
+                            <label for="rep-<?= $entryId ?>"><span class="criterion-icon">🔁</span> <span class="criterion-name">Replay</span></label>
+                            <div class="criterion-stepper">
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-down" aria-label="Decrease Replay score" title="Decrease score">&minus;</button>
+                                <?php endif; ?>
+                                <input 
+                                    type="number" 
+                                    id="rep-<?= $entryId ?>" 
+                                    class="criterion-input <?= $isFinalized ? 'is-readonly' : '' ?>" 
+                                    data-criterion="replayability"
+                                    min="0" 
+                                    max="10" 
+                                    step="1" 
+                                    <?= $isFinalized ? 'readonly disabled aria-disabled="true"' : 'placeholder="0-10"' ?>
+                                    value="<?= $item['replayability'] !== null ? (int)$item['replayability'] : '' ?>"
+                                    aria-label="Replayability score out of 10<?= $isFinalized ? ' (Finalized)' : '' ?>"
+                                >
+                                <span class="criterion-max">/10</span>
+                                <?php if (!$isFinalized): ?>
+                                    <button type="button" class="btn-step-btn btn-step-up" aria-label="Increase Replay score" title="Increase score">&plus;</button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if (!$isFinalized): ?>
                             <input 
-                                type="number" 
-                                id="rep-<?= $entryId ?>" 
-                                class="criterion-input" 
-                                data-criterion="replayability"
+                                type="range" 
+                                class="criterion-range" 
                                 min="0" 
                                 max="10" 
                                 step="1" 
-                                placeholder="0-10" 
-                                value="<?= $item['replayability'] !== null ? (int)$item['replayability'] : '' ?>"
+                                value="<?= $item['replayability'] !== null ? (int)$item['replayability'] : 5 ?>"
+                                aria-label="Replayability slider"
                             >
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- 6. Aggregate Total Instrument (Adjacent to Criteria) -->
+                    <div class="criterion-field criterion-aggregate-box <?= ($isComplete || $isFinalized) ? 'complete' : ($isIncomplete ? 'incomplete' : '') ?> <?= $isFinalized ? 'is-finalized' : '' ?>" title="Aggregate score of all 5 criteria">
+                        <div class="criterion-header">
+                            <label><span class="criterion-icon"><?= $isFinalized ? '🔒' : '⚖️' ?></span> <span class="criterion-name"><?= $isFinalized ? 'Finalized' : 'Total Score' ?></span></label>
                         </div>
-                        <input 
-                            type="range" 
-                            class="criterion-range" 
-                            min="0" 
-                            max="10" 
-                            step="1" 
-                            value="<?= $item['replayability'] !== null ? (int)$item['replayability'] : 5 ?>"
-                            aria-label="Replayability slider"
-                        >
+                        <div class="aggregate-score-display font-mono font-bold <?= $isFinalized ? 'text-finalized' : '' ?>">
+                            <span class="aggregate-score-val"><?= ($isFinalized || $isComplete) ? ((int)$totalScore . ' / 50') : ($isIncomplete ? ($partialSum . '* / 50') : '— / 50') ?></span>
+                        </div>
+                        <div class="aggregate-score-status text-xs <?= $isFinalized ? 'text-finalized font-bold' : ($isComplete ? 'text-success font-bold' : ($isIncomplete ? 'text-gold' : 'text-muted')) ?>">
+                            <?= $isFinalized ? '🔒 Score Locked' : ($isComplete ? '✓ Complete' : ($isIncomplete ? '⏳ Incomplete' : '○ Unscored')) ?>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Footer / Save Actions -->
                 <div class="scorecard-footer">
                     <div class="save-feedback">
-                        <?php if ($isComplete): ?>
+                        <?php if ($isFinalized): ?>
+                            <span class="text-finalized font-bold">
+                                <span class="lock-icon" aria-hidden="true">🔒</span> Finalized (<?= (int)$totalScore ?>/50) &bull; Recorded in Tournament History<?= !empty($finalizedResult) ? ' (' . ucfirst($finalizedResult) . ')' : '' ?>
+                            </span>
+                        <?php elseif ($isComplete): ?>
                             <span class="text-success">✓ Complete (<?= (int)$totalScore ?>/50)</span>
                         <?php elseif ($isIncomplete): ?>
                             <span class="text-gold">⏳ Incomplete Scorecard (Resume anytime)</span>
@@ -843,36 +927,39 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         <?php endif; ?>
                     </div>
                     <div class="scorecard-actions">
-                        <?php if ((int)$selectedRoundId === 1): ?>
+                        <?php if ($isFinalized): ?>
+                            <span class="badge badge-finalized-action" title="This scorecard is finalized and immutable">
+                                <span class="lock-icon" aria-hidden="true">🔒</span> Scorecard Locked
+                            </span>
+                        <?php else: ?>
+                            <button type="button" class="btn btn-primary btn-sm btn-save-scorecard" aria-label="Save scorecard" data-tooltip="Save scorecard">
+                                <svg class="btn-svg-icon icon-save" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> <span class="btn-text">Save Scorecard</span>
+                            </button>
+                            <?php if ((int)$selectedRoundId === 1): ?>
+                                <button type="button" 
+                                        class="btn btn-secondary-subtle btn-sm btn-remove-shortlist" 
+                                        data-song-id="<?= $songId ?>" 
+                                        data-entry-id="<?= $entryId ?>"
+                                        title="Remove <?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?> from shortlist"
+                                        aria-label="Remove from shortlist"
+                                        data-tooltip="Remove from shortlist">
+                                    <svg class="btn-svg-icon icon-cross" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> <span class="btn-text">Remove Shortlist</span>
+                                </button>
+                            <?php endif; ?>
                             <button type="button" 
-                                    class="btn btn-secondary-subtle btn-sm btn-remove-shortlist" 
-                                    data-song-id="<?= $songId ?>" 
-                                    data-entry-id="<?= $entryId ?>"
-                                    title="Remove this song from your audition shortlist">
-                                <span class="btn-icon">✕</span> Remove Shortlist
+                                    class="btn btn-outline-danger btn-sm btn-reset-scorecard" 
+                                    data-entry-id="<?= $entryId ?>" 
+                                    data-round-id="<?= (int)$selectedRoundId ?>" 
+                                    title="Reset <?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?> scorecard to unscored state"
+                                    aria-label="Reset score"
+                                    data-tooltip="Reset score"
+                                    style="<?= ($isComplete || $isIncomplete) ? '' : 'display: none;' ?>">
+                                <svg class="btn-svg-icon icon-reset" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> <span class="btn-text">Reset Score</span>
                             </button>
                         <?php endif; ?>
-                        <button type="button" 
-                                class="btn btn-outline-danger btn-sm btn-reset-scorecard" 
-                                data-entry-id="<?= $entryId ?>" 
-                                data-round-id="<?= (int)$selectedRoundId ?>" 
-                                title="Reset this scorecard to unscored state"
-                                style="<?= ($isComplete || $isIncomplete) ? '' : 'display: none;' ?>">
-                            <span class="btn-icon">↺</span> Reset Score
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm btn-save-scorecard">
-                            <span class="btn-icon">💾</span> Save Scorecard
-                        </button>
                     </div><!-- /.scorecard-actions -->
                 </div><!-- /.scorecard-footer -->
             </div><!-- /.scorecard-card -->
-
-            <!-- Poetic Under-Card Epigraph -->
-            <div class="poetic-footer">
-                <div class="poetic-song-caps"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?></div>
-                <div class="poetic-quote">some songs take you away to a place you love.</div>
-                <div class="botanical-sprig" aria-hidden="true">🌿</div>
-            </div>
         </div><!-- /.scorecard-wrapper -->
         <?php endforeach; ?>
         </div>

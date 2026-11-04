@@ -143,9 +143,9 @@ assert_test("Source inspection: get_current_user_id contains try/catch with fail
 // ---------------------------------------------------------------------
 echo "\n2. HTTP Access Control With Missing and Invalid Sessions\n";
 
-// Test unauthenticated page access
-$unauthPage = test_http("http://127.0.0.1:8080/index.php", 'GET');
-assert_test("Unauthenticated access to index.php returns HTTP 302", $unauthPage['status'] === 302);
+// Test unauthenticated protected page access
+$unauthPage = test_http("http://127.0.0.1:8080/library.php", 'GET');
+assert_test("Unauthenticated access to protected page (library.php) returns HTTP 302", $unauthPage['status'] === 302);
 assert_test("Redirect targets login.php", strpos($unauthPage['headers']['location'] ?? '', 'login.php') !== false);
 
 // Test access with invalid session cookie value
@@ -247,7 +247,7 @@ $logoutRes = test_http(
 assert_test("Logout redirects to login.php?logged_out=1", $logoutRes['status'] === 302);
 
 // Post-logout request with the same cookie must now be denied
-$postLogoutRes = test_http("http://127.0.0.1:8080/index.php", 'GET', null, ['Cookie' => $authedCookie]);
+$postLogoutRes = test_http("http://127.0.0.1:8080/library.php", 'GET', null, ['Cookie' => $authedCookie]);
 assert_test("Post-logout request with terminated cookie is rejected (HTTP 302 -> login.php)", $postLogoutRes['status'] === 302);
 
 // ---------------------------------------------------------------------

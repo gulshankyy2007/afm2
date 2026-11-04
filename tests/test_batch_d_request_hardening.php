@@ -164,8 +164,16 @@ function login_admin_helper(): array {
 // PRE-FLIGHT INVARIANT CHECK
 // =====================================================================
 echo "--- 0. Pre-Flight Catalogue Invariants ---\n";
-$preCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-$preNullArtists = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+$hasMaster = (bool)$pdo->query("SHOW TABLES LIKE 'master_starter_songs'")->fetchColumn();
+if ($hasMaster) {
+    $preCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    $preNullArtists = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`")->fetchAll(PDO::FETCH_COLUMN);
+    $preNullArtists = array_map('intval', $preNullArtists);
+} else {
+    $preCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    $preNullArtists = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+    $preNullArtists = array_map('intval', $preNullArtists);
+}
 assert_test("Pre-test Catalogue Baseline Invariant: 2,411 songs", $preCount === 2411, "Count: {$preCount}");
 assert_test("Pre-test Missing Artist Invariant: [1546, 2015, 2196]", $preNullArtists === [1546, 2015, 2196], "IDs: " . json_encode($preNullArtists));
 
@@ -262,14 +270,14 @@ assert_test(
 );
 
 // Test 6: Session identity is invalidated after successful logout.
-$postLogoutAccessRes = test_http("http://127.0.0.1:8080/index.php", 'GET', null, ['Cookie' => $session1['cookie']]);
+$postLogoutAccessRes = test_http("http://127.0.0.1:8080/library.php", 'GET', null, ['Cookie' => $session1['cookie']]);
 $postLogoutApiRes = test_http("http://127.0.0.1:8080/api.php?action=get_preferences", 'GET', null, ['Cookie' => $session1['cookie']]);
 assert_test(
-    "6. Session identity is invalidated after successful logout (index redirects to login.php, API returns 401)",
+    "6. Session identity is invalidated after successful logout (protected page redirects to login.php, API returns 401)",
     $postLogoutAccessRes['status'] === 302 &&
     strpos($postLogoutAccessRes['headers']['location'] ?? '', 'login.php') !== false &&
     $postLogoutApiRes['status'] === 401,
-    "Index Status: {$postLogoutAccessRes['status']}, API Status: {$postLogoutApiRes['status']}"
+    "Library Status: {$postLogoutAccessRes['status']}, API Status: {$postLogoutApiRes['status']}"
 );
 
 // Test 7: Session-cookie clearing preserves the correct cookie attributes.
@@ -307,8 +315,15 @@ assert_test(
 // =====================================================================
 echo "\n--- 2. FINDING-07: YouTube Candidate Discovery Hardening ---\n";
 
-$testSongId = 1; // Existing catalogue track
-// Ensure track 1 has clean test candidate state
+$activeSession = login_admin_helper();
+$adminUserRow = $pdo->query("SELECT user_id FROM `app_users` WHERE `username` = 'adminuser' LIMIT 1")->fetch();
+$adminUid = $adminUserRow ? (int)$adminUserRow['user_id'] : 994;
+$testSongId = (int)$pdo->query("SELECT `song_id` FROM `songs` WHERE `user_id` = {$adminUid} ORDER BY `song_id` ASC LIMIT 1")->fetchColumn();
+if (!$testSongId) {
+    $testSongId = 1;
+}
+
+// Ensure target track has clean test candidate state
 $origCandidates = $pdo->prepare("SELECT * FROM `song_youtube_candidates` WHERE `song_id` = :id");
 $origCandidates->execute([':id' => $testSongId]);
 $backupCandidates = $origCandidates->fetchAll(PDO::FETCH_ASSOC);
@@ -317,7 +332,6 @@ $pdo->prepare("DELETE FROM `song_youtube_candidates` WHERE `song_id` = :id")->ex
 $candCountClean = (int)$pdo->query("SELECT COUNT(*) FROM `song_youtube_candidates` WHERE `song_id` = {$testSongId}")->fetchColumn();
 
 // Test 9: GET discovery requests cannot trigger scraping or writes.
-$activeSession = login_admin_helper();
 $getDiscoveryRes = test_http(
     "http://127.0.0.1:8080/api.php?action=youtube_get_candidates&song_id={$testSongId}",
     'GET',
@@ -536,8 +550,15 @@ assert_test(
 // POST-FLIGHT INVARIANT CHECK
 // =====================================================================
 echo "\n--- 3. Post-Flight Catalogue Invariants ---\n";
-$postCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
-$postNullArtists = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+if ($hasMaster) {
+    $postCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    $postNullArtists = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id`")->fetchAll(PDO::FETCH_COLUMN);
+    $postNullArtists = array_map('intval', $postNullArtists);
+} else {
+    $postCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    $postNullArtists = $pdo->query("SELECT `song_id` FROM `songs` WHERE `artist` IS NULL ORDER BY `song_id`")->fetchAll(PDO::FETCH_COLUMN);
+    $postNullArtists = array_map('intval', $postNullArtists);
+}
 
 assert_test("Post-test Catalogue Preservation Invariant: strictly 2,411 songs", $postCount === 2411, "Count: {$postCount}");
 assert_test("Post-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNullArtists === [1546, 2015, 2196], "IDs: " . json_encode($postNullArtists));

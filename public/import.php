@@ -237,17 +237,17 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <div class="import-step-icon">
                 <?= $currentStep !== 'upload' ? '✓' : '1' ?>
             </div>
-            <span>1. Upload CSV</span>
+            <span class="import-step-label"><span class="step-label-main">Upload</span><span class="step-label-sub"> CSV</span></span>
         </div>
         <div class="import-step-node <?= $currentStep === 'review' ? 'active' : ($currentStep === 'results' ? 'completed' : '') ?>">
             <div class="import-step-icon">
                 <?= $currentStep === 'results' ? '✓' : '2' ?>
             </div>
-            <span>2. Preview &amp; Review</span>
+            <span class="import-step-label"><span class="step-label-main">Preview</span><span class="step-label-sub"> &amp; Review</span></span>
         </div>
         <div class="import-step-node <?= $currentStep === 'results' ? 'active' : '' ?>">
             <div class="import-step-icon">3</div>
-            <span>3. Import Results</span>
+            <span class="import-step-label"><span class="step-label-main">Results</span></span>
         </div>
     </div>
 

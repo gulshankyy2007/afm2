@@ -260,11 +260,11 @@ require_once dirname(__DIR__) . '/includes/header.php';
                             <div class="status-badge-container">
                                 <?php if ($isComplete): ?>
                                     <span class="badge badge-success" title="Formal audition score complete">
-                                        ✓ Scored: <?= (int)$totalScore ?> / 50
+                                        ✓ Scored: <?= (int)$totalScore ?><span class="score-max-subtle"> / 50</span>
                                     </span>
                                 <?php elseif ($isIncomplete): ?>
                                     <span class="badge badge-warning" title="Scorecard partially filled">
-                                        ⏳ Incomplete (<?= (int)$totalScore ?>* / 50)
+                                        ⏳ Incomplete (<?= (int)$totalScore ?>*<span class="score-max-subtle"> / 50</span>)
                                     </span>
                                 <?php else: ?>
                                     <span class="badge badge-neutral" title="Awaiting formal audition score">

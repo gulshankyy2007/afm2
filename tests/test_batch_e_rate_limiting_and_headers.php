@@ -100,10 +100,17 @@ function test_http(string $url, string $method = 'GET', ?string $body = null, ar
 // SECTION 0: PRE-FLIGHT CATALOGUE INVARIANTS
 // =====================================================================
 echo "--- 0. Pre-Flight Catalogue Invariants ---\n";
-$preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+$hasMaster = (bool)$pdo->query("SHOW TABLES LIKE 'master_starter_songs'")->fetchColumn();
+if ($hasMaster) {
+    $preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    $preNullArtists = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id` ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $preNullArtists = array_map('intval', $preNullArtists);
+} else {
+    $preSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    $preNullArtists = $pdo->query("SELECT song_id FROM `songs` WHERE `artist` IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $preNullArtists = array_map('intval', $preNullArtists);
+}
 assert_test("Pre-test Catalogue Baseline Invariant: strictly 2,411 songs", $preSongCount === 2411, "Found: {$preSongCount}");
-
-$preNullArtists = $pdo->query("SELECT song_id FROM `songs` WHERE `artist` IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
 assert_test("Pre-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $preNullArtists === [1546, 2015, 2196], "Found: " . json_encode($preNullArtists));
 
 // =====================================================================
@@ -394,7 +401,7 @@ $hasCsp = !empty($h['content-security-policy']);
 assert_test("13. Expected defensive security headers present on standard HTML response", $hasNosniff && $hasSameOrigin && $hasReferrer && $hasPermissions && $hasCsp, "nosniff: " . ($hasNosniff ? 'OK' : 'FAIL') . ", frame: " . ($hasSameOrigin ? 'OK' : 'FAIL') . ", csp: " . ($hasCsp ? 'OK' : 'FAIL'));
 
 // 14. Headers on redirects
-$redirRes = test_http("http://127.0.0.1:8080/index.php", 'GET');
+$redirRes = test_http("http://127.0.0.1:8080/library.php", 'GET');
 $rh = $redirRes['headers'];
 $redirHasHeaders = ($redirRes['status'] === 302
     && ($rh['x-content-type-options'] ?? '') === 'nosniff'
@@ -583,10 +590,16 @@ assert_test("25h. Production environment: Strong 64-char hex secret passes valid
 // SECTION 3: POST-FLIGHT CATALOGUE INVARIANTS
 // =====================================================================
 echo "\n--- 3. Post-Flight Catalogue Invariants ---\n";
-$postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+if ($hasMaster) {
+    $postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `master_starter_songs` WHERE `starter_version` = 1")->fetchColumn();
+    $postNullArtists = $pdo->query("SELECT `source_song_id` FROM `master_starter_songs` WHERE `artist` IS NULL OR `artist` = '' ORDER BY `source_song_id` ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $postNullArtists = array_map('intval', $postNullArtists);
+} else {
+    $postSongCount = (int)$pdo->query("SELECT COUNT(*) FROM `songs`")->fetchColumn();
+    $postNullArtists = $pdo->query("SELECT song_id FROM `songs` WHERE `artist` IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $postNullArtists = array_map('intval', $postNullArtists);
+}
 assert_test("Post-test Catalogue Preservation Invariant: strictly 2,411 songs", $postSongCount === 2411, "Found: {$postSongCount}");
-
-$postNullArtists = $pdo->query("SELECT song_id FROM `songs` WHERE `artist` IS NULL ORDER BY song_id ASC")->fetchAll(PDO::FETCH_COLUMN);
 assert_test("Post-test Missing Artist Invariant: strictly [1546, 2015, 2196]", $postNullArtists === [1546, 2015, 2196], "Found: " . json_encode($postNullArtists));
 
 // Clean up test rate limit records

@@ -6,20 +6,86 @@
 document.addEventListener('DOMContentLoaded', function() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    // ==================== Modal Helpers ====================
-    function openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
+    // ==================== Modal System & Viewport Positioning ====================
+    const RECORDINGS_MODAL_IDS = [
+        'candidateReviewModal',
+        'manualUrlModal',
+        'videoPreviewModal',
+        'clearRecordingModal'
+    ];
+
+    // Ensure all recording modals are direct children of document.body immediately on boot
+    // so they are never trapped by ancestor CSS transforms, container filters, or overflow
+    RECORDINGS_MODAL_IDS.forEach(id => {
+        const modal = document.getElementById(id);
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
         }
+    });
+
+    let modalStack = [];
+
+    function openModal(modalId, trigger) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        // Ensure modal is attached directly to document.body
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
+        const triggerEl = trigger || (document.activeElement && document.activeElement !== document.body ? document.activeElement : null);
+        const currentScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+
+        modal._lastActiveTrigger = triggerEl;
+        modal._savedScrollY = currentScrollY;
+
+        modal.classList.add('active');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+
+        if (!modalStack.includes(modal)) {
+            modalStack.push(modal);
+        }
+
+        // Accessibility: set focus to first focusable element inside modal
+        requestAnimationFrame(() => {
+            const focusables = modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            if (focusables.length > 0) {
+                focusables[0].focus();
+            }
+        });
     }
 
     function closeModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('active');
+        if (!modal) return;
+
+        modal.classList.remove('active');
+        modalStack = modalStack.filter(m => m !== modal);
+
+        if (modalStack.length === 0) {
+            document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
+        }
+
+        // Restore focus to triggering control without causing unwanted auto-scrolling
+        if (modal._lastActiveTrigger && typeof modal._lastActiveTrigger.focus === 'function') {
+            try {
+                modal._lastActiveTrigger.focus({ preventScroll: true });
+            } catch (e) {
+                try {
+                    modal._lastActiveTrigger.focus();
+                } catch (err) {}
+            }
+        }
+
+        // Restore saved scroll position exactly
+        if (typeof modal._savedScrollY === 'number') {
+            window.scrollTo({
+                top: modal._savedScrollY,
+                behavior: 'instant'
+            });
         }
     }
 
@@ -32,12 +98,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Close on Escape key
+    // Keyboard navigation: Escape key dismissal and Tab focus trapping
     document.addEventListener('keydown', function(e) {
+        if (modalStack.length === 0) return;
+        const activeModal = modalStack[modalStack.length - 1];
+
         if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-overlay.active').forEach(modal => {
-                closeModal(modal.id);
-            });
+            e.preventDefault();
+            closeModal(activeModal.id);
+            return;
+        }
+
+        if (e.key === 'Tab') {
+            const focusables = Array.from(activeModal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+            if (focusables.length === 0) {
+                e.preventDefault();
+                return;
+            }
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first || !activeModal.contains(document.activeElement)) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (document.activeElement === last || !activeModal.contains(document.activeElement)) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
         }
     });
 
@@ -221,15 +312,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.btn-open-candidates').forEach(btn => {
         btn.addEventListener('click', function() {
             const sId = parseInt(this.getAttribute('data-song-id'), 10);
-            const row = document.getElementById('row-song-any') || this.closest('tr');
+            const row = document.getElementById('row-song-' + sId) || this.closest('tr');
             activeSongIdForCand = sId;
             activeSongTitleForCand = row?.getAttribute('data-title') || '';
             activeSongArtistForCand = row?.getAttribute('data-artist') || '';
 
-            if (candModalTitle) candModalTitle.innerHTML = `<span>🎯</span> Candidates: ${escapeHtml(activeSongTitleForCand)}`;
+            const candSongTitle = document.getElementById('candSongTitle');
+            const candSongArtist = document.getElementById('candSongArtist');
+            const candSongTrack = document.getElementById('candSongTrack');
+
+            if (candModalTitle) candModalTitle.innerHTML = `<span>🎯</span> YouTube Candidates`;
+            if (candSongTitle) candSongTitle.textContent = activeSongTitleForCand;
+            if (candSongArtist) candSongArtist.textContent = activeSongArtistForCand;
+            if (candSongTrack) candSongTrack.textContent = `Track #${sId}`;
             if (candModalSubtitle) candModalSubtitle.textContent = `Artist: ${activeSongArtistForCand} • Track #${sId}`;
 
-            openModal('candidateReviewModal');
+            openModal('candidateReviewModal', this);
             loadCandidates(sId, false);
         });
     });
@@ -366,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Attach listeners for preview and select inside modal
         candCardsList.querySelectorAll('.btn-preview-cand').forEach(btn => {
             btn.addEventListener('click', function() {
-                openVideoPreview(this.getAttribute('data-video-id'), this.getAttribute('data-title'));
+                openVideoPreview(this.getAttribute('data-video-id'), this.getAttribute('data-title'), this);
             });
         });
 
@@ -428,7 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const manualEmbedNotice = document.getElementById('manualEmbedNotice');
     const manualOverwriteWarning = document.getElementById('manualOverwriteWarning');
 
-    function openManualUrlModal(songId, title, artist, currentUrl) {
+    function openManualUrlModal(songId, title, artist, currentUrl, trigger) {
         activeManualSongId = songId;
         if (manualSongIdInput) manualSongIdInput.value = songId;
         if (manualModalTitle) manualModalTitle.innerHTML = `<span>✍️</span> Edit Recording: ${escapeHtml(title)}`;
@@ -440,7 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (manualOverwriteWarning) manualOverwriteWarning.style.display = currentUrl ? 'flex' : 'none';
 
-        openModal('manualUrlModal');
+        openModal('manualUrlModal', trigger);
     }
 
     document.querySelectorAll('.btn-open-manual').forEach(btn => {
@@ -450,7 +548,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const row = this.closest('tr');
             const title = row?.getAttribute('data-title') || '';
             const artist = row?.getAttribute('data-artist') || '';
-            openManualUrlModal(sId, title, artist, currentUrl);
+            openManualUrlModal(sId, title, artist, currentUrl, this);
         });
     });
 
@@ -539,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewExternalLink = document.getElementById('previewExternalLink');
     const previewEmbedAlert = document.getElementById('previewEmbedAlert');
 
-    function openVideoPreview(videoId, title) {
+    function openVideoPreview(videoId, title, trigger) {
         if (!videoId) return;
         if (previewSubtitle) previewSubtitle.textContent = title ? `Now Playing: ${title}` : `Video ID: ${videoId}`;
         if (previewIframe) previewIframe.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&enablejsapi=1`;
@@ -563,12 +661,12 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(() => {});
 
-        openModal('videoPreviewModal');
+        openModal('videoPreviewModal', trigger);
     }
 
     document.querySelectorAll('.btn-preview-video').forEach(btn => {
         btn.addEventListener('click', function() {
-            openVideoPreview(this.getAttribute('data-video-id'), this.getAttribute('data-title'));
+            openVideoPreview(this.getAttribute('data-video-id'), this.getAttribute('data-title'), this);
         });
     });
 
@@ -594,7 +692,7 @@ document.addEventListener('DOMContentLoaded', function() {
             activeClearSongId = sId;
             if (clearSongTitle) clearSongTitle.textContent = row?.getAttribute('data-title') || `Song #${sId}`;
             if (clearSongArtist) clearSongArtist.textContent = row?.getAttribute('data-artist') || '';
-            openModal('clearRecordingModal');
+            openModal('clearRecordingModal', this);
         });
     });
 
