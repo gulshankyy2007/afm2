@@ -285,6 +285,17 @@ body.modal-open {
         .criterion-header label {
             font-size: 0.75rem !important;
         }
+
+        .criterion-field.criterion-aggregate-box.is-finalized {
+            padding: 0.5rem 0.65rem !important;
+            gap: 0.35rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+            font-size: 1.1rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+            font-size: 0.75rem !important;
+        }
     }
 
     @media (max-width: 320px) {
@@ -335,6 +346,17 @@ body.modal-open {
             width: 36px !important;
             height: 28px !important;
             font-size: 0.85rem !important;
+        }
+
+        .criterion-field.criterion-aggregate-box.is-finalized {
+            padding: 0.45rem 0.5rem !important;
+            gap: 0.25rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+            font-size: 1.05rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+            font-size: 0.72rem !important;
         }
     }
 
@@ -1030,6 +1052,74 @@ body.modal-open {
 
     .badge-finalized-pill .badge-finalized-text {
         display: none !important;
+    }
+
+    /* Mobile Formal Auditions: Compact Finalized Indicator & Single-Line Aggregate Score */
+    .criterion-field.criterion-aggregate-box.is-finalized {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.55rem 0.85rem !important;
+        min-height: 44px !important;
+        gap: 0.45rem !important;
+    }
+
+    /* 1. Remove visible FINALIZED text label on mobile; retain single compact lock icon */
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: auto !important;
+        flex: 0 0 auto !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header label {
+        margin: 0 !important;
+        gap: 0 !important;
+        cursor: default;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header .criterion-name {
+        display: none !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header .criterion-icon {
+        font-size: 1.15rem !important;
+        line-height: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-right: 0.2rem !important;
+    }
+
+    /* Hide duplicate lock icon in Score Locked so lock indicator appears strictly once */
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status .status-lock-icon {
+        display: none !important;
+    }
+
+    /* 2. Keep aggregate score on one line with distinct styling and prevent wrapping */
+    .criterion-field.criterion-aggregate-box .aggregate-score-display,
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+        flex: 1 1 auto !important;
+        margin: 0 !important;
+        padding: 0 0.35rem !important;
+        white-space: nowrap !important;
+        text-align: left !important;
+        font-size: 1.2rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .criterion-field.criterion-aggregate-box .aggregate-score-val,
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-val {
+        white-space: nowrap !important;
+        display: inline-block !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+        font-size: 0.8rem !important;
     }
 
     /* ==========================================================================

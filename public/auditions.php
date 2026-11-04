@@ -900,13 +900,13 @@ require_once dirname(__DIR__) . '/includes/header.php';
                     <!-- 6. Aggregate Total Instrument (Adjacent to Criteria) -->
                     <div class="criterion-field criterion-aggregate-box <?= ($isComplete || $isFinalized) ? 'complete' : ($isIncomplete ? 'incomplete' : '') ?> <?= $isFinalized ? 'is-finalized' : '' ?>" title="Aggregate score of all 5 criteria">
                         <div class="criterion-header">
-                            <label><span class="criterion-icon"><?= $isFinalized ? '🔒' : '⚖️' ?></span> <span class="criterion-name"><?= $isFinalized ? 'Finalized' : 'Total Score' ?></span></label>
+                            <label><span class="criterion-icon" <?= $isFinalized ? 'title="Finalized scorecard" aria-label="Finalized scorecard"' : '' ?>><?= $isFinalized ? '🔒' : '⚖️' ?></span> <span class="criterion-name"><?= $isFinalized ? 'Finalized' : 'Total Score' ?></span></label>
                         </div>
                         <div class="aggregate-score-display font-mono font-bold <?= $isFinalized ? 'text-finalized' : '' ?>">
                             <span class="aggregate-score-val"><?= ($isFinalized || $isComplete) ? ((int)$totalScore . ' / 50') : ($isIncomplete ? ($partialSum . '* / 50') : '— / 50') ?></span>
                         </div>
                         <div class="aggregate-score-status text-xs <?= $isFinalized ? 'text-finalized font-bold' : ($isComplete ? 'text-success font-bold' : ($isIncomplete ? 'text-gold' : 'text-muted')) ?>">
-                            <?= $isFinalized ? '🔒 Score Locked' : ($isComplete ? '✓ Complete' : ($isIncomplete ? '⏳ Incomplete' : '○ Unscored')) ?>
+                            <?= $isFinalized ? '<span class="status-lock-icon" aria-hidden="true">🔒 </span>Score Locked' : ($isComplete ? '✓ Complete' : ($isIncomplete ? '⏳ Incomplete' : '○ Unscored')) ?>
                         </div>
                     </div>
                 </div>
