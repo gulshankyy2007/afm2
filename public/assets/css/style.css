@@ -8727,16 +8727,19 @@ html[data-theme="quiet_minimal"] .sort-select {
 }
 
 .modal-overlay.active {
-    display: flex;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 .song-management-modal-content {
     max-width: 680px;
     width: min(680px, 94vw);
-    max-height: 88vh;
-    display: flex;
-    flex-direction: column;
+    max-height: calc(100dvh - 32px) !important;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: hidden !important;
+    margin: auto !important;
     background: var(--modal-bg, var(--bg-surface)) !important;
     border: 1.5px solid var(--modal-border, var(--border-color)) !important;
     border-radius: 16px !important;
@@ -8870,8 +8873,10 @@ html[data-theme="quiet_minimal"] .sort-select {
 
 .song-management-modal-content .modal-body {
     padding: 1rem 1.5rem;
-    overflow-y: auto;
-    flex: 1;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 1 auto;
+    max-height: calc(100dvh - 160px);
     margin-bottom: 0;
 }
 

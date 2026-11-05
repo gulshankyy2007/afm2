@@ -4371,6 +4371,39 @@ function initSongManagement() {
     const btnEditFetchYt = document.getElementById('btnEditFetchYt');
     const editSongError = document.getElementById('editSongError');
 
+    // Ensure edit modal is a direct child of document.body so no container styles or transforms trap it
+    if (editModal && editModal.parentElement !== document.body) {
+        document.body.appendChild(editModal);
+    }
+
+    const openEditModal = () => {
+        if (!editModal) return;
+        if (editModal.parentElement !== document.body) {
+            document.body.appendChild(editModal);
+        }
+        editModal.classList.add('active');
+        editModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+        setTimeout(() => {
+            if (editSongTitle) {
+                try {
+                    editSongTitle.focus({ preventScroll: true });
+                } catch (e) {
+                    editSongTitle.focus();
+                }
+            }
+        }, 80);
+    };
+
+    const closeEditModal = () => {
+        if (!editModal) return;
+        editModal.classList.remove('active');
+        editModal.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.modal-overlay.active')) {
+            document.body.classList.remove('modal-open');
+        }
+    };
+
     document.addEventListener('click', (e) => {
         const editBtn = e.target.closest('.btn-manage-edit');
         if (!editBtn || !editModal) return;
@@ -4391,14 +4424,11 @@ function initSongManagement() {
             editSongError.textContent = '';
         }
 
-        editModal.classList.add('active');
-        setTimeout(() => {
-            if (editSongTitle) editSongTitle.focus();
-        }, 100);
+        openEditModal();
     });
 
-    if (closeEditBtn && editModal) closeEditBtn.addEventListener('click', () => editModal.classList.remove('active'));
-    if (cancelEditBtn && editModal) cancelEditBtn.addEventListener('click', () => editModal.classList.remove('active'));
+    if (closeEditBtn && editModal) closeEditBtn.addEventListener('click', closeEditModal);
+    if (cancelEditBtn && editModal) cancelEditBtn.addEventListener('click', closeEditModal);
 
     // Auto-fill in edit modal from YouTube link
     if (btnEditFetchYt && editSongVideo) {
@@ -4484,7 +4514,7 @@ function initSongManagement() {
                 }
 
                 showToast(data.message || `Song #${songId} updated successfully!`, 'success');
-                editModal.classList.remove('active');
+                closeEditModal();
 
                 // Invalidate lyrics cache for this updated song
                 cardLyricsCache.delete(songId);
@@ -4548,6 +4578,39 @@ function initSongManagement() {
     const deleteDisplayArtist = document.getElementById('deleteDisplayArtist');
     const deleteSongError = document.getElementById('deleteSongError');
 
+    // Ensure delete modal is a direct child of document.body so no container styles or transforms trap it
+    if (deleteModal && deleteModal.parentElement !== document.body) {
+        document.body.appendChild(deleteModal);
+    }
+
+    const openDeleteModal = () => {
+        if (!deleteModal) return;
+        if (deleteModal.parentElement !== document.body) {
+            document.body.appendChild(deleteModal);
+        }
+        deleteModal.classList.add('active');
+        deleteModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+        setTimeout(() => {
+            if (cancelDeleteBtn) {
+                try {
+                    cancelDeleteBtn.focus({ preventScroll: true });
+                } catch (e) {
+                    cancelDeleteBtn.focus();
+                }
+            }
+        }, 80);
+    };
+
+    const closeDeleteModal = () => {
+        if (!deleteModal) return;
+        deleteModal.classList.remove('active');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.modal-overlay.active')) {
+            document.body.classList.remove('modal-open');
+        }
+    };
+
     document.addEventListener('click', (e) => {
         const delBtn = e.target.closest('.btn-manage-delete');
         if (!delBtn || !deleteModal) return;
@@ -4567,11 +4630,11 @@ function initSongManagement() {
             deleteSongError.textContent = '';
         }
 
-        deleteModal.classList.add('active');
+        openDeleteModal();
     });
 
-    if (closeDeleteBtn && deleteModal) closeDeleteBtn.addEventListener('click', () => deleteModal.classList.remove('active'));
-    if (cancelDeleteBtn && deleteModal) cancelDeleteBtn.addEventListener('click', () => deleteModal.classList.remove('active'));
+    if (closeDeleteBtn && deleteModal) closeDeleteBtn.addEventListener('click', closeDeleteModal);
+    if (cancelDeleteBtn && deleteModal) cancelDeleteBtn.addEventListener('click', closeDeleteModal);
 
     // Confirm Delete
     if (confirmDeleteBtn && deleteModal) {
@@ -4646,7 +4709,7 @@ function initSongManagement() {
                 }
 
                 showToast(data.message || `Song #${songId} was permanently deleted.`, 'success');
-                deleteModal.classList.remove('active');
+                closeDeleteModal();
 
                 // Animate row removal from table
                 const row = document.querySelector(`tr[data-song-id="${songId}"]`);

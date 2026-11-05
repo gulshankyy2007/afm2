@@ -2686,6 +2686,13 @@ body.modal-open {
         max-height: calc(100dvh - 24px) !important;
     }
 
+    .song-management-modal-content .modal-body {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        flex: 1 1 auto !important;
+        max-height: calc(100dvh - 150px) !important;
+    }
+
     .candidate-modal-content {
         width: min(640px, 96vw) !important;
         max-width: min(640px, 96vw) !important;
@@ -3982,17 +3989,16 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: no-preference) {
     /* 1. Page Entrance Fade */
     .main-content {
-        animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: none !important;
     }
 
     @keyframes pageFadeIn {
         from {
             opacity: 0;
-            transform: translateY(6px);
         }
         to {
             opacity: 1;
-            transform: none;
         }
     }
 
