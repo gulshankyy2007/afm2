@@ -7565,6 +7565,167 @@ html[data-player-layout="compact"] .tactile-player-card {
     margin-top: 1rem;
 }
 
+/* Tasteful Participant's Guide Journal Banner */
+.journal-guide-section {
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.journal-guide-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.35rem 1.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.journal-guide-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+.journal-guide-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg), 0 0 20px var(--primary-light);
+}
+
+.journal-guide-left {
+    display: flex;
+    align-items: center;
+    gap: 1.15rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.journal-guide-icon-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--primary-light);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.journal-guide-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.journal-guide-overhead {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.journal-guide-subtag {
+    font-family: var(--font-brand);
+    font-size: 0.725rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--sepia);
+}
+
+.journal-guide-title {
+    font-family: var(--font-serif);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--text-primary);
+    margin-bottom: 0.3rem;
+}
+
+.journal-guide-desc {
+    font-family: var(--font-main);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-bottom: 0;
+    max-width: 560px;
+}
+
+.journal-guide-right {
+    flex-shrink: 0;
+}
+
+.journal-guide-cta {
+    white-space: nowrap;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+}
+
+.guide-arrow {
+    font-size: 0.95rem;
+    transition: transform 0.2s ease;
+}
+
+.journal-guide-cta:hover .guide-arrow {
+    transform: translate(2px, -2px);
+}
+
+/* Mobile & Tablet Responsiveness for Journal Guide */
+@media (max-width: 768px) {
+    .journal-guide-card {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1.15rem 1.15rem 1.25rem;
+        gap: 1rem;
+    }
+
+    .journal-guide-left {
+        gap: 0.85rem;
+        align-items: flex-start;
+    }
+
+    .journal-guide-icon-badge {
+        width: 42px;
+        height: 42px;
+        font-size: 1.25rem;
+    }
+
+    .journal-guide-title {
+        font-size: 1.2rem;
+    }
+
+    .journal-guide-desc {
+        font-size: 0.825rem;
+    }
+
+    .journal-guide-right {
+        width: 100%;
+    }
+
+    .journal-guide-cta {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+    }
+}
+
 /* Shortlist Shelf */
 .shortlist-shelf-grid {
     display: grid;

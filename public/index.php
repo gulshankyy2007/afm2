@@ -155,6 +155,38 @@ require_once dirname(__DIR__) . '/includes/header.php';
     </section>
     <?php endif; ?>
 
+    <!-- Tasteful Participant's Guide & Manual Companion Banner -->
+    <section class="journal-section journal-guide-section mb-5" aria-label="Official Participant's Guide">
+        <div class="journal-guide-card">
+            <div class="journal-guide-left">
+                <div class="journal-guide-icon-badge" aria-hidden="true">
+                    <span class="journal-guide-icon">📖</span>
+                </div>
+                <div class="journal-guide-text">
+                    <div class="journal-guide-overhead">
+                        <span class="badge-year">HANDBOOK</span>
+                        <span class="journal-guide-subtag">Official Participant Companion</span>
+                    </div>
+                    <h2 class="journal-guide-title">Your AFM#2 Journey</h2>
+                    <p class="journal-guide-desc">
+                        Explore the complete participant handbook covering music imports, the 5-point audition rubric, advisory scoring, and tournament stage advancement.
+                    </p>
+                </div>
+            </div>
+            <div class="journal-guide-right">
+                <a href="https://afm2-user-manual.netlify.app/" 
+                   target="_blank" 
+                   rel="noopener noreferrer" 
+                   class="btn btn-primary btn-glow journal-guide-cta"
+                   aria-label="Explore the official Participant's Guide (opens in a new tab)">
+                    <span class="btn-icon">📘</span>
+                    <span>Explore Participant's Guide</span>
+                    <span class="guide-arrow" aria-hidden="true">↗</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
     <!-- Compact Tournament Milestones Tracker -->
     <section class="journal-section mb-5">
         <div class="journal-section-header">
