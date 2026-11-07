@@ -83,13 +83,13 @@ assert_test("public/sw.js exists", file_exists($swPath));
 $swContent = (string)file_get_contents($swPath);
 assert_test("Service Worker handles 'install' event with skipWaiting", str_contains($swContent, "'install'") && str_contains($swContent, "skipWaiting"));
 assert_test("Service Worker handles 'activate' event with clients.claim", str_contains($swContent, "'activate'") && str_contains($swContent, "clients.claim"));
-assert_test("Service Worker handles 'fetch' event with network passthrough", str_contains($swContent, "'fetch'") && str_contains($swContent, "fetch(event.request)"));
+assert_test("Service Worker handles 'fetch' event with network passthrough", str_contains($swContent, "'fetch'") && (str_contains($swContent, "fetch(event.request)") || str_contains($swContent, "fetch(request")));
 assert_test("Root sw.js mirror exists", file_exists($projectRoot . '/sw.js'));
 
 echo "\n--- Group 3: HTML Integration & Header Metadata ---\n";
 
 $headerContent = (string)file_get_contents($projectRoot . '/includes/header.php');
-assert_test("header.php links manifest.json", str_contains($headerContent, '<link rel="manifest" href="manifest.json">'));
+assert_test("header.php links manifest.json with crossorigin='use-credentials'", str_contains($headerContent, '<link rel="manifest" href="manifest.json" crossorigin="use-credentials">'));
 assert_test("header.php specifies theme-color meta tag", str_contains($headerContent, '<meta name="theme-color" content="#0c0e14">'));
 assert_test("header.php specifies mobile-web-app-capable", str_contains($headerContent, '<meta name="mobile-web-app-capable" content="yes">'));
 assert_test("header.php specifies apple-mobile-web-app-capable", str_contains($headerContent, '<meta name="apple-mobile-web-app-capable" content="yes">'));
@@ -98,7 +98,7 @@ $footerContent = (string)file_get_contents($projectRoot . '/includes/footer.php'
 assert_test("footer.php registers sw.js", str_contains($footerContent, "navigator.serviceWorker.register('sw.js'"));
 
 $loginContent = (string)file_get_contents($projectRoot . '/public/login.php');
-assert_test("login.php links manifest.json", str_contains($loginContent, '<link rel="manifest" href="manifest.json">'));
+assert_test("login.php links manifest.json with crossorigin='use-credentials'", str_contains($loginContent, '<link rel="manifest" href="manifest.json" crossorigin="use-credentials">'));
 assert_test("login.php registers sw.js", str_contains($loginContent, "navigator.serviceWorker.register('sw.js'"));
 
 echo "\n--- Group 4: Web Server Apache .htaccess PWA Access Controls ---\n";
@@ -107,9 +107,11 @@ $htaccessRoot = (string)file_get_contents($projectRoot . '/.htaccess');
 assert_test(".htaccess explicitly permits manifest.json", str_contains($htaccessRoot, '<Files "manifest.json">'));
 assert_test(".htaccess explicitly permits manifest.webmanifest", str_contains($htaccessRoot, '<Files "manifest.webmanifest">'));
 assert_test(".htaccess configures application/manifest+json MIME type", str_contains($htaccessRoot, 'AddType application/manifest+json .webmanifest'));
+assert_test(".htaccess sets no-cache on sw.js", str_contains($htaccessRoot, '<Files "sw.js">') && str_contains($htaccessRoot, 'no-cache, no-store, must-revalidate, max-age=0'));
 
 $htaccessPublic = (string)file_get_contents($projectRoot . '/public/.htaccess');
 assert_test("public/.htaccess configures application/manifest+json MIME type", str_contains($htaccessPublic, 'AddType application/manifest+json'));
+assert_test("public/.htaccess sets no-cache on sw.js", str_contains($htaccessPublic, '<Files "sw.js">') && str_contains($htaccessPublic, 'no-cache, no-store, must-revalidate, max-age=0'));
 
 echo "\n--- Group 5: Synced Lyrics Auto-Scrolling Implementation ---\n";
 
@@ -117,10 +119,15 @@ $appJs = (string)file_get_contents($projectRoot . '/public/assets/js/app.js');
 assert_test("app.js contains container-relative offset calculation helper", str_contains($appJs, 'getElementOffsetTopRelativeTo'));
 assert_test("app.js attaches non-intrusive manual scroll detection", str_contains($appJs, '_hasManualScrollListener') && str_contains($appJs, '_lastUserScrollTime'));
 assert_test("app.js pauses auto-scroll when user manually scrolls (4s window)", str_contains($appJs, 'timeSinceUserScroll < 4000'));
-assert_test("app.js centers active line within container using scrollTo", str_contains($appJs, 'body.scrollTo({ top: targetScrollTop, behavior: \'smooth\' })'));
+assert_test("app.js centers active line within container using scrollTo", str_contains($appJs, 'body.scrollTo({ top: targetScrollTop'));
 assert_test("app.js enforces threshold check to prevent micro-jitter", str_contains($appJs, 'Math.abs(body.scrollTop - targetScrollTop) > 6'));
 assert_test("app.js centers line immediately on timestamp seek click", str_contains($appJs, 'body._lastUserScrollTime = 0'));
 assert_test("app.js resumes and centers line immediately on auto-scroll toggle ON", str_contains($appJs, 'updateActiveSyncedLyricLine(panel, player.getCurrentTime(), true)'));
+assert_test("app.js includes cross-origin YouTube postMessage listener fallback", str_contains($appJs, "event.origin.includes('youtube.com')") && str_contains($appJs, "infoDelivery"));
+
+$auditionsPhp = (string)file_get_contents($projectRoot . '/public/auditions.php');
+assert_test("auditions.php sets YouTube embed origin to get_base_url()", str_contains($auditionsPhp, '$appOrigin = get_base_url();'));
+assert_test("auditions.php generates embed query parameters with & rather than &amp;", str_contains($auditionsPhp, '?enablejsapi=1&playsinline=1&rel=0&origin='));
 
 echo "\n--- Group 6: CSS Flexbox & Overflow Guarantees ---\n";
 
@@ -152,6 +159,33 @@ if ($hasMasterStarter) {
     $nullArtists = array_map('intval', $nullArtists);
     assert_test("Missing Artist Invariant: strictly [1546, 2015, 2196]", $nullArtists === [1546, 2015, 2196], "Found: " . json_encode($nullArtists));
 }
+
+echo "\n--- Group 8: Timezone & IST Consistency Verification ---\n";
+
+require_once $projectRoot . '/includes/db_helper.php';
+
+$phpTimezone = date_default_timezone_get();
+assert_test("PHP default timezone is centrally set to Asia/Kolkata", $phpTimezone === 'Asia/Kolkata', "Got: {$phpTimezone}");
+
+$sessionTz = (string)$pdo->query("SELECT @@session.time_zone")->fetchColumn();
+assert_test("MySQL session timezone is initialized to +05:30", $sessionTz === '+05:30', "Got: {$sessionTz}");
+
+$mysqlNow = (string)$pdo->query("SELECT NOW()")->fetchColumn();
+$phpNow = date('Y-m-d H:i:s');
+// Verify MySQL NOW() and PHP date('Y-m-d H:i:s') differ by at most 2 seconds
+$diffSeconds = abs(strtotime($mysqlNow) - strtotime($phpNow));
+assert_test("MySQL NOW() and PHP date() are synchronized in IST within 2s", $diffSeconds <= 2, "Diff: {$diffSeconds}s (MySQL: {$mysqlNow}, PHP: {$phpNow})");
+
+// Verify format_local_timestamp correctly handles both raw IST strings and ISO UTC strings
+$sampleIso = '2026-11-07T21:25:00Z';
+$formattedFromIso = format_local_timestamp($sampleIso, 'Y-m-d H:i');
+assert_test("format_local_timestamp converts ISO 8601 UTC to IST (+5:30)", $formattedFromIso === '2026-11-08 02:55', "Got: {$formattedFromIso}");
+
+$sampleIstStr = '2026-11-08 02:55:00';
+$formattedFromIst = format_local_timestamp($sampleIstStr, 'Y-m-d H:i');
+assert_test("format_local_timestamp preserves raw IST timestamp without double-shifting", $formattedFromIst === '2026-11-08 02:55', "Got: {$formattedFromIst}");
+
+assert_test("format_local_timestamp returns 'Never' for empty/null timestamps", format_local_timestamp(null) === 'Never' && format_local_timestamp('') === 'Never');
 
 echo "\n======================================================================\n";
 echo " TEST SUMMARY: {$passCount} / {$testCount} tests passed.\n";

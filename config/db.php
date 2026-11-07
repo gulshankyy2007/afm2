@@ -43,7 +43,8 @@ function get_db_connection(bool $forceNew = false, ?string $overrideDb = null): 
         } catch (PDOException $e) {
             $pdo->exec("SET NAMES utf8mb4");
         }
-        $pdo->exec("SET time_zone = '+00:00'");
+        // Set database session timezone to Indian Standard Time (IST / UTC+05:30)
+        $pdo->exec("SET time_zone = '+05:30'");
         $instances[$dbname] = $pdo;
     } catch (PDOException $e) {
         // Log detailed error internally

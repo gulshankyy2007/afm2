@@ -22,6 +22,16 @@ Options -Indexes
     Header set Referrer-Policy "strict-origin-when-cross-origin"
     Header set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
     Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://yt3.ggpht.com https://images.unsplash.com https://coverartarchive.org https://archive.org https://*.archive.org; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';"
+
+    # Service Worker and PWA Manifests must never be cached long-term
+    <Files "sw.js">
+        Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </Files>
+    <FilesMatch "^(manifest\.json|manifest\.webmanifest)$">
+        Header set Cache-Control "no-cache, must-revalidate, max-age=0"
+    </FilesMatch>
 </IfModule>
 
 # PWA Manifest MIME Type

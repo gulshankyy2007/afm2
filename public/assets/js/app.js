@@ -2122,6 +2122,45 @@ function attachYouTubePlayerToPanel(panel, songId, forceReinit = false, retryCou
     }
 }
 
+// Cross-origin HTML5 postMessage listener for YouTube IFrame player events
+// Captures playback state and timestamps directly from iframe postMessage stream as a resilient fallback
+if (typeof window !== 'undefined' && !window._hasYouTubeMessageListener) {
+    window._hasYouTubeMessageListener = true;
+    window.addEventListener('message', (event) => {
+        if (!event.origin || (!event.origin.includes('youtube.com') && !event.origin.includes('youtube-nocookie.com'))) {
+            return;
+        }
+        try {
+            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (!data) return;
+            if (data.event === 'infoDelivery' && data.info) {
+                const info = data.info;
+                const currentTime = typeof info.currentTime === 'number' ? info.currentTime : null;
+                const playerState = typeof info.playerState === 'number' ? info.playerState : null;
+
+                document.querySelectorAll('.yt-embed-frame').forEach((iframe) => {
+                    if (iframe.contentWindow === event.source) {
+                        const panel = iframe.closest('.scorecard-media-panel');
+                        if (panel) {
+                            const songId = parseInt(panel.dataset.songId, 10);
+                            if (playerState === 1) {
+                                setPlaybackStatus(songId, 'status-playing', 'Playing');
+                            } else if (playerState === 2) {
+                                setPlaybackStatus(songId, 'status-paused', 'Paused');
+                            } else if (playerState === 0) {
+                                setPlaybackStatus(songId, 'status-ended', 'Ended');
+                            }
+                            if (currentTime !== null && currentTime >= 0) {
+                                updateActiveSyncedLyricLine(panel, currentTime);
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (e) {}
+    }, { passive: true });
+}
+
 /**
  * Handle YouTube embed restriction or playback errors gracefully
  */
@@ -2198,16 +2237,25 @@ function stopSyncedLyricsTracker(songId) {
 }
 
 /**
- * Helper: Get element offsetTop relative to a specific ancestor container
+ * Helper: Get element offsetTop relative to a specific ancestor container.
+ * Uses getBoundingClientRect() + container.scrollTop to guarantee exact viewport subpixel
+ * coordinate accuracy across flexbox, CSS transforms, and mobile browsers.
  */
 function getElementOffsetTopRelativeTo(element, container) {
-    let top = 0;
-    let curr = element;
-    while (curr && curr !== container) {
-        top += curr.offsetTop;
-        curr = curr.offsetParent;
+    if (!element || !container) return 0;
+    try {
+        const elemRect = element.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        return (elemRect.top - contRect.top) + container.scrollTop;
+    } catch (e) {
+        let top = 0;
+        let curr = element;
+        while (curr && curr !== container) {
+            top += curr.offsetTop;
+            curr = curr.offsetParent;
+        }
+        return top;
     }
-    return top;
 }
 
 /**
@@ -2253,7 +2301,9 @@ function updateActiveSyncedLyricLine(panel, currentTime, forceScroll = false) {
         const body = box.querySelector('.lyrics-body');
         if (!body) return;
 
-        // Non-intrusive listener to detect when user manually scrolls or touches the lyrics box
+        // Non-intrusive listener to detect when user manually scrolls the lyrics container.
+        // Listens to 'wheel' (mouse wheel) and 'touchmove' (touch drag). Omits 'pointerdown'
+        // so ordinary taps, clicks on lines, or seeking do not accidentally freeze auto-scroll.
         if (!body._hasManualScrollListener) {
             body._hasManualScrollListener = true;
             body._lastUserScrollTime = 0;
@@ -2262,7 +2312,6 @@ function updateActiveSyncedLyricLine(panel, currentTime, forceScroll = false) {
             };
             body.addEventListener('wheel', onUserManualScroll, { passive: true });
             body.addEventListener('touchmove', onUserManualScroll, { passive: true });
-            body.addEventListener('pointerdown', onUserManualScroll, { passive: true });
         }
 
         const autoScrollBtn = box.querySelector('.btn-autoscroll-toggle');
@@ -2287,7 +2336,7 @@ function updateActiveSyncedLyricLine(panel, currentTime, forceScroll = false) {
         if (Math.abs(body.scrollTop - targetScrollTop) > 6) {
             if (typeof body.scrollTo === 'function') {
                 try {
-                    body.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                    body.scrollTo({ top: targetScrollTop, behavior: forceScroll ? 'auto' : 'smooth' });
                 } catch (e) {
                     body.scrollTop = targetScrollTop;
                 }
