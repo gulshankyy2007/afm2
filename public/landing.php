@@ -56,7 +56,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <span class="trust-item"><span class="trust-icon">✓</span> Curated Multi-Era Catalogue</span>
                 <span class="trust-item"><span class="trust-icon">✓</span> 5-Criterion Auditions</span>
                 <span class="trust-item"><span class="trust-icon">✓</span> 7 Championship Stages</span>
-                <span class="trust-item"><span class="trust-icon">✓</span> Passkey &amp; Google Auth</span>
+                <span class="trust-item"><span class="trust-icon">✓</span> Passkey &amp; Google Sign-In</span>
             </div>
         </div>
 

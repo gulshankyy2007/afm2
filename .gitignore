@@ -34,6 +34,7 @@ My YouTube Music Library.csv
 *.bak
 afm2-deploy.tar.gz
 afm2-infinityfree.zip
+deployment/*.zip
 
 # Backup directories
 backups/
@@ -42,13 +43,53 @@ backups/
 scratch/
 artifacts/
 *.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.prproj
+*.aep
 *.log
 bin/*.log
+gitleaks*.json
 
-# Operating system metadata
+# Video and multimedia showcase production workspaces
+AFM2_CINEMATIC_SHOWCASE_2026/
+AFM2_Showcase_Production/
+
+# Heavy binary document formats (source Markdown and HTML tracked in docs/)
+*.docx
+*.pdf
+/AFM2_Participants_Guide_2026.docx
+/AFM2_Participants_Guide_2026.pdf
+/AFM2_Participants_Guide_2026.html
+/AFM2_Participants_Guide_2026.md
+
+# Standalone external manual deployment web builds
+AFM2_Participants_Guide_Web/
+
+# Security audit and remediation forensic reports (persisted in backups/artifacts)
+/AFM2_SECURITY_AUDIT_PHASE_1.md
+/AFM2_SECURITY_REMEDIATION_PHASE_2.md
+/AFM2_SECURITY_CHANGELOG.md
+/AFM2_SECURITY_TEST_REPORT.md
+
+# IDE, editor, and operating system metadata
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
 
 # Vercel CLI deployment metadata
 .vercel/

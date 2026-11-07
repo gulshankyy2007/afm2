@@ -36,10 +36,4 @@
         <changefreq>monthly</changefreq>
         <priority>0.7</priority>
     </url>
-    <url>
-        <loc>https://afm2.infinityfreeapp.com/login.php</loc>
-        <lastmod>2026-10-29</lastmod>
-        <changefreq>monthly</changefreq>
-        <priority>0.5</priority>
-    </url>
 </urlset>

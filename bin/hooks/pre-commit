@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# AFM#2 — Pre-Commit Secret Detection Hook
+# Prevents accidental credential or private key commits.
+
+set -euo pipefail
+
+echo "==> Running AFM#2 pre-commit security verification..."
+
+# 1. Check for committed .env files
+if git diff --cached --name-only | grep -E '(^|/)\.env($|\..*)' | grep -v '\.env\.example$'; then
+    echo "❌ ERROR: Attempting to commit an environment file containing secrets!"
+    echo "Only .env.example may be committed to Git."
+    exit 1
+fi
+
+# 2. Check for private keys or database dumps
+if git diff --cached --name-only | grep -E '\.(pem|key|sql|bak|dump)$'; then
+    echo "❌ ERROR: Attempting to commit private keys or raw database dumps!"
+    exit 1
+fi
+
+# 3. Run Gitleaks if installed
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks protect --staged --redact --verbose
+else
+    echo "ℹ️  Notice: gitleaks is not installed locally. Consider installing gitleaks for deep scanning."
+fi
+
+echo "✔ Pre-commit security verification passed."
+exit 0

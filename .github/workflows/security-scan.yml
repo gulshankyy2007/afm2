@@ -1,0 +1,49 @@
+name: Security & Integrity Scan
+
+on:
+  push:
+    branches: [ main, impl/responsive-redesign ]
+  pull_request:
+    branches: [ main, impl/responsive-redesign ]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret Detection (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_REDACT: "true"
+
+  php-lint:
+    name: PHP Syntax & Configuration Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, json, mbstring, openssl
+
+      - name: Verify PHP Syntax
+        run: |
+          find . -name "*.php" -not -path "./vendor/*" -not -path "./scratch/*" -exec php -l {} \;
+
+      - name: Verify Sanitized Configuration
+        run: |
+          test -f .env.example
+          ! test -f .env
+          grep -q "APP_SECRET" .env.example

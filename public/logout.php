@@ -12,6 +12,9 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 
+// Instruct all search crawlers not to index or cache logout endpoints
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+
 // Method check: Only POST requests can perform logout
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);

@@ -19,6 +19,7 @@ require_once dirname(__DIR__) . '/includes/youtube_matcher.php';
 require_once dirname(__DIR__) . '/includes/webauthn_service.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
 
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];

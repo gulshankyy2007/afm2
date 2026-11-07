@@ -11,6 +11,9 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 
+// Instruct all search crawlers not to index or cache setup endpoints
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+
 // If users already exist, lock this setup screen completely
 if (has_users()) {
     header('Location: login.php');
@@ -50,6 +53,7 @@ $pageTitle = 'Initial Setup — AFM#2';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <title><?= htmlspecialchars($pageTitle) ?></title>
     <!-- Favicon & Touch Icons (Approved Compact AFM#2 Symbol) -->
     <link rel="icon" type="image/x-icon" href="favicon.ico">

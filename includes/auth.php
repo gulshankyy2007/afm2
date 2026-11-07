@@ -102,6 +102,7 @@ function is_admin(): bool {
  */
 function require_auth(bool $isApi = false): void {
     if (!is_authenticated()) {
+        header('X-Robots-Tag: noindex, nofollow, noarchive', true);
         if ($isApi) {
             http_response_code(401);
             header('Content-Type: application/json; charset=utf-8');

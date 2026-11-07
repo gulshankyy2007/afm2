@@ -1,373 +1,423 @@
 # AFM#2 — Annual Musical Finale 2026
 
-**Personal Music Catalogue, Audition, and Tournament Web Application**
+**An Open-Source, Non-Commercial Music Curation Sanctuary & 7-Stage Tournament Web Application**
 
-AFM#2 is a personal music management, audition, and tournament competition web application designed for the 2026 Annual Musical Finale. It provides high-performance music catalogue exploration, rapid one-tap shortlist/pass discovery, multi-criteria audition scoring, automated tournament progression across 7 stages with deterministic 5-tier tie-breaking, real-time synchronized lyrics, and responsive layouts across desktop, tablet, and mobile devices.
-
----
-
-## 1. System Architecture & Technology Stack
-
-AFM#2 is built strictly with lightweight, native technologies without framework overhead or external build steps:
-
-- **Backend:** Native PHP 8.2+ (Strict typing, PDO prepared statements, UTF-8mb4, secure session cookies, defense-in-depth security headers, and rate limiting).
-- **Database:** MySQL 8.0+ / MariaDB 10.4+ / 11.4 (`afm_db`) with `utf8mb4_unicode_ci` and stored generated columns.
-- **Frontend Architecture:** Semantic HTML5, Vanilla CSS3 (Custom properties design system, 8 themes, responsive flex/grid layouts, mobile-first card transformations), and Vanilla ES6+ JavaScript.
-- **External Integrations:**
-  - **YouTube:** Privacy-enhanced embedded video playback (`youtube-nocookie.com`) and zero-cost search integration without API keys.
-  - **LRCLIB:** Free community-driven synchronized and plain lyrics lookups with multi-level database caching (`song_lyrics_ref`).
-  - **Lyrics.ovh:** Secondary automated lyrics fallback provider.
-  - **Google OAuth 2.0 / OpenID Connect:** Optional federated identity authentication.
-  - **WebAuthn / FIDO2:** Hardware passkey authentication.
-- **Zero Framework Bloat:** Zero Node.js runtime dependencies, zero npm packages required in production, zero frontend framework baggage.
+[![Security & Integrity Scan](https://github.com/gulshankyy2007/afm2/actions/workflows/security-scan.yml/badge.svg)](https://github.com/gulshankyy2007/afm2/actions/workflows/security-scan.yml)
+[![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
+[![Database](https://img.shields.io/badge/MySQL-8.0%2B%20%7C%20MariaDB-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 2. Main Application Features
+## 1. Project Overview & Philosophy
 
-### Responsive UI & Theming System
-- **Comprehensive Viewport Support:** Optimized for mobile phones (320px, 360px, 390px, 430px), tablets (600px, 768px, 1024px), and desktops (1280px, 1440px, 1920px).
-- **Eight Distinct Visual Themes:**
-  1. *Midnight Muse* (Default deep obsidian with cyan/magenta neon accents)
-  2. *Oceanic* (Deep marine cyan)
-  3. *Nordic Frost* (Crisp sub-zero slate)
-  4. *Emerald Forest* (Lush emerald woodland)
-  5. *Midnight Ember* (Warm amber glow)
-  6. *Velvet Amethyst* (Royal twilight purple)
-  7. *Vintage Parchment* (Warm classic paper)
-  8. *Solar Terracotta* (Earthy dusk tones)
-- **Accessible Interactions:** WCAG 2.1 AA compliant color contrast, 44px+ touch targets, mobile navigation drawer, and keyboard-trapped modal dialogs.
+**AFM#2 (Annual Musical Finale 2026)** is an open-source, non-commercial personal music journal, audition workstation, and tournament platform. Built around the ethos of deliberate, intentional listening, AFM#2 transforms passive music streaming into an active, artistic competition.
+
+Participants explore a curated multi-era music catalogue of **2,411 tracks**, evaluate contenders across five structured artistic dimensions, and steer a seven-stage qualification ladder from initial auditions down to crowning the **2026 Champion Song**.
+
+### Core Philosophy
+- **Intentional Curation:** Counteracting infinite algorithmic shuffle by encouraging focused, album-quality listening sessions.
+- **Structured Adjudication:** Moving beyond binary "likes" to evaluate songs across Melody, Lyrics, Vocals, Emotion, and Replayability.
+- **Artistic Autonomy:** Automated scores provide guidance, while human adjudicators retain full control over stage qualifications and boundary ties.
+- **Privacy & Lightweight Engineering:** Zero tracking scripts, zero commercial advertisements, zero frontend framework baggage, and strict multi-user data isolation.
+
+---
+
+## 2. Open-Source & Non-Commercial Status
+
+AFM#2 is developed and maintained strictly as a **non-commercial, open-source personal project**:
+- **No Monetization:** The application contains no subscriptions, paid tiers, advertisements, or affiliate programs.
+- **No Commercial Data Collection:** User ratings, journal notes, and tournament results remain strictly private and belong exclusively to the user.
+- **Educational & Personal Use:** Designed for music enthusiasts, private listening groups, and tournament adjudicators.
+
+---
+
+## 3. Technology Stack & Architecture
+
+AFM#2 is engineered with lightweight, native web standards to maximize performance, durability, and portability across zero-cost shared hosting (e.g. InfinityFree, cPanel) and modern cloud containers (Docker, Render, Railway, VPS):
+
+| Layer | Technologies & Implementations |
+|---|---|
+| **Backend** | Native **PHP 8.2+** with strict typing (`declare(strict_types=1)`), PDO prepared statements, argon2id/bcrypt password hashing, and RFC 6797 HTTPS transport verification. |
+| **Database** | **MySQL 8.0+ / MariaDB 10.4+ / 11.4** with `utf8mb4_unicode_ci` collation, stored generated columns, and foreign-key integrity constraints. |
+| **Frontend** | Semantic **HTML5**, Vanilla **CSS3** (custom properties design system, 8 cohesive themes, fluid clamp typography, mobile navigation drawer), and Vanilla **ES6+ JavaScript** (zero npm runtime dependencies). |
+| **Authentication** | Modular multi-method architecture: Native Credentials, Google OAuth 2.0 / OpenID Connect, and **WebAuthn / FIDO2 Passkeys**. |
+| **Media & Lyrics** | Privacy-enhanced YouTube player (`youtube-nocookie.com`), **LRCLIB** synchronized lyrics API with local database caching, and Lyrics.ovh automated fallback. |
+| **Security** | Defense-in-depth HTTP headers (CSP, HSTS, X-Frame-Options, Permissions-Policy), timing-safe CSRF tokens, strict IDOR prevention, IP/composite rate limiting, and formula-injection-safe CSV export. |
+
+---
+
+## 4. Key Features & Capabilities
+
+### Atmospheric Design & 8 Cohesive Themes
+AFM#2 features a custom-built design system with WCAG 2.1 AA compliant color contrast, 44px+ touch targets, real-time background blur adjustments, and eight responsive themes:
+1. **Midnight Ember** *(Default Dark)*: Warm amber coals, charcoal dusk, and obsidian depth.
+2. **Nordic Frost** *(Hero Light)*: Crisp architectural monolith, snow-white canvas, and royal sapphire blue.
+3. **Velvet Amethyst**: Cosmic twilight, deep indigo, and luminous neon lavender.
+4. **Emerald Forest**: Verdant alpine spruce, shadowy forest floor, and vibrant mint.
+5. **Vintage Parchment** *(Light)*: Aged archival paper, warm sepia, and deep walnut ink.
+6. **Solar Terracotta** *(Light)*: Sun-drenched Tuscan clay, terracotta warmth, and desert sienna.
+7. **Oceanic Dusk**: Deep midnight marine horizon and bioluminescent cyan.
+8. **Quiet Minimal**: Serene architectural studio, warm white canvas, and soft charcoal.
 
 ### Catalogue & Library Management
-- **2,411 Starter Catalogue Tracks:** Complete baseline music collection with persistent metadata, album artwork, and YouTube links.
-- **Instant Filtering & Sorting:** Fast catalogue search with multi-field sorting by ID, Title (A-Z/Z-A), and Artist (A-Z/Z-A).
-- **Direct CRUD Operations:** Modal track creation with auto-populated YouTube metadata, title/artist editing, and safe deletion controls.
-- **Bulk Selection & Safety Safeguards:** Multi-track selection bar with pre-action eligibility evaluation protecting shortlisted, scored, and tournament-active songs from accidental deletion.
+- **2,411 Starter Catalogue Tracks:** Pre-seeded catalogue spanning multiple decades and genres, cloned independently for each registered user.
+- **Instant Search & Multi-Field Sorting:** Filter by Title, Artist, Track ID, or Evaluation Status with zero server lag.
+- **Bulk Action Safeguards:** Protected multi-track operations that prevent accidental deletion of shortlisted, scored, or tournament-active entries.
 
 ### Discovery Shortlist
-- **Rapid Evaluation:** Quick audition intake with one-tap Shortlist, Pass, and Scorecard shortcuts.
-- **Responsive Presentation:** Compact single-line numeric badges on desktop (`✓ SCORED: 40`) and spacious structured cards on mobile with dedicated timestamps and action buttons.
-
-### Formal Auditions & Scoring
-- **5-Dimension Scoring (/50 Total):**
-  1. *Melody* (0–10)
-  2. *Lyrics* (0–10)
-  3. *Vocals* (0–10)
-  4. *Emotion* (0–10)
-  5. *Replayability* (0–10)
-- **Automatic Score Generation:** Database-computed stored generated column:
-  $$\text{Total} = \text{Melody} + \text{Lyrics} + \text{Vocals} + \text{Emotion} + \text{Replayability}$$
-- **Incomplete vs. Complete Tracking:** Partial scorecards tracked as incomplete (`28* / 50`); only complete scorecards advance to official leaderboards.
-- **Stage Finalization & Immutability:** Completed tournament scorecards and advancement decisions are permanently frozen and tamper-proof against unverified modifications or deletions.
-
-### Tournament Progression & History
-- **7-Stage Tournament Ladder:**
-  1. *Formal Auditions* (Candidate intake & qualification)
-  2. *Top 200* (Top 200 participants)
-  3. *Top 100* (Top 100 participants)
-  4. *Top 50* (Top 50 participants)
-  5. *Top 20* (Semi-finalists)
-  6. *Top 10* (Finalists)
-  7. *Finals* (Crowning the 2026 Champion)
-- **Deterministic 5-Tier Tie-Breaking:** Emotion > Replayability > Melody > Vocals > Lyrics > Entry ID ASC.
-- **Interactive Manual Qualification Wizard:** Multi-step wizard supporting advisory cutoffs, custom drag-and-drop / arrow re-ordering, candidate replacements, and transactional confirmation.
-- **Archival & CSV Export:** Historical stage standings, podium visualizations, and formula-injection-safe CSV results export.
+- **One-Tap Candidate Intake:** Streamlined triage with one-tap Shortlist, Pass, or Reset actions.
+- **Responsive Presentation:** Compact numeric badges on desktop; spacious, touch-friendly cards on mobile devices.
 
 ### Recordings & Audio Experience
-- **Smart Candidate Discovery:** Multi-source YouTube matching engine with thumbnail previews, duration heuristics, and debounce protections.
-- **Real-Time Synced Lyrics:** YouTube IFrame API integration with line-by-line active lyric tracking, smooth auto-scrolling, and interactive seek-to-lyric timestamps.
-- **Personal Manual Lyrics:** Secure user overrides for missing or synchronized lyrics stored per-user.
-
-### Multiuser Isolation & Modular Authentication
-- **Multiuser Architecture:** Independent user starter catalogues (`master_starter_songs` cloning), private user tracks, private scorecards, and isolated stage progression.
-- **Authentication Providers:** Password (argon2id/bcrypt), Google OAuth 2.0 / OpenID Connect, and WebAuthn / FIDO2 Passkeys.
-- **Administrative Provisioning:** Tokenized 64-hex invitations, account activation, and role-based access.
+- **Multi-Source YouTube Matching:** Automated search query heuristics with thumbnail previews and duration verification.
+- **Interactive Synced Lyrics:** Real-time line-by-line active lyric tracking with click-to-seek playback timestamps.
+- **Personal Lyric Overrides:** Secure user overrides for missing tracks, cached privately per-user.
 
 ---
 
-## 3. Directory Structure
+## 5. Tournament Structure & Progression
+
+The competition advances through a rigorous 7-stage tournament ladder:
+
+```
+[ 2,411 Starter Catalogue ]
+            │
+            ▼
+┌────────────────────────────────────────┐
+│ Stage 1: Formal Auditions              │ ◄── All shortlisted candidates scored (/50)
+└──────────────────┬─────────────────────┘
+                   │ Top 200 Qualifiers
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 2: Top 200                       │
+└──────────────────┬─────────────────────┘
+                   │ Top 100 Qualifiers
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 3: Top 100                       │
+└──────────────────┬─────────────────────┘
+                   │ Top 50 Qualifiers
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 4: Top 50                        │
+└──────────────────┬─────────────────────┘
+                   │ Top 20 Semi-Finalists
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 5: Top 20                        │
+└──────────────────┬─────────────────────┘
+                   │ Top 10 Finalists
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 6: Top 10 (Championship Finals)  │
+└──────────────────┬─────────────────────┘
+                   │ Final Adjudication
+                   ▼
+┌────────────────────────────────────────┐
+│ Stage 7: The Grand Finale              │ ◄── 2026 Champion Song Crowned 🏆
+└────────────────────────────────────────┘
+```
+
+---
+
+## 6. Audition & Evaluation Criteria
+
+Every track is scored across five distinct artistic criteria, each calibrated on a `0.0` to `10.0` scale:
+
+| Criterion | Dimension Evaluated | Weight |
+|---|---|:---:|
+| **Melody (♫)** | Harmonic richness, melodic memorability, composition progression | 10 pts |
+| **Lyrics (📝)** | Narrative depth, poetic resonance, storytelling, linguistic craft | 10 pts |
+| **Vocals (🎤)** | Vocal expression, timbre, technical delivery, range, emotional presence | 10 pts |
+| **Emotion (❤️)** | Visceral impact, atmosphere, goosebumps, lasting emotional resonance | 10 pts |
+| **Replayability (🔁)** | Longevity across repeated listens, timelessness, enduring appeal | 10 pts |
+| **TOTAL** | **Aggregate Audition Score** | **/ 50 pts** |
+
+The aggregate total is computed automatically via a MySQL stored generated column:
+$$\text{Total} = \text{Melody} + \text{Lyrics} + \text{Vocals} + \text{Emotion} + \text{Replayability}$$
+
+### Deterministic 5-Tier Tie-Breaking
+When candidates tie on aggregate total at a stage qualification boundary, AFM#2 resolves position through a deterministic hierarchy:
+$$\text{Emotion} \rightarrow \text{Replayability} \rightarrow \text{Melody} \rightarrow \text{Vocals} \rightarrow \text{Lyrics} \rightarrow \text{Adjudicator Choice}$$
+
+---
+
+## 7. Directory Structure
 
 ```text
-/mnt/data/GY/Music/AFM#2/
-├── .htaccess                     # Root Apache rewrite rules (routes to public/) & security headers
-├── .env.example                  # Environment configuration template
-├── index.php                     # Root entry point forwarding to public/index.php
-├── robots.txt                    # Search engine crawling rules
-├── sitemap.xml                   # Public sitemap
-├── bin/                          # Build & packaging helper scripts
-│   └── build-infinityfree-release.sh
-├── config/                       # Configuration & connection infrastructure
+/
+├── .github/
+│   ├── dependabot.yml            # Dependabot configuration for GitHub Actions
+│   └── workflows/
+│       └── security-scan.yml     # Automated Gitleaks & PHP syntax verification
+├── .env.example                  # Sanitized environment configuration template
+├── .gitignore                    # Comprehensive security and build exclusion policy
+├── .gitleaks.toml                # Gitleaks secret detection rules and allowlist
+├── index.php                     # Root entry point bridging to public/index.php
+├── robots.txt                    # Search crawler rules (allows noindex reading)
+├── sitemap.xml                   # Public sitemap (strictly public informational pages)
+├── bin/                          # Management utilities & automation scripts
+│   ├── admin_recovery.php        # CLI administrator account recovery tool
+│   ├── build-infinityfree-release.sh # Production asset minification & packaging
+│   ├── bulk_youtube_matcher.php  # Automated YouTube candidate matcher
+│   └── hooks/
+│       └── pre-commit            # Local pre-commit secret detection script
+├── config/                       # Application configuration
 │   ├── config.php                # Environment loader, security headers, HTTPS detection
-│   └── db.php                    # PDO connection factory (UTF-8mb4, emulated prepares disabled)
+│   └── db.php                    # PDO connection provider (UTF-8mb4, prepared statements)
+├── docs/                         # Authoritative documentation and user manuals
+│   ├── AFM2_Participants_Guide_2026.md   # Official participant handbook source
+│   ├── AFM2_Participants_Guide_2026.html # Formatted participant handbook
+│   ├── participant_guide.css     # Handbook styling
+│   └── screenshots/              # High-resolution desktop and mobile UI previews
 ├── includes/                     # Application logic, helpers, and services
-│   ├── auth.php                  # Authentication lifecycle, rate limiting, and session security
-│   ├── csrf.php                  # Timing-safe CSRF token generation and validation
-│   ├── db_helper.php             # Core database queries, tournament logic, and safeguards
-│   ├── duplicate_helper.php      # Duplicate candidate detection and safe consolidation
-│   ├── footer.php                # Layout footer, scripts, toasts, and media player
-│   ├── google_auth_service.php   # Google OIDC authentication provider
-│   ├── header.php                # Layout header, navigation drawer, theme selector, user pill
-│   ├── import_helper.php         # CSV import processing and formula injection sanitization
-│   ├── lyrics_helper.php         # LRCLIB & Lyrics.ovh multi-source lyrics fetcher
+│   ├── artwork_helper.php        # Album art extraction and CDN fallbacks
+│   ├── auth.php                  # Modular authentication and session security
+│   ├── csrf.php                  # Timing-safe CSRF token lifecycle
+│   ├── db_helper.php             # Core database queries, tournament logic
+│   ├── duplicate_helper.php      # Duplicate track candidate detection
+│   ├── footer.php                # Layout footer, audio player, modal scripts
+│   ├── google_auth_service.php   # Google OAuth 2.0 / OpenID Connect provider
+│   ├── header.php                # Layout header, navigation drawer, theme selector
+│   ├── import_helper.php         # CSV import parser and formula injection guard
+│   ├── media_helper.php          # LRCLIB & Lyrics.ovh multi-source lyrics fetcher
+│   ├── preferences_helper.php    # User theme and UI layout persistence
 │   ├── webauthn_service.php      # FIDO2 / WebAuthn passkey registration & verification
 │   └── youtube_matcher.php       # YouTube search and metadata extraction engine
-├── migrations/                   # Versioned additive database schema migrations
+├── migrations/                   # Additive, version-controlled database migrations
 │   ├── 001_init_app_tables.php through 015_align_tournament_collations.php
-│   └── migration_runner.php      # Additive migration runner CLI & web handler
+│   └── migration_runner.php      # Migration execution engine (CLI & web)
 ├── public/                       # Web server document root
-│   ├── .htaccess                 # Direct public access security rules
-│   ├── assets/
-│   │   ├── css/                  # style.css (Midnight Muse) & mobile.css (Responsive)
-│   │   ├── js/                   # app.js, auth.js, recordings.js (Vanilla ES6+)
-│   │   └── img/                  # Brand logos, favicons, artwork fallbacks
+│   ├── .htaccess                 # Apache security rules and security headers
+│   ├── about.php                 # About AFM#2 philosophy and curation rules
+│   ├── account.php               # Account profile, credentials, passkey management
+│   ├── admin_migrate.php         # Hardened database migration & reconciliation console
+│   ├── api.php                   # Secure CSRF-protected JSON REST endpoint
 │   ├── auditions.php             # Multi-criteria scoring interface
-│   ├── discovery.php             # Shortlist management view
-│   ├── index.php                 # Application dashboard & progression overview
-│   ├── library.php               # Catalogue browser, search, sorting & modal CRUD
-│   ├── recordings.php            # YouTube matching and recording management
-│   ├── tournament.php            # Stage leaderboards & manual qualification wizard
-│   ├── results.php               # Historical stage archive, CSV export, winner podium
-│   ├── import.php                # CSV catalogue import interface
-│   ├── login.php                 # Multi-method login screen
-│   ├── logout.php                # Secure CSRF-protected session termination
-│   ├── account.php               # User profile, theme settings, passkeys & auth management
-│   ├── setup.php                 # One-time administrator provisioning (locks upon use)
-│   ├── api.php                   # Secure CSRF-protected JSON API endpoint
-│   └── archive.php               # Permanent redirect to results.php
-├── deployment/                   # Deployment guides, backups, SQL migrations, release bundles
-│   ├── afm2-infinityfree-release.zip # Validated production release archive
-│   ├── afm2_full_backup.sql      # Canonical database backup
-│   ├── DEPLOYMENT_GUIDE.md       # Generic deployment instructions
-│   └── INFINITYFREE_SETUP.md     # Detailed InfinityFree step-by-step setup guide
-├── tests/                        # Automated regression and security test suites
-│   ├── test_db_guard.php         # Test database isolation guard (protects afm_db)
-│   ├── test_bulk_action_safety.php
-│   ├── test_production_deletion_safeguards.php
-│   ├── test_stage_finalization_and_immutability.php
-│   ├── test_song_management_and_sorting.php
-│   ├── test_tournament_progression_and_qualification.php
-│   ├── test_batch_a_auth_integrity.php through test_batch_e_rate_limiting_and_headers.php
-│   └── test_multiuser_isolation.php
-└── README.md                     # System documentation & operating guide
+│   ├── contact.php               # Maintainer contact & open-source disclosures
+│   ├── discovery.php             # Shortlist evaluation view
+│   ├── index.php                 # Journal dashboard & tournament status
+│   ├── invite.php                # Single-use tokenized invitation onboarding
+│   ├── landing.php               # Public introduction for unauthenticated visitors
+│   ├── library.php               # Catalogue browser, multi-field search, modal CRUD
+│   ├── login.php                 # Multi-method login screen (branded & crawler-protected)
+│   ├── logout.php                # POST-only CSRF-protected session termination
+│   ├── privacy.php               # Factual privacy and data protection policy
+│   ├── recordings.php            # YouTube matching and recording workbench
+│   ├── results.php               # Historical tournament archive & CSV export
+│   ├── setup.php                 # One-time administrator setup (fails closed)
+│   ├── terms.php                 # Terms of Use guidelines
+│   ├── tournament.php            # Stage leaderboards & manual qualification console
+│   ├── users.php                 # Administrator user management & invitation console
+│   └── assets/                   # Pre-compiled, cache-busted CSS, JS, and image assets
+├── tests/                        # Automated regression, isolation, and security test suites
+│   ├── test_batch_a_auth_integrity.php
+│   ├── test_batch_b_cookie_security.php
+│   ├── test_batch_c_csv_security.php
+│   ├── test_batch_d_request_hardening.php
+│   ├── test_batch_e_rate_limiting_and_headers.php
+│   ├── test_modular_auth.php     # Multi-method auth suite (38 assertions)
+│   ├── test_multiuser_isolation.php # Two-user isolation suite (58 assertions)
+│   ├── test_phase2_security_remediation.php # Phase 2 verification suite (33 assertions)
+│   └── test_suite.php            # Core catalogue and tournament logic suite
+└── deployment/                   # Deployment guides, Dockerfile, and setup scripts
 ```
 
 ---
 
-## 4. System Requirements
+## 8. Authentication & Security Architecture
 
-### Production Environment (e.g. InfinityFree / Shared Hosting / VPS)
-- **PHP Version:** PHP 8.2 or later (PHP 8.2, 8.3, 8.4 supported).
-- **PHP Extensions:** `pdo_mysql`, `curl`, `json`, `mbstring`, `openssl`, `session`.
-- **Web Server:** Apache 2.2 / 2.4+ with modules:
-  - `mod_rewrite` (URL routing and `.htaccess` rules)
-  - `mod_headers` (Defensive security headers and cache control)
-  - `mod_deflate` (Gzip compression)
-  - `mod_expires` (Browser caching)
-- **Database:** MySQL 8.0+ or MariaDB 10.4+ / 11.4 with `utf8mb4_unicode_ci` support.
+AFM#2 enforces comprehensive defensive controls across every layer:
 
-### Local Development Environment
-- PHP 8.2+ CLI built-in web server (`php -S`).
-- MySQL 8.0+ or MariaDB running locally on port 3306.
-- cURL utility and OpenSSL for testing.
+```
+                  ┌────────────────────────────────────────┐
+                  │          Incoming Web Request          │
+                  └───────────────────┬────────────────────┘
+                                      │
+                       [ HTTPS Transport Verification ]
+                                      │
+                   [ Defense-in-Depth Security Headers ]
+             (CSP, HSTS, X-Content-Type-Options, X-Frame-Options)
+                                      │
+               [ Search Crawler Control: X-Robots-Tag ]
+         (Auth & internal endpoints instructed: noindex, nofollow)
+                                      │
+                   [ Rate Limiting & Abuse Prevention ]
+             (IP-based & composite account-specific buckets)
+                                      │
+                                      ▼
+               ┌──────────────────────────────────────────────┐
+               │         Modular Authentication Gate         │
+               ├──────────────┬────────────────┬──────────────┤
+               │   Password   │  Google OIDC   │   WebAuthn   │
+               │ (argon2id)   │ (RS256 JWT)    │   (FIDO2)    │
+               └──────────────┴────────────────┴──────────────┘
+                                      │
+                                      ▼
+                  ┌────────────────────────────────────────┐
+                  │    Authenticated User Session Context  │
+                  ├────────────────────────────────────────┤
+                  │  • Timing-Safe CSRF Token Validation   │
+                  │  • Multi-User Isolated Starter Data    │
+                  │  • Mutative IDOR Safety Boundaries     │
+                  │  • Formula-Injection-Safe CSV Export   │
+                  └────────────────────────────────────────┘
+```
+
+### Authentication Methods
+1. **Native Username/Email & Password:** Secure password storage using PHP `PASSWORD_DEFAULT` (argon2id or bcrypt with cost factor 12).
+2. **Google OAuth 2.0 / OpenID Connect:** Cryptographically verified identity with RS256 token validation against Google's public JWKS. Complies with Google Identity Branding Guidelines (*"Continue to AFM#2 with Google"*).
+3. **WebAuthn / FIDO2 Passkeys:** Hardware-backed biometric and security key authentication with anti-replay signature counters.
+4. **Administrator Provisioning:** Invitation-only registration via cryptographically random 64-hexadecimal tokens.
+
+### Preventive Security Controls
+- **Search Engine Isolation:** All authentication, setup, admin, and API endpoints emit `X-Robots-Tag: noindex, nofollow, noarchive` headers. Protected route redirects emit `noindex` to prevent crawler evaluation.
+- **Admin Secret Hardening:** Administrative endpoints (`admin_migrate.php`) reject query parameter secrets (`GET ?secret=`), accepting authorization strictly via `$_POST['secret']` or `X-App-Secret` headers with zero parameter leakage in 403 responses.
+- **CSRF Defense:** Cryptographically secure 256-bit hexadecimal CSRF tokens tied to user sessions and validated with `hash_equals()`.
+- **IDOR Protections:** Every mutation query scopes operations strictly by `WHERE user_id = :uid`. Cross-user editing or deletion is rejected.
+- **Formula Injection Safeguard:** All CSV exports prepend a single quotation mark (`'`) to cells starting with `=`, `+`, `-`, `@`, `\t`, or `\r`.
 
 ---
 
-## 5. Local Installation & Setup
+## 9. Local Installation & Configuration
 
-### Step 1: Clone the Repository
-```bash
-git clone https://github.com/gulshankyy2007/afm2.git
-cd afm2
-git checkout impl/responsive-redesign
-```
+### Prerequisites
+- PHP 8.2 or later with extensions: `pdo_mysql`, `curl`, `json`, `mbstring`, `openssl`, `session`.
+- MySQL 8.0+ or MariaDB 10.4+.
+- Web server: Apache (with `mod_rewrite` and `mod_headers`) or Nginx.
 
-### Step 2: Environment Configuration
-Copy the template configuration file:
-```bash
-cp .env.example .env
-```
+### Step-by-Step Setup
 
-Edit `.env` with your local database credentials:
-```ini
-APP_ENV=development
-APP_SECRET=a_strong_random_64_hex_character_secret_here
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=afm_db
-DB_USER=your_local_db_user
-DB_PASS=your_local_db_password
-SESSION_LIFETIME=86400
-```
-
-### Step 3: Database Initialization & Migrations
-1. Create the MySQL database:
+1. **Clone the Repository:**
    ```bash
-   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS afm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+   git clone https://github.com/gulshankyy2007/afm2.git
+   cd afm2
    ```
-2. Import the canonical starter database or execute migrations:
-   ```bash
-   # Option A: Import full baseline backup (contains all starter tracks & tables)
-   mysql -u root -p afm_db < deployment/afm2_full_backup.sql
 
-   # Option B: Run additive schema migrations
+2. **Configure Environment Variables:**
+   ```bash
+   cp .env.example .env
+   ```
+   Open `.env` and configure your database settings and application secret:
+   ```ini
+   APP_ENV=development
+   APP_SECRET=your_random_64_character_hex_secret_here
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_NAME=afm_db
+   DB_USER=your_local_db_user
+   DB_PASS=your_local_db_password
+   ```
+   *(Generate a secure secret via terminal: `php -r 'echo bin2hex(random_bytes(32)) . PHP_EOL;'`)*
+
+3. **Initialize the Database:**
+   Create the database in MySQL:
+   ```sql
+   CREATE DATABASE afm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
+   Run the automated database migration runner:
+   ```bash
    php migrations/migration_runner.php
    ```
 
-### Step 4: Launch the Local Development Server
-Start PHP's built-in server targeting the public document root:
+4. **Start the Local Development Server:**
+   ```bash
+   php -S 127.0.0.1:8000 -t public
+   ```
+   Open `http://127.0.0.1:8000/setup.php` in your browser to create the initial administrator account. Once provisioned, `setup.php` permanently locks.
+
+---
+
+## 10. Preventive Secret Scanning & Developer Workflow
+
+AFM#2 enforces automated secret detection to ensure credentials, private keys, and environment files are never published:
+
+### 1. Gitleaks Configuration (`.gitleaks.toml`)
+The repository includes `.gitleaks.toml` which extends the standard Gitleaks rule library while allowlisting sanitized documentation templates (`.env.example`) and test fixtures.
+
+### 2. Local Pre-Commit Hook
+Developers can enable automatic pre-commit scanning by installing the provided hook:
 ```bash
-php -S 127.0.0.1:8080 -t public/
+cp bin/hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+*(Or globally configure Git: `git config core.hooksPath bin/hooks`)*
+
+### 3. Continuous Integration (GitHub Actions)
+Every `push` and `pull_request` to `main` and `impl/responsive-redesign` triggers `.github/workflows/security-scan.yml`, running:
+- **Gitleaks Scan:** Deep historical and staged commit analysis with `--redact` enabled.
+- **PHP Syntax & Config Lint:** Syntax checking across all files and validation of `.env.example`.
+
+---
+
+## 11. Screenshots & Interface Previews
+
+| Desktop Workbench | Mobile Adaptive Layout |
+|:---:|:---:|
+| ![Journal Desktop](docs/screenshots/journal_desktop.png) | ![Journal Mobile](docs/screenshots/journal_mobile.png) |
+| *Auditions Workbench (Desktop)* | *Auditions Card View (Mobile)* |
+| ![Auditions Desktop](docs/screenshots/auditions_desktop.png) | ![Auditions Mobile](docs/screenshots/auditions_mobile.png) |
+| *Tournament Leaderboard (Desktop)* | *Tournament Bracket (Mobile)* |
+| ![Tournament Desktop](docs/screenshots/tournament_desktop.png) | ![Tournament Mobile](docs/screenshots/tournament_mobile.png) |
+
+---
+
+## 12. Deployment Considerations
+
+### InfinityFree / Shared Hosting
+1. Generate the production bundle:
+   ```bash
+   bash bin/build-infinityfree-release.sh
+   ```
+   This compiles and minifies CSS/JS with `esbuild`, validates syntax, and produces `deployment/afm2-infinityfree-release.zip`.
+2. Upload the contents of the ZIP into the `htdocs/` directory via File Manager or FTP.
+3. Create the database via cPanel / VistaPanel and run migrations using `public/admin_migrate.php` (authenticating via administrator session or POST secret token).
+4. **Hosting Proxy Notice:** Free hosting providers (e.g. ByetHost / InfinityFree) inject transient client-side challenge scripts (`/aes.js`). For optimal crawler performance and custom domain branding, connecting a custom domain with Cloudflare's free proxy is recommended.
+
+### Cloud Containers (Docker / VPS / Render)
+The `deployment/` directory includes a multi-stage `Dockerfile`, `docker-compose.yml`, and `vps-setup.sh` for one-command container deployment on modern Linux servers.
+
+---
+
+## 13. Known Limitations & Roadmap
+
+- **Audio Playback:** Relies on the YouTube IFrame API; tracks not available on YouTube require manual link association.
+- **Hosting Anti-Bot Friction:** Free hosting challenge scripts can occasionally delay first-time automated indexing by search bots.
+- **Future Enhancements:**
+  - Native offline-first PWA caching for mobile auditioning.
+  - Multi-judge aggregate consensus scoring mode.
+  - Spotify / Apple Music playlist export integration.
+
+---
+
+## 14. Contribution Guidelines
+
+Contributions are welcome from music enthusiasts and open-source developers!
+1. Fork the repository on GitHub.
+2. Create a focused feature branch: `git checkout -b feature/my-enhancement`.
+3. Ensure all tests pass: `php tests/test_modular_auth.php && php tests/test_multiuser_isolation.php`.
+4. Ensure no secrets are staged: `gitleaks protect --staged`.
+5. Submit a pull request with a detailed description of changes.
+
+---
+
+## 15. Licence Information
+
+AFM#2 is released as open-source software under the terms of the **[MIT License](LICENSE)**:
+
+```text
+MIT License
+Copyright (c) 2026 Gulshan Yadav
 ```
 
-Access the application in your browser at: **`http://127.0.0.1:8080/`**
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the conditions stated in the [LICENSE](LICENSE) file.
 
 ---
 
-## 6. Production Deployment on InfinityFree
+## 16. Contact & Maintainer Information
 
-AFM#2 is engineered to run on InfinityFree's zero-cost PHP 8.2 + MySQL hosting environment.
-
-### Deployment Prerequisites & Safety Policy
-> [!IMPORTANT]
-> - Never run destructive test scripts against the production database.
-> - Never execute schema reset or reimport operations on an existing live database.
-> - Always perform full file and database backups before updating production files.
-
-### Step-by-Step Deployment Instructions
-
-#### 1. Backup the Existing Live Website & Database
-1. **Database Backup:** Log in to InfinityFree Control Panel $\rightarrow$ **phpMyAdmin** $\rightarrow$ select your database (`if0_xxxxxxxx_afm_db`) $\rightarrow$ click **Export** $\rightarrow$ format **SQL** $\rightarrow$ click **Export**. Save this file securely.
-2. **File Backup:** In Control Panel $\rightarrow$ **File Manager** (or FileZilla FTP) $\rightarrow$ download or compress the existing `htdocs/` directory to your local workstation.
-
-#### 2. Obtain the Release Archive
-Use the pre-validated release package:
-- **Archive Path:** `deployment/afm2-infinityfree-release.zip`
-- **Archive Size:** ~915 KB (Minified CSS/JS, complete PHP runtime, zero dev clutter)
-- **SHA-256 Checksum:** `1cd8a0eb9e09a28be706d2bc4169e3c123af5807ca9b1b23a8fe9a947b8e4dc2`
-
-#### 3. Upload and Extract into `htdocs/`
-1. Open the InfinityFree **File Manager** (Monsta FTP) and navigate into the **`htdocs/`** directory.
-2. Upload `afm2-infinityfree-release.zip`.
-3. Extract the archive **directly into `htdocs/`**.
-4. Verify the resulting directory layout inside `htdocs/`:
-   ```text
-   htdocs/
-   ├── .htaccess
-   ├── .env.example
-   ├── index.php
-   ├── robots.txt
-   ├── sitemap.xml
-   ├── config/
-   ├── includes/
-   ├── migrations/
-   └── public/
-   ```
-   *Notice: There must NOT be any enclosing `afm2-infinityfree-release/` wrapper folder.*
-
-#### 4. Configure Production Environment (`.env`)
-1. If updating an existing installation, your live `.env` inside `htdocs/` is preserved and untouched.
-2. If setting up a fresh instance, copy `.env.example` to `.env` in `htdocs/` and configure:
-   ```ini
-   APP_ENV=production
-   APP_SECRET=your_generated_32_to_64_character_hex_secret
-   DB_HOST=sqlxxx.infinityfree.com
-   DB_PORT=3306
-   DB_NAME=if0_xxxxxxxx_afm_db
-   DB_USER=if0_xxxxxxxx
-   DB_PASS=YourHostingPassword
-   TRUST_PROXY_HEADERS=false
-   FORCE_HTTPS=false
-   SESSION_LIFETIME=86400
-   ```
-3. Set `.env` permissions to read-only for the web server (`chmod 600` or `chmod 644`). Note that root `.htaccess` already forbids web access to `.env*` files.
-
-#### 5. Database Migration Assessment for this Release
-> [!NOTE]
-> **Database migration required: NO.**
-> The responsive redesign and UI polish release operates entirely within the existing database schema established in migrations 001–014. No new tables, columns, indexes, triggers, or stored procedures were introduced. Existing production data remains 100% compatible.
-
-#### 6. Post-Deployment Verification
-Visit your InfinityFree domain (`https://yourname.infinityfreeapp.com/`):
-1. **Public Landing / Dashboard:** Verify responsive styling and theme rendering.
-2. **Authentication:** Log in with your existing account; verify session creation.
-3. **Library View:** Verify catalogue tracks (2,411 baseline), sorting, and single-line numeric audition score rendering on desktop (`42`).
-4. **Discovery Shortlist:** Check that status badges display numeric scores cleanly (`✓ SCORED: 40`), and mobile cards display separated metadata with dashed date dividers.
-5. **Auditions Scoring:** Open a scorecard, test scoring audio, and verify real-time lyrics synchronization.
-6. **Tournament Leaderboards:** Verify stage standings, tie-breaking criteria, and manual qualification wizard.
-
-#### 7. Rollback & Recovery Procedures
-If any hosting-level anomalies occur:
-- **Files Rollback:** Re-upload your backup of the previous `htdocs/` folder via FTP or File Manager.
-- **Database Rollback:** If a database error occurs, import your pre-deployment SQL export into phpMyAdmin.
-
----
-
-## 7. Automated Test Suite & Isolation
-
-AFM#2 maintains a comprehensive test suite with strict database safety guards to prevent accidental modification of real application data.
-
-### Database Safety Invariant
-All test scripts enforce connection strictly to **`afm_test_db`** via [`tests/test_db_guard.php`](file:///mnt/data/GY/Music/AFM%232/tests/test_db_guard.php). If any test script attempts to run against `afm_db` or a production database name pattern, the safety guard throws an immediate exception and halts execution.
-
-### Test Execution Commands
-
-```bash
-# 1. Database Safety Guard Verification
-php tests/test_db_safety_guard.php
-
-# 2. Bulk Action Safety & Safeguards (40 assertions)
-php tests/test_bulk_action_safety.php
-
-# 3. Production Deletion Safeguards (20 assertions)
-php tests/test_production_deletion_safeguards.php
-
-# 4. Stage Finalization & Immutability (48 assertions)
-php tests/test_stage_finalization_and_immutability.php
-
-# 5. Song Management, Sorting & Theme Styles (77 assertions)
-php tests/test_song_management_and_sorting.php
-
-# 6. Tournament Progression & Manual Qualification (33 assertions)
-php tests/test_tournament_progression_and_qualification.php
-
-# 7. Authentication & Session Integrity (Batch A, 24 assertions)
-php tests/test_batch_a_auth_integrity.php
-
-# 8. HTTPS Detection & Cookie Security (Batch B, 51 assertions)
-php tests/test_batch_b_cookie_security.php
-
-# 9. CSV Formula Injection Hardening (Batch C, 63 assertions)
-php tests/test_batch_c_csv_security.php
-
-# 10. Request Hardening & Secure Logout (Batch D, 20 assertions)
-php tests/test_batch_d_request_hardening.php
-
-# 11. Rate Limiting & Security Headers (Batch E, 47 assertions)
-php tests/test_batch_e_rate_limiting_and_headers.php
-
-# 12. Modular Multi-Method Authentication (38 assertions)
-php tests/test_modular_auth.php
-
-# 13. Two-User Isolation & Privacy (58 assertions)
-php tests/test_multiuser_isolation.php
-
-# 14. Collation Compatibility & Error 1267 Immunity (18 assertions)
-php tests/test_production_collation_error_1267.php
-
-# 15. Multi-Source Lyrics System (31 assertions)
-php tests/test_multisource_lyrics.php
-
-# 16. Manual Qualification Cancel Button Test
-php tests/test_advancement_cancel_button.php
-```
-
----
-
-## 8. Release Information
-
-- **Release Identifier:** `v2.4-responsive-redesign`
-- **Active Git Branch:** `impl/responsive-redesign`
-- **Target Remote:** `https://github.com/gulshankyy2007/afm2.git`
-- **Production Package:** `deployment/afm2-infinityfree-release.zip` (SHA-256: `1cd8a0eb9e09a28be706d2bc4169e3c123af5807ca9b1b23a8fe9a947b8e4dc2`)
-- **Hosting Target:** InfinityFree (Apache 2.4 / PHP 8.2+ / MySQL / `htdocs`)
-- **License / Ownership:** Annual Musical Finale 2026 (AFM#2). All rights reserved.
+- **Project Maintainer:** Gulshan Yadav ([@gulshankyy2007](https://github.com/gulshankyy2007))
+- **Official Repository:** [https://github.com/gulshankyy2007/afm2](https://github.com/gulshankyy2007/afm2)
+- **Live Application:** [https://afm2.infinityfreeapp.com/](https://afm2.infinityfreeapp.com/)
+- **Participant Handbook Web Manual:** [https://afm2-user-manual.netlify.app/](https://afm2-user-manual.netlify.app/)

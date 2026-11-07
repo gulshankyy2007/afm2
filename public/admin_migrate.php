@@ -20,6 +20,9 @@ if (file_exists(dirname(__DIR__) . '/includes/auth.php')) {
     require_once dirname(__DIR__) . '/includes/auth.php';
 }
 
+// Instruct all search crawlers not to index or cache administrative utilities
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+
 // 1. Enforce Authentication / Secret Authorization
 $isAuthorized = false;
 $authReason = '';
@@ -30,8 +33,9 @@ if (function_exists('is_authenticated') && is_authenticated() && function_exists
     $authReason = 'Authenticated Administrator Session';
 }
 
-// Check APP_SECRET token
-$providedSecret = $_GET['secret'] ?? $_POST['secret'] ?? '';
+// Check APP_SECRET token strictly via HTTP header or POST (never GET to avoid URL/log exposure)
+$headerSecret = $_SERVER['HTTP_X_APP_SECRET'] ?? '';
+$providedSecret = $_POST['secret'] ?? $headerSecret;
 if (!empty($providedSecret) && defined('APP_SECRET') && hash_equals(APP_SECRET, $providedSecret)) {
     $isAuthorized = true;
     $authReason = 'Verified Application Secret Token';
@@ -45,6 +49,7 @@ if (!$isAuthorized) {
     <html lang="en">
     <head>
         <meta charset="UTF-8">
+        <meta name="robots" content="noindex, nofollow, noarchive">
         <title>403 Forbidden — AFM#2</title>
         <link rel="stylesheet" href="assets/css/style.css?v=3.6">
         <style>
@@ -57,7 +62,7 @@ if (!$isAuthorized) {
     <body>
         <div class="box">
             <h1>403 Forbidden</h1>
-            <p>Access to the database migration utility is restricted. Please log in as an administrator or provide the authorized application secret key via <code>?secret=&lt;APP_SECRET&gt;</code>.</p>
+            <p>Access to the database migration utility is strictly restricted to authenticated administrators.</p>
         </div>
     </body>
     </html>
@@ -65,16 +70,28 @@ if (!$isAuthorized) {
     exit;
 }
 
-// 2. Execute Migrations if requested
+// 2. Execute Migrations if requested (strictly POST requests only)
 require_once dirname(__DIR__) . '/migrations/migration_runner.php';
 
 $pdo = get_db_connection();
 $dbName = (string)$pdo->query("SELECT DATABASE()")->fetchColumn();
 $dbVersion = (string)$pdo->query("SELECT VERSION()")->fetchColumn();
 
-$action = $_POST['action'] ?? $_GET['action'] ?? '';
+$action = $_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['action'] ?? '') : '';
 $migrationLogs = [];
 $executionMessage = '';
+
+// Validate CSRF token for session-authenticated administrative requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($action)) {
+    $isSessionAuth = function_exists('is_authenticated') && is_authenticated() && function_exists('is_admin') && is_admin();
+    if ($isSessionAuth) {
+        $token = $_POST['csrf_token'] ?? null;
+        if (!validate_csrf_token($token)) {
+            $executionMessage = 'Security validation failed: invalid CSRF token. Please refresh and try again.';
+            $action = '';
+        }
+    }
+}
 
 if ($action === 'migrate') {
     try {
@@ -185,6 +202,7 @@ if ($gulshanId) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <title>Database Migration & Reconciliation — AFM#2</title>
     <link rel="stylesheet" href="assets/css/style.css?v=3.6">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -250,6 +268,7 @@ if ($gulshanId) {
             <?php if (!empty($pendingFiles)): ?>
                 <div style="margin-top: 20px;">
                     <form method="POST">
+                        <?= csrf_field() ?>
                         <input type="hidden" name="action" value="migrate">
                         <?php if (!empty($providedSecret)): ?>
                             <input type="hidden" name="secret" value="<?= htmlspecialchars($providedSecret) ?>">
@@ -318,6 +337,7 @@ if ($gulshanId) {
                     <h3 style="font-size: 1rem; margin-top: 0; color: #38bdf8;">🔑 Set / Reset Password for `adminuser`</h3>
                     <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px;">Set a new password for the administrator account. If left blank, a secure password is generated.</p>
                     <form method="POST">
+                        <?= csrf_field() ?>
                         <input type="hidden" name="action" value="reset_password">
                         <input type="hidden" name="username" value="adminuser">
                         <?php if (!empty($providedSecret)): ?>
@@ -337,6 +357,7 @@ if ($gulshanId) {
                     <h3 style="font-size: 1rem; margin-top: 0; color: #4ade80;">👤 Account Role Management</h3>
                     <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px;">Configure the role for user <code>gulshan</code> (e.g. keep as <code>user</code> while <code>adminuser</code> is <code>admin</code>).</p>
                     <form method="POST" style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
+                        <?= csrf_field() ?>
                         <input type="hidden" name="action" value="set_role">
                         <input type="hidden" name="username" value="gulshan">
                         <?php if (!empty($providedSecret)): ?>

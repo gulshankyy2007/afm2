@@ -9,6 +9,9 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/google_auth_service.php';
 
+// Instruct all search crawlers not to index or cache OAuth callbacks
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+
 $provider = trim($_GET['provider'] ?? 'google');
 $code = trim($_GET['code'] ?? '');
 $state = trim($_GET['state'] ?? '');
