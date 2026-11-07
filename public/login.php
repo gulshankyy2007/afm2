@@ -75,6 +75,14 @@ $pageTitle = 'Sign In — AFM#2';
     <link rel="icon" type="image/png" sizes="192x192" href="assets/img/afm2-favicon-192x192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
+    <!-- PWA & Standalone Mobile Web App Capabilities -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0c0e14">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AFM#2">
+
     <link rel="stylesheet" href="assets/css/style.css?v=3.6">
     <link rel="stylesheet" href="assets/css/mobile.css?v=3.6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -206,5 +214,14 @@ $pageTitle = 'Sign In — AFM#2';
     </div>
 
     <script src="assets/js/auth.js?v=<?= file_exists(__DIR__ . '/assets/js/auth.js') ? filemtime(__DIR__ . '/assets/js/auth.js') : '1.0' ?>"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function(err) {
+                console.warn('PWA ServiceWorker registration failed:', err);
+            });
+        });
+    }
+    </script>
 </body>
 </html>

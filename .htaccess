@@ -44,6 +44,32 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
+# Explicitly permit Web App Manifest for PWA installation
+<Files "manifest.json">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</Files>
+<Files "manifest.webmanifest">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</Files>
+
+# Ensure correct MIME type for PWA manifests
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType application/manifest+json .json
+</IfModule>
+
 # Security Headers (Defense in depth)
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
