@@ -260,11 +260,11 @@ require_once dirname(__DIR__) . '/includes/header.php';
                             <div class="status-badge-container">
                                 <?php if ($isComplete): ?>
                                     <span class="badge badge-success" title="Formal audition score complete">
-                                        ✓ Scored: <?= (int)$totalScore ?> / 50
+                                        ✓ Scored: <?= (int)$totalScore ?><span class="score-max-subtle"> / 50</span>
                                     </span>
                                 <?php elseif ($isIncomplete): ?>
                                     <span class="badge badge-warning" title="Scorecard partially filled">
-                                        ⏳ Incomplete (<?= (int)$totalScore ?>* / 50)
+                                        ⏳ Incomplete (<?= (int)$totalScore ?>*<span class="score-max-subtle"> / 50</span>)
                                     </span>
                                 <?php else: ?>
                                     <span class="badge badge-neutral" title="Awaiting formal audition score">
@@ -275,7 +275,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                         </td>
                         <td class="col-date">
                             <span class="date-text">
-                                <?= $song['reviewed_at'] ? date('M j, Y H:i', strtotime($song['reviewed_at'])) : '—' ?>
+                                <?= $song['reviewed_at'] ? htmlspecialchars(format_local_timestamp($song['reviewed_at'])) : '—' ?>
                             </span>
                         </td>
                         <td class="col-actions">

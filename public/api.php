@@ -16,11 +16,10 @@ require_once dirname(__DIR__) . '/includes/artwork_helper.php';
 require_once dirname(__DIR__) . '/includes/duplicate_helper.php';
 require_once dirname(__DIR__) . '/includes/import_helper.php';
 require_once dirname(__DIR__) . '/includes/youtube_matcher.php';
+require_once dirname(__DIR__) . '/includes/webauthn_service.php';
 
 header('Content-Type: application/json; charset=utf-8');
-
-// Require authentication for all API operations
-require_auth(true);
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
 
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -28,14 +27,23 @@ $method = $_SERVER['REQUEST_METHOD'];
 // Helper to get JSON input
 $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
 
-// Verify CSRF for state-changing POST requests
-if ($method === 'POST') {
-    $submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null);
-    if (!validate_csrf_token($submittedToken)) {
-        http_response_code(403);
-        echo json_encode(['success' => false, 'error' => 'Security token (CSRF) validation failed. Please refresh the page.']);
-        exit;
+// Public unauthenticated actions
+$publicActions = ['webauthn_auth_options', 'webauthn_auth_verify'];
+
+if (!in_array($action, $publicActions, true)) {
+    // Require authentication for all standard API operations
+    require_auth(true);
+
+    // Verify CSRF for state-changing POST requests
+    if ($method === 'POST') {
+        $submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null);
+        if (!validate_csrf_token($submittedToken)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Security token (CSRF) validation failed. Please refresh the page.']);
+            exit;
+        }
     }
+    $currentUserId = get_current_user_id();
 }
 
 switch ($action) {
@@ -55,8 +63,84 @@ switch ($action) {
             exit;
         }
 
-        $result = update_song_discovery_status($songId, $status);
+        $result = update_song_discovery_status($songId, $status, $currentUserId);
+        if (!$result['success'] && strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($result);
+        break;
+
+    case 'check_bulk_eligibility':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $operation = isset($input['operation']) ? trim((string)$input['operation']) : '';
+        $rawSongIds = $input['song_ids'] ?? [];
+
+        if (!in_array($operation, ['shortlist', 'pass', 'delete'], true)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid bulk action operation. Must be shortlist, pass, or delete.']);
+            exit;
+        }
+
+        if (!is_array($rawSongIds) || empty($rawSongIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'No song IDs provided for eligibility check.']);
+            exit;
+        }
+
+        try {
+            $eligibility = check_bulk_songs_eligibility($operation, $rawSongIds, $currentUserId);
+            echo json_encode($eligibility);
+        } catch (\Throwable $e) {
+            error_log("AFM2 check_bulk_eligibility exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred while verifying track eligibility. Please try again later.'
+            ]);
+        }
+        break;
+
+    case 'bulk_discovery_update':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $status = isset($input['status']) ? trim((string)$input['status']) : (isset($input['operation']) ? trim((string)$input['operation']) : '');
+        $rawSongIds = $input['song_ids'] ?? [];
+
+        if (!is_array($rawSongIds) || empty($rawSongIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'No song IDs provided for bulk status update.']);
+            exit;
+        }
+
+        try {
+            $res = bulk_update_song_discovery($status, $rawSongIds, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
+            }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 bulk_discovery_update exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred during bulk status update. The technical incident has been logged. Please try again.'
+            ]);
+        }
         break;
 
     case 'save_rating':
@@ -88,8 +172,15 @@ switch ($action) {
             $lyrics, 
             $vocals, 
             $emotion, 
-            $replayability
+            $replayability,
+            $currentUserId
         );
+
+        if (!$result['success'] && (!empty($result['blocked']) || strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false)) {
+            http_response_code(403);
+            echo json_encode($result);
+            break;
+        }
 
         // Also persist recording media if provided with scorecard
         $videoInput = trim($input['video_id_or_url'] ?? ($input['video_url'] ?? ($input['youtube_url'] ?? '')));
@@ -107,7 +198,7 @@ switch ($action) {
                 $versionType  = trim($input['version_type'] ?? 'original');
                 $versionNotes = isset($input['version_notes']) ? trim($input['version_notes']) : null;
                 $userUrl      = isset($input['user_url']) ? trim($input['user_url']) : $videoInput;
-                $mediaRes = save_song_media($songId, $videoInput, $versionType, $versionNotes, 'allowed', null, null, $userUrl);
+                $mediaRes = save_song_media($songId, $videoInput, $versionType, $versionNotes, 'allowed', null, null, $userUrl, $currentUserId);
                 if ($mediaRes['success']) {
                     $result['media'] = $mediaRes['media'];
                 }
@@ -115,6 +206,45 @@ switch ($action) {
         }
 
         echo json_encode($result);
+        break;
+
+    case 'reset_score':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $entryId = isset($input['entry_id']) ? (int)$input['entry_id'] : 0;
+        $roundId = isset($input['round_id']) ? (int)$input['round_id'] : 1;
+
+        if ($entryId <= 0 || $roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid entry or tournament round ID.']);
+            exit;
+        }
+
+        $result = reset_scorecard_rating($entryId, $roundId, $currentUserId);
+        if (!$result['success']) {
+            if (!empty($result['blocked']) || strpos(strtolower($result['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
+        }
+        echo json_encode($result);
+        break;
+
+    case 'get_qualification_data':
+        $fromRoundId = isset($_GET['from_round_id']) ? (int)$_GET['from_round_id'] : 0;
+        if ($fromRoundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+
+        $data = get_stage_qualification_candidates($fromRoundId, $currentUserId);
+        echo json_encode(['success' => true, 'data' => $data]);
         break;
 
     case 'preview_advancement':
@@ -125,7 +255,7 @@ switch ($action) {
             exit;
         }
 
-        $preview = preview_stage_advancement($fromRoundId);
+        $preview = preview_stage_advancement($fromRoundId, $currentUserId);
         echo json_encode($preview);
         break;
 
@@ -140,6 +270,9 @@ switch ($action) {
         $qualifiers  = isset($input['qualifier_ids']) && is_array($input['qualifier_ids']) 
             ? array_map('intval', $input['qualifier_ids']) 
             : [];
+        $manualOrderMap = isset($input['manual_order_map']) && is_array($input['manual_order_map'])
+            ? $input['manual_order_map']
+            : null;
 
         if ($fromRoundId <= 0 || empty($qualifiers)) {
             http_response_code(400);
@@ -147,7 +280,52 @@ switch ($action) {
             exit;
         }
 
-        $res = commit_stage_advancement($fromRoundId, $qualifiers);
+        $res = commit_stage_advancement($fromRoundId, $qualifiers, $currentUserId, $manualOrderMap);
+        if (!$res['success']) {
+            http_response_code(400);
+        }
+        echo json_encode($res);
+        break;
+
+    case 'get_stage_reopen_info':
+        require_admin(true);
+        $roundId = isset($_GET['round_id']) ? (int)$_GET['round_id'] : 0;
+        if ($roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+        $info = get_stage_reopen_info($roundId, $currentUserId);
+        echo json_encode($info);
+        break;
+
+    case 'admin_stage_correction':
+    case 'reopen_stage':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        require_admin(true);
+        $roundId = isset($input['round_id']) ? (int)$input['round_id'] : 0;
+        $reason = trim($input['reason'] ?? '');
+        if ($roundId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid round ID.']);
+            exit;
+        }
+        if (strlen($reason) < 10) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error'   => 'A documented technical reason of at least 10 characters is required for exceptional administrative corrections.'
+            ]);
+            exit;
+        }
+        $res = admin_correct_tournament_stage($roundId, $reason, $currentUserId, $currentUserId);
+        if (!$res['success']) {
+            http_response_code(400);
+        }
         echo json_encode($res);
         break;
 
@@ -201,9 +379,13 @@ switch ($action) {
             exit;
         }
 
-        $res = save_song_media($songId, $videoInput, $versionType, $versionNotes, $embedStatus, $title, $channelTitle, $userUrl);
+        $res = save_song_media($songId, $videoInput, $versionType, $versionNotes, $embedStatus, $title, $channelTitle, $userUrl, $currentUserId);
         if (!$res['success']) {
-            http_response_code(400);
+            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
         }
         echo json_encode($res);
         break;
@@ -222,7 +404,10 @@ switch ($action) {
             exit;
         }
 
-        $res = remove_song_media($songId);
+        $res = remove_song_media($songId, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($res);
         break;
 
@@ -241,7 +426,10 @@ switch ($action) {
             exit;
         }
 
-        $res = update_song_media_embed_status($songId, $status);
+        $res = update_song_media_embed_status($songId, $status, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($res);
         break;
 
@@ -253,14 +441,106 @@ switch ($action) {
         $artist       = trim($_GET['artist'] ?? ($input['artist'] ?? ''));
         $forceRefresh = !empty($_GET['refresh']) || !empty($input['refresh']);
 
+        // Ground in authoritative catalogue record if song exists
+        if ($songId > 0) {
+            $pdo = get_db_connection();
+            $stmt = $pdo->prepare("SELECT `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id LIMIT 1");
+            $stmt->execute([':id' => $songId]);
+            $songRow = $stmt->fetch();
+            if ($songRow) {
+                if ($currentUserId !== null && $songRow['user_id'] !== null && (int)$songRow['user_id'] !== (int)$currentUserId) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized: Song belongs to another user.']);
+                    exit;
+                }
+                // Ensure current authoritative catalogue title is used (prevents stale frontend button attributes)
+                $title = trim($songRow['title']);
+                $dbArtist = trim($songRow['artist'] ?? '');
+                if (!empty($dbArtist) && $dbArtist !== 'Unknown Artist') {
+                    $artist = $dbArtist;
+                } elseif (empty($artist) || $artist === 'Unknown Artist') {
+                    $artist = '';
+                }
+            }
+        }
+
+        // Allow optional custom search overrides (e.g. from corrected title/artist search)
+        $customTitle = trim($_GET['custom_title'] ?? ($input['custom_title'] ?? ''));
+        $customArtist = trim($_GET['custom_artist'] ?? ($input['custom_artist'] ?? ''));
+        if ($customTitle !== '') {
+            $title = $customTitle;
+        }
+        if ($customArtist !== '') {
+            $artist = $customArtist;
+        }
+
         if ($songId <= 0 || empty($title)) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Song ID and Title are required.']);
             exit;
         }
 
-        $res = fetch_lrclib_lyrics($songId, $title, $artist, $forceRefresh);
+        $provider = trim($_GET['provider'] ?? ($input['provider'] ?? 'auto'));
+        $res = fetch_multisource_lyrics($songId, $title, $artist, $currentUserId, $provider, $forceRefresh);
         echo json_encode($res);
+        break;
+
+    case 'save_manual_lyrics':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        $lyrics = isset($input['lyrics']) ? (string)$input['lyrics'] : '';
+
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $res = save_user_manual_lyrics($songId, $lyrics, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
+        echo json_encode($res);
+        break;
+
+    case 'clear_manual_lyrics':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $res = clear_user_manual_lyrics($songId, $currentUserId);
+        echo json_encode($res);
+        break;
+
+    case 'get_manual_lyrics':
+        $songId = isset($_GET['song_id']) ? (int)$_GET['song_id'] : (int)($input['song_id'] ?? 0);
+        if ($songId <= 0) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
+            exit;
+        }
+
+        $manual = get_user_manual_lyrics($songId, $currentUserId);
+        echo json_encode([
+            'success'   => true,
+            'has_manual'=> ($manual !== null && !empty($manual['lyrics_text'])),
+            'lyrics'    => $manual['lyrics_text'] ?? null,
+            'updated_at'=> $manual['updated_at'] ?? null
+        ]);
         break;
 
     case 'search_lyrics_candidates':
@@ -294,6 +574,18 @@ switch ($action) {
             exit;
         }
 
+        if ($currentUserId !== null) {
+            $pdo = get_db_connection();
+            $stmt = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id LIMIT 1");
+            $stmt->execute([':id' => $songId]);
+            $sRow = $stmt->fetch();
+            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$currentUserId) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'Unauthorized: Cannot modify lyrics for another user\'s song.']);
+                exit;
+            }
+        }
+
         $res = get_lrclib_lyrics_by_id($songId, $lrclibId);
         echo json_encode($res);
         break;
@@ -312,7 +604,10 @@ switch ($action) {
             exit;
         }
 
-        $res = clear_song_lyrics_ref($songId);
+        $res = clear_song_lyrics_ref($songId, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($res);
         break;
 
@@ -405,6 +700,18 @@ switch ($action) {
             exit;
         }
 
+        if ($currentUserId !== null) {
+            $pdo = get_db_connection();
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id LIMIT 1");
+            $chk->execute([':id' => $songId]);
+            $sRow = $chk->fetch();
+            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$currentUserId) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'Unauthorized: Cannot modify artwork for another user\'s song.']);
+                exit;
+            }
+        }
+
         $res = confirm_song_artwork($songId, $artwork);
         if (!$res['success']) {
             http_response_code(400);
@@ -426,6 +733,18 @@ switch ($action) {
             exit;
         }
 
+        if ($currentUserId !== null) {
+            $pdo = get_db_connection();
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id LIMIT 1");
+            $chk->execute([':id' => $songId]);
+            $sRow = $chk->fetch();
+            if ($sRow && $sRow['user_id'] !== null && (int)$sRow['user_id'] !== (int)$currentUserId) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'Unauthorized: Cannot modify artwork for another user\'s song.']);
+                exit;
+            }
+        }
+
         $res = remove_song_artwork($songId);
         echo json_encode($res);
         break;
@@ -443,7 +762,7 @@ switch ($action) {
         ];
 
         try {
-            $data = detect_duplicate_candidates($filters);
+            $data = detect_duplicate_candidates($filters, $currentUserId);
             echo json_encode(['success' => true, 'data' => $data]);
         } catch (Throwable $e) {
             http_response_code(500);
@@ -459,6 +778,20 @@ switch ($action) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Two distinct, valid song IDs are required for comparison.']);
             exit;
+        }
+
+        if ($currentUserId !== null) {
+            $pdo = get_db_connection();
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` IN (:a, :b)");
+            $chk->execute([':a' => $songIdA, ':b' => $songIdB]);
+            $uids = $chk->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($uids as $u) {
+                if ($u !== null && (int)$u !== (int)$currentUserId) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized: Song belongs to another user.']);
+                    exit;
+                }
+            }
         }
 
         try {
@@ -594,7 +927,7 @@ switch ($action) {
             http_response_code(400);
         } else {
             // Check if extracted track already exists in catalogue
-            $existing = find_existing_catalogue_song($data['title'], $data['artist']);
+            $existing = find_existing_catalogue_song($data['title'], $data['artist'], $currentUserId);
             if ($existing) {
                 $data['existing_song'] = [
                     'song_id' => (int)$existing['song_id'],
@@ -613,7 +946,7 @@ switch ($action) {
             echo json_encode(['success' => true, 'match' => null]);
             exit;
         }
-        $existing = find_existing_catalogue_song($title, $artist);
+        $existing = find_existing_catalogue_song($title, $artist, $currentUserId);
         if ($existing) {
             echo json_encode([
                 'success' => true,
@@ -645,7 +978,7 @@ switch ($action) {
             exit;
         }
 
-        $res = create_catalogue_song($title, $artist, $youtubeUrl, $discoveryStatus);
+        $res = create_catalogue_song($title, $artist, $youtubeUrl, $discoveryStatus, $currentUserId);
         if (!$res['success']) {
             http_response_code(400);
         }
@@ -669,9 +1002,13 @@ switch ($action) {
             exit;
         }
 
-        $res = update_catalogue_song($songId, $title, $artist, $youtubeUrl);
+        $res = update_catalogue_song($songId, $title, $artist, $youtubeUrl, $currentUserId);
         if (!$res['success']) {
-            http_response_code(400);
+            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
         }
         echo json_encode($res);
         break;
@@ -689,11 +1026,25 @@ switch ($action) {
             exit;
         }
 
-        $res = delete_catalogue_song($songId);
-        if (!$res['success']) {
-            http_response_code(!empty($res['blocked']) ? 409 : 400);
+        try {
+            $res = delete_catalogue_song($songId, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
+            }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 delete_song exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred while deleting the song. The technical incident has been logged. Please try again later.'
+            ]);
         }
-        echo json_encode($res);
         break;
 
     case 'delete_multiple_songs':
@@ -709,11 +1060,25 @@ switch ($action) {
             exit;
         }
 
-        $res = delete_multiple_catalogue_songs($rawSongIds);
-        if (!$res['success']) {
-            http_response_code(!empty($res['blocked']) ? 409 : 400);
+        try {
+            $res = delete_multiple_catalogue_songs($rawSongIds, $currentUserId);
+            if (!$res['success']) {
+                if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                    http_response_code(403);
+                } else {
+                    http_response_code(!empty($res['blocked']) ? 409 : 400);
+                }
+            }
+            echo json_encode($res);
+        } catch (\Throwable $e) {
+            error_log("AFM2 delete_multiple_songs exception: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode([
+                'success'    => false,
+                'error_code' => 'server_error',
+                'error'      => 'A server error occurred during bulk deletion. The technical incident has been logged. Please try again later.'
+            ]);
         }
-        echo json_encode($res);
         break;
 
     case 'export_rejection_report':
@@ -732,7 +1097,7 @@ switch ($action) {
             exit;
         }
 
-        $songId = isset($input['song_id']) ? (int)$input['song_id'] : 0;
+        $songId = isset($input['song_id']) ? (int)$input['song_id'] : (isset($_GET['song_id']) ? (int)$_GET['song_id'] : 0);
         if ($songId <= 0) {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid song ID.']);
@@ -740,12 +1105,17 @@ switch ($action) {
         }
 
         $pdo = get_db_connection();
-        $songStmt = $pdo->prepare("SELECT `song_id`, `title`, `artist` FROM `songs` WHERE `song_id` = :id");
+        $songStmt = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id");
         $songStmt->execute([':id' => $songId]);
         $song = $songStmt->fetch();
         if (!$song) {
             http_response_code(404);
             echo json_encode(['success' => false, 'error' => 'Song not found in catalogue.']);
+            exit;
+        }
+        if ($currentUserId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$currentUserId) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Unauthorized: Song belongs to another user.']);
             exit;
         }
 
@@ -754,19 +1124,50 @@ switch ($action) {
         $lyricsRow = $lyricsStmt->fetch();
         $expectedDuration = ($lyricsRow && !empty($lyricsRow['duration'])) ? (int)round((float)$lyricsRow['duration']) : null;
 
-        $forceRefresh = !empty($input['force_refresh']);
+        $forceRefresh = !empty($input['force_refresh']) || !empty($_POST['force_refresh']);
         $candidates = [];
-        if (!$forceRefresh) {
-            $existing = YouTubeMatcher::get_candidates_for_song($songId);
-            if (!empty($existing)) {
-                $candidates = $existing;
-            }
+
+        // Acquire short-timeout MySQL advisory lock to serialize concurrent discovery requests for the same song
+        $lockKey = "afm2_discover_song_{$songId}";
+        $hasLock = false;
+        try {
+            $lockStmt = $pdo->prepare("SELECT GET_LOCK(:k, 3)");
+            $lockStmt->execute([':k' => $lockKey]);
+            $hasLock = (int)$lockStmt->fetchColumn() === 1;
+        } catch (Exception $e) {
+            $hasLock = false;
         }
 
-        if (empty($candidates)) {
-            $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
-            $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
-            YouTubeMatcher::save_candidates_for_song($songId, $candidates);
+        try {
+            if (!$forceRefresh) {
+                $existing = YouTubeMatcher::get_candidates_for_song($songId);
+                if (!empty($existing)) {
+                    $candidates = $existing;
+                }
+            } else {
+                // Safeguard against accidental rapid duplicate discovery (5-second debounce)
+                // Use MySQL TIMESTAMPDIFF to eliminate PHP vs MySQL timezone offset mismatches
+                $checkRecentStmt = $pdo->prepare("SELECT TIMESTAMPDIFF(SECOND, MAX(`updated_at`), NOW()) FROM `song_youtube_candidates` WHERE `song_id` = :id");
+                $checkRecentStmt->execute([':id' => $songId]);
+                $diffSec = $checkRecentStmt->fetchColumn();
+                if ($diffSec !== null && $diffSec !== false && (int)$diffSec >= 0 && (int)$diffSec < 5) {
+                    $candidates = YouTubeMatcher::get_candidates_for_song($songId);
+                }
+            }
+
+            if (empty($candidates)) {
+                $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
+                $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
+                YouTubeMatcher::save_candidates_for_song($songId, $candidates);
+            }
+        } finally {
+            if ($hasLock) {
+                try {
+                    $pdo->prepare("SELECT RELEASE_LOCK(:k)")->execute([':k' => $lockKey]);
+                } catch (Exception $e) {
+                    // Advisory lock auto-releases on connection close
+                }
+            }
         }
 
         $savedMedia = get_song_media($songId);
@@ -790,7 +1191,7 @@ switch ($action) {
         }
 
         $pdo = get_db_connection();
-        $songStmt = $pdo->prepare("SELECT `song_id`, `title`, `artist` FROM `songs` WHERE `song_id` = :id");
+        $songStmt = $pdo->prepare("SELECT `song_id`, `title`, `artist`, `user_id` FROM `songs` WHERE `song_id` = :id");
         $songStmt->execute([':id' => $songId]);
         $song = $songStmt->fetch();
         if (!$song) {
@@ -798,19 +1199,14 @@ switch ($action) {
             echo json_encode(['success' => false, 'error' => 'Song not found in catalogue.']);
             exit;
         }
-
-        $candidates = YouTubeMatcher::get_candidates_for_song($songId);
-        if (empty($candidates)) {
-            $lyricsStmt = $pdo->prepare("SELECT `duration` FROM `song_lyrics_ref` WHERE `song_id` = :id");
-            $lyricsStmt->execute([':id' => $songId]);
-            $lyricsRow = $lyricsStmt->fetch();
-            $expectedDuration = ($lyricsRow && !empty($lyricsRow['duration'])) ? (int)round((float)$lyricsRow['duration']) : null;
-
-            $rawCandidates = YouTubeMatcher::discover_candidates($song['title'], $song['artist']);
-            $candidates = YouTubeMatcher::score_and_rank_candidates($song['title'], $song['artist'], $rawCandidates, $expectedDuration);
-            YouTubeMatcher::save_candidates_for_song($songId, $candidates);
+        if ($currentUserId !== null && $song['user_id'] !== null && (int)$song['user_id'] !== (int)$currentUserId) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Unauthorized: Song belongs to another user.']);
+            exit;
         }
 
+        // Pure read-only candidate retrieval. Side-effecting discovery and writes are restricted to POST youtube_discover_candidates.
+        $candidates = YouTubeMatcher::get_candidates_for_song($songId);
         $savedMedia = get_song_media($songId);
 
         echo json_encode([
@@ -841,9 +1237,13 @@ switch ($action) {
             exit;
         }
 
-        $res = YouTubeMatcher::manual_select_candidate($songId, $videoId, $versionType, $versionNotes);
+        $res = YouTubeMatcher::manual_select_candidate($songId, $videoId, $versionType, $versionNotes, $currentUserId);
         if (!$res['success']) {
-            http_response_code(400);
+            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
         }
         echo json_encode($res);
         break;
@@ -866,9 +1266,13 @@ switch ($action) {
             exit;
         }
 
-        $res = YouTubeMatcher::manual_save_url($songId, $urlOrId, $versionType, $versionNotes);
+        $res = YouTubeMatcher::manual_save_url($songId, $urlOrId, $versionType, $versionNotes, $currentUserId);
         if (!$res['success']) {
-            http_response_code(400);
+            if (strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+                http_response_code(403);
+            } else {
+                http_response_code(400);
+            }
         }
         echo json_encode($res);
         break;
@@ -887,7 +1291,10 @@ switch ($action) {
             exit;
         }
 
-        $res = YouTubeMatcher::clear_recording($songId);
+        $res = YouTubeMatcher::clear_recording($songId, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($res);
         break;
 
@@ -900,7 +1307,10 @@ switch ($action) {
             exit;
         }
 
-        $res = YouTubeMatcher::verify_playback_and_embed($videoId, $songId);
+        $res = YouTubeMatcher::verify_playback_and_embed($videoId, $songId, $currentUserId);
+        if (!$res['success'] && strpos(strtolower($res['error'] ?? ''), 'unauthorized') !== false) {
+            http_response_code(403);
+        }
         echo json_encode($res);
         break;
 
@@ -914,15 +1324,15 @@ switch ($action) {
         $batchSize = isset($input['batch_size']) ? max(1, min(50, (int)$input['batch_size'])) : 10;
         $force = !empty($input['force']);
 
-        $res = YouTubeMatcher::process_batch($batchSize, ['force' => $force]);
-        $stats = YouTubeMatcher::get_matching_stats();
+        $res = YouTubeMatcher::process_batch($batchSize, ['force' => $force], $currentUserId);
+        $stats = YouTubeMatcher::get_matching_stats(false, $currentUserId);
         $res['stats'] = $stats;
         echo json_encode($res);
         break;
 
     case 'youtube_job_status':
-        $job = YouTubeMatcher::get_or_create_active_job();
-        $stats = YouTubeMatcher::get_matching_stats();
+        $job = YouTubeMatcher::get_or_create_active_job($currentUserId);
+        $stats = YouTubeMatcher::get_matching_stats(false, $currentUserId);
         echo json_encode([
             'success' => true,
             'job'     => $job,
@@ -937,15 +1347,53 @@ switch ($action) {
             exit;
         }
 
-        YouTubeMatcher::reset_job();
-        $job = YouTubeMatcher::get_or_create_active_job();
-        $stats = YouTubeMatcher::get_matching_stats();
+        YouTubeMatcher::reset_job($currentUserId);
+        $job = YouTubeMatcher::get_or_create_active_job($currentUserId);
+        $stats = YouTubeMatcher::get_matching_stats(false, $currentUserId);
         echo json_encode([
             'success' => true,
             'message' => 'Matching job reset successfully.',
             'job'     => $job,
             'stats'   => $stats
         ]);
+        break;
+
+    // ==================== WEBAUTHN / PASSKEY ACTIONS ====================
+    case 'webauthn_register_options':
+        $userId = get_current_user_id();
+        $username = get_current_username();
+        $options = WebAuthnService::generate_registration_options($userId, $username);
+        echo json_encode(['success' => true, 'options' => $options]);
+        break;
+
+    case 'webauthn_register_verify':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        $userId = get_current_user_id();
+        $deviceName = trim($input['device_name'] ?? 'Passkey');
+        $credData = $input['credential'] ?? $input;
+        $result = WebAuthnService::verify_registration_response($userId, $credData, $deviceName);
+        echo json_encode($result);
+        break;
+
+    case 'webauthn_auth_options':
+        $username = trim($input['username'] ?? $_GET['username'] ?? '');
+        $options = WebAuthnService::generate_authentication_options($username ?: null);
+        echo json_encode(['success' => true, 'options' => $options]);
+        break;
+
+    case 'webauthn_auth_verify':
+        if ($method !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+            exit;
+        }
+        $credData = $input['credential'] ?? $input;
+        $result = WebAuthnService::verify_authentication_response($credData);
+        echo json_encode($result);
         break;
 
     default:

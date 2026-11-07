@@ -13,7 +13,11 @@ require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 require_once dirname(__DIR__) . '/includes/artwork_helper.php';
 
-require_auth();
+// If visitor is unauthenticated, serve the public landing page!
+if (!is_authenticated()) {
+    require __DIR__ . '/landing.php';
+    exit;
+}
 
 $stats = get_dashboard_stats();
 $pageTitle = 'Journal — AFM#2 Annual Musical Finale 2026';
@@ -100,40 +104,41 @@ require_once dirname(__DIR__) . '/includes/header.php';
 
                     <!-- Right: Metadata & Direct Action -->
                     <div class="tactile-meta-col">
-                        <div class="tactile-header-bar">
-                            <div class="tactile-stream-badge">
-                                <span class="stream-beacon">((●))</span>
-                                <span class="stream-title">Featured Shortlist Contender</span>
+                        <div class="tactile-info-group">
+                            <div class="tactile-header-bar">
+                                <?php if (isset($featuredSong['total']) && $featuredSong['total'] !== null): ?>
+                                    <span class="total-score-badge complete">
+                                        <?= (int)$featuredSong['total'] ?> / 50
+                                    </span>
+                                <?php else: ?>
+                                    <span class="total-score-badge">
+                                        Awaiting Score
+                                    </span>
+                                <?php endif; ?>
                             </div>
-                            <?php if ($featuredSong['total'] !== null): ?>
-                                <span class="total-score-badge complete">
-                                    <?= (int)$featuredSong['total'] ?> / 50
-                                </span>
-                            <?php else: ?>
-                                <span class="total-score-badge">
-                                    Awaiting Score
-                                </span>
-                            <?php endif; ?>
-                        </div>
 
-                        <div class="tactile-song-info">
-                            <h2 class="tactile-title"><?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?></h2>
-                            <div class="tactile-artist"><?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="tactile-details">Catalogue Track #<?= (int)$featuredSong['song_id'] ?> &bull; Shortlisted for Auditions</div>
+                            <div class="tactile-song-info">
+                                <h2 class="tactile-title"><?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?></h2>
+                                <div class="tactile-artist"><?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="tactile-details">Catalogue Track #<?= (int)$featuredSong['song_id'] ?> &bull; Shortlisted for Auditions</div>
+                            </div>
                         </div>
 
                         <div class="featured-actions-row">
-                            <a href="auditions.php?q=<?= urlencode($featuredSong['title']) ?>" class="btn btn-primary btn-sm">
-                                <span class="btn-icon">🎧</span> Open Audition Scorecard
+                            <a href="auditions.php?q=<?= urlencode($featuredSong['title']) ?>" class="btn btn-primary btn-sm btn-featured-scoreboard" aria-label="Open Audition Scorecard for <?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>">
+                                <span class="btn-icon">🎧</span>
+                                <span class="btn-text-desktop">Open Audition Scorecard</span>
+                                <span class="btn-text-mobile">Scoreboard</span>
                             </a>
                             <button type="button" 
                                     class="btn btn-secondary btn-sm btn-quick-lyrics btn-lyrics-quick-view" 
                                     data-song-id="<?= (int)$featuredSong['song_id'] ?>" 
                                     data-song-title="<?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?>">
+                                    data-song-artist="<?= htmlspecialchars($featuredSong['artist'], ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-label="Read Lyrics for <?= htmlspecialchars($featuredSong['title'], ENT_QUOTES, 'UTF-8') ?>">
                                 <span class="btn-icon">📜</span> Read Lyrics
                             </button>
-                            <a href="<?= htmlspecialchars($featYtSearch, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external">
+                            <a href="<?= htmlspecialchars($featYtSearch, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external btn-featured-yt" aria-label="Search and play on YouTube">
                                 YouTube ↗
                             </a>
                         </div>
@@ -150,6 +155,38 @@ require_once dirname(__DIR__) . '/includes/header.php';
     </section>
     <?php endif; ?>
 
+    <!-- Tasteful Participant's Guide & Manual Companion Banner -->
+    <section class="journal-section journal-guide-section mb-5" aria-label="Official Participant's Guide">
+        <div class="journal-guide-card">
+            <div class="journal-guide-left">
+                <div class="journal-guide-icon-badge" aria-hidden="true">
+                    <span class="journal-guide-icon">📖</span>
+                </div>
+                <div class="journal-guide-text">
+                    <div class="journal-guide-overhead">
+                        <span class="badge-year">HANDBOOK</span>
+                        <span class="journal-guide-subtag">Official Participant Companion</span>
+                    </div>
+                    <h2 class="journal-guide-title">Your AFM#2 Journey</h2>
+                    <p class="journal-guide-desc">
+                        Explore the complete participant handbook covering music imports, the 5-point audition rubric, advisory scoring, and tournament stage advancement.
+                    </p>
+                </div>
+            </div>
+            <div class="journal-guide-right">
+                <a href="https://afm2-user-manual.netlify.app/" 
+                   target="_blank" 
+                   rel="noopener noreferrer" 
+                   class="btn btn-primary btn-glow journal-guide-cta"
+                   aria-label="Explore the official Participant's Guide (opens in a new tab)">
+                    <span class="btn-icon">📘</span>
+                    <span>Explore Participant's Guide</span>
+                    <span class="guide-arrow" aria-hidden="true">↗</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
     <!-- Compact Tournament Milestones Tracker -->
     <section class="journal-section mb-5">
         <div class="journal-section-header">
@@ -160,7 +197,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <a href="tournament.php" class="journal-section-link">View Full Board &rarr;</a>
         </div>
 
-        <div class="stages-timeline">
+        <div class="stages-timeline milestones-timeline">
             <?php foreach ($stats['rounds'] as $r): 
                 $nodeClass = '';
                 if ($r['status'] === 'completed') {
@@ -216,7 +253,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                          class="shelf-thumb" 
                          loading="lazy"
                          onerror="this.onerror=null; this.src='assets/img/artwork-fallback.svg';">
-                    <?php if ($item['total'] !== null): ?>
+                    <?php if (isset($item['total']) && $item['total'] !== null): ?>
                         <span class="shelf-badge badge-score"><?= (int)$item['total'] ?>/50</span>
                     <?php else: ?>
                         <span class="shelf-badge badge-pending">Audition</span>

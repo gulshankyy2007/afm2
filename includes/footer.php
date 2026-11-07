@@ -50,7 +50,7 @@
                     <h3 class="modal-title" id="appearanceModalTitle">Atmospheric Themes</h3>
                     <p class="modal-subtitle">Select a curated mood — harmonizing colors, background, and typography</p>
                 </div>
-                <button type="button" class="modal-close" id="closeAppearanceModal" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="closeAppearanceModal" data-modal-close aria-label="Close">&times;</button>
             </div>
             <div class="modal-body appearance-modal-body">
                 <!-- Curated Distinctive Themes Grid -->
@@ -174,6 +174,45 @@
                             <p class="theme-narrative">Sun-warmed terracotta dawn, roasted sienna, golden hour sunlight, and deep espresso text.</p>
                         </div>
                     </button>
+                    <!-- Theme 7: Oceanic Dusk (Dark Marine & Tranquil Teal) -->
+                    <button type="button" class="curated-theme-card" data-theme-val="oceanic" data-bg-val="atmospheric" data-opacity-val="75">
+                        <div class="theme-card-banner banner-oceanic">
+                            <span class="theme-mood-tag">Nocturnal Sea</span>
+                            <div class="theme-swatch-pills">
+                                <span style="background: #061219;" title="Midnight Marine"></span>
+                                <span style="background: #0d9488;" title="Tranquil Teal"></span>
+                                <span style="background: #38bdf8;" title="Cool Cyan"></span>
+                            </div>
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-header">
+                                <h4 class="theme-title-display font-brand">Oceanic Dusk</h4>
+                                <span class="theme-active-badge">Active ✓</span>
+                            </div>
+                            <span class="theme-subtitle">Deep Marine &amp; Twilight Coast</span>
+                            <p class="theme-narrative">Midnight ocean horizons, tranquil deep teal, cool cyan highlights, and serene spacing.</p>
+                        </div>
+                    </button>
+
+                    <!-- Theme 8: Quiet Minimal (Warm Alabaster Studio Light) -->
+                    <button type="button" class="curated-theme-card" data-theme-val="quiet_minimal" data-bg-val="atmospheric" data-opacity-val="18">
+                        <div class="theme-card-banner banner-minimal">
+                            <span class="theme-mood-tag">Focused Studio</span>
+                            <div class="theme-swatch-pills">
+                                <span style="background: #faf9f6;" title="Warm Alabaster"></span>
+                                <span style="background: #374151;" title="Graphite Slate"></span>
+                                <span style="background: #111827;" title="Charcoal Ink"></span>
+                            </div>
+                        </div>
+                        <div class="theme-card-body">
+                            <div class="theme-card-header">
+                                <h4 class="theme-title-display font-main">Quiet Minimal</h4>
+                                <span class="theme-active-badge">Active ✓</span>
+                            </div>
+                            <span class="theme-subtitle">Pure Studio &amp; High Contrast</span>
+                            <p class="theme-narrative">Warm alabaster, crisp neutral borders, charcoal typography, and distraction-free focus.</p>
+                        </div>
+                    </button>
                 </div>
 
                 <!-- Streamlined Layout Option -->
@@ -193,7 +232,7 @@
                     ↺ Reset to Default
                 </button>
                 <div class="appearance-save-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAppearance">Cancel</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAppearance" data-modal-close>Cancel</button>
                     <button type="button" class="btn btn-primary btn-sm" id="btnSaveAppearance">Save Theme</button>
                 </div>
             </div>
@@ -255,7 +294,9 @@
                          alt="AFM#2 — Annual Musical Finale" 
                          class="footer-logo-img" 
                          width="70" 
-                         height="38">
+                         height="38"
+                         loading="lazy"
+                         decoding="async">
                 </a>
                 <div class="footer-text-block">
                     <span class="footer-brand">AFM#2 &bull; 2026 Annual Musical Finale</span>
@@ -266,25 +307,159 @@
                 <span class="db-status-pill">
                     <?php
                     $footerTrackCount = null;
-                    if (function_exists('get_dashboard_stats')) {
+                    if (isset($stats['total_songs']) && is_numeric($stats['total_songs'])) {
+                        $footerTrackCount = (int)$stats['total_songs'];
+                    } elseif (function_exists('get_cached_dashboard_stats') && ($cachedFooterStats = get_cached_dashboard_stats()) !== null) {
+                        $footerTrackCount = $cachedFooterStats['total_songs'] ?? null;
+                    } elseif (function_exists('get_catalogue_song_count')) {
                         try {
-                            $footerStats = get_dashboard_stats();
-                            $footerTrackCount = $footerStats['total_songs'] ?? null;
+                            $footerTrackCount = get_catalogue_song_count();
                         } catch (\Throwable $e) {}
                     }
-                    if ($footerTrackCount === null && function_exists('get_db_connection')) {
-                        try {
-                            $footerTrackCount = (int)get_db_connection()->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
-                        } catch (\Throwable $e) {}
-                    }
-                    $footerTrackCount = $footerTrackCount ?? 2461;
                     ?>
-                    <span class="dot-live"></span> <?= number_format($footerTrackCount) ?> Songs Preserved
+                    <?php if (is_authenticated() && $footerTrackCount !== null && $footerTrackCount > 0): ?>
+                        <span class="dot-live"></span> <?= number_format($footerTrackCount) ?> Songs Preserved
+                    <?php elseif (is_authenticated()): ?>
+                        <span class="dot-live"></span> Personal Music Sanctuary
+                    <?php else: ?>
+                        <span class="dot-live"></span> Curated Music Sanctuary
+                    <?php endif; ?>
                 </span>
             </div>
         </div>
+
+        <div class="footer-bottom-row">
+            <nav class="footer-trust-nav" aria-label="Project Policies and Documentation">
+                <a href="about.php">About AFM#2</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="privacy.php">Privacy Policy</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="terms.php">Terms of Use</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="contact.php">Contact</a>
+                <span class="footer-sep">&bull;</span>
+                <a href="https://github.com/gulshankyy2007/afm2" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
+            </nav>
+            <p class="footer-attribution">
+                Playback via YouTube embedded player &bull; Synchronized lyrics via LRCLIB &bull; Personal non-commercial music listening project &bull; All copyrights belong to original artists and labels.
+            </p>
+        </div>
     </footer>
 
-    <script src="assets/js/app.js?v=3.0"></script>
+    <?php if (is_authenticated()): 
+        $isMoreActive = in_array($currentPage, ['recordings.php', 'discovery.php', 'results.php', 'import.php', 'account.php', 'users.php'], true);
+    ?>
+    <!-- Persistent Mobile 5-Destination Bottom Navigation Dock (<= 768px Viewports) -->
+    <nav class="mobile-bottom-dock" id="mobileBottomDock" aria-label="Mobile Navigation">
+        <a href="index.php" class="mobile-dock-item <?= $currentPage === 'index.php' ? 'active' : '' ?>" id="dockHome" aria-label="Journal Home" <?= $currentPage === 'index.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">⌂</span>
+            <span class="dock-label">Journal</span>
+        </a>
+        <a href="library.php" class="mobile-dock-item <?= $currentPage === 'library.php' ? 'active' : '' ?>" id="dockLibrary" aria-label="Music Library" <?= $currentPage === 'library.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">♫</span>
+            <span class="dock-label">Library</span>
+        </a>
+        <a href="auditions.php" class="mobile-dock-item <?= $currentPage === 'auditions.php' ? 'active' : '' ?>" id="dockAuditions" aria-label="Formal Auditions" <?= $currentPage === 'auditions.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">🎧</span>
+            <span class="dock-label">Auditions</span>
+        </a>
+        <a href="tournament.php" class="mobile-dock-item <?= $currentPage === 'tournament.php' ? 'active' : '' ?>" id="dockTournament" aria-label="Tournament Progression" <?= $currentPage === 'tournament.php' ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">🏆</span>
+            <span class="dock-label">Tournament</span>
+        </a>
+        <button type="button" class="mobile-dock-item <?= $isMoreActive ? 'active' : '' ?>" id="btnOpenMobileMore" aria-label="More destinations and preferences" aria-haspopup="dialog" aria-expanded="false" <?= $isMoreActive ? 'aria-current="page"' : '' ?>>
+            <span class="dock-icon" aria-hidden="true">⋯</span>
+            <span class="dock-label">More</span>
+        </button>
+    </nav>
+
+    <!-- Accessible Mobile Slide-up "More" Sheet -->
+    <div class="modal-overlay mobile-more-modal" id="mobileMoreModal" role="dialog" aria-modal="true" aria-labelledby="moreSheetTitle">
+        <div class="modal-content mobile-more-content">
+            <div class="modal-header">
+                <div class="mobile-more-title-wrap">
+                    <span class="eyebrow-tag"><span class="eyebrow-dot"></span> Navigation</span>
+                    <h3 class="modal-title" id="moreSheetTitle">More Destinations</h3>
+                </div>
+                <button type="button" class="modal-close" id="btnMoreClose" data-modal-close aria-label="Close navigation sheet">&times;</button>
+            </div>
+            <div class="modal-body mobile-more-body">
+                <div class="mobile-more-grid">
+                    <a href="recordings.php" class="more-nav-tile <?= $currentPage === 'recordings.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">🎬</span>
+                        <div class="tile-text">
+                            <strong>Recordings</strong>
+                            <span>YouTube link matching</span>
+                        </div>
+                    </a>
+                    <a href="discovery.php" class="more-nav-tile <?= $currentPage === 'discovery.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">★</span>
+                        <div class="tile-text">
+                            <strong>Shortlist</strong>
+                            <span>Audition candidates</span>
+                        </div>
+                    </a>
+                    <a href="results.php" class="more-nav-tile <?= $currentPage === 'results.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">📜</span>
+                        <div class="tile-text">
+                            <strong>Archive</strong>
+                            <span>Hall of fame & history</span>
+                        </div>
+                    </a>
+                    <a href="import.php" class="more-nav-tile <?= $currentPage === 'import.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">📁</span>
+                        <div class="tile-text">
+                            <strong>Import / Export</strong>
+                            <span>CSV data transfers</span>
+                        </div>
+                    </a>
+                    <button type="button" class="more-nav-tile" id="btnMoreOpenAppearance">
+                        <span class="tile-icon">🎨</span>
+                        <div class="tile-text">
+                            <strong>Appearance</strong>
+                            <span>8 atmospheric themes</span>
+                        </div>
+                    </button>
+                    <a href="account.php" class="more-nav-tile <?= $currentPage === 'account.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">🛡️</span>
+                        <div class="tile-text">
+                            <strong>Account</strong>
+                            <span>Passkeys & security</span>
+                        </div>
+                    </a>
+                    <?php if (is_admin()): ?>
+                    <a href="users.php" class="more-nav-tile <?= $currentPage === 'users.php' ? 'active' : '' ?>">
+                        <span class="tile-icon">👥</span>
+                        <div class="tile-text">
+                            <strong>Users</strong>
+                            <span>User administration</span>
+                        </div>
+                    </a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="mobile-more-user-strip">
+                    <div class="more-user-badge">
+                        <span class="status-indicator online"></span>
+                        <span class="more-user-name"><?= htmlspecialchars(get_current_username() ?? 'User', ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="role-pill"><?= is_admin() ? 'Admin' : 'Judge' ?></span>
+                    </div>
+                    <form action="logout.php" method="POST" style="margin: 0;">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(get_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="submit" class="btn btn-secondary btn-sm" id="btnMobileMoreSignout">
+                            Sign Out
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php
+    $appJsFile = dirname(__DIR__) . '/public/assets/js/app.js';
+    $appJsVer = '4.1.' . (file_exists($appJsFile) ? filemtime($appJsFile) : '20261029');
+    ?>
+    <script src="assets/js/app.js?v=<?= $appJsVer ?>"></script>
 </body>
 </html>

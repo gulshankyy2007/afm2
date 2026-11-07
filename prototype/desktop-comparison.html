@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en" data-visual-direction="midnight_muse" data-theme="midnight_ember">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFM#2 — Desktop vs. Mobile Adaptive Architecture & Responsive Workbench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/prototype.css">
+    <style>
+        .comparison-page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 5rem;
+        }
+        .comp-header {
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 1.5rem;
+        }
+        .comp-header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-primary, #f8fafc);
+        }
+        .comp-header p {
+            color: var(--text-muted, #94a3b8);
+            font-size: 0.95rem;
+            margin-top: 0.5rem;
+            max-width: 860px;
+            line-height: 1.6;
+        }
+        .comp-card {
+            background: var(--bg-surface, #141218);
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+            border-radius: var(--radius-lg, 16px);
+            overflow: hidden;
+            margin-bottom: 3rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .comp-card-header {
+            padding: 1.25rem 1.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .comp-title-group h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary, #f8fafc);
+        }
+        .comp-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.75rem;
+            padding: 1.75rem;
+        }
+        @media (max-width: 960px) {
+            .comp-grid { grid-template-columns: 1fr; }
+        }
+        .arch-col {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-md, 12px);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .arch-badge {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 10px;
+            border-radius: var(--radius-xs, 4px);
+            display: inline-block;
+            margin-bottom: 0.85rem;
+            width: fit-content;
+        }
+        .badge-desktop { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-mobile { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .arch-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 0.85rem;
+            flex: 1;
+        }
+        .arch-list li {
+            font-size: 0.875rem;
+            color: var(--text-secondary, #cbd5e1);
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: baseline;
+            gap: 0.6rem;
+            line-height: 1.45;
+        }
+        .arch-list li::before {
+            content: "•";
+            color: var(--primary, #f59e0b);
+            font-weight: bold;
+        }
+        .comp-wireframe-snippet {
+            margin-top: 1.25rem;
+            background: #09080c;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-sm, 8px);
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: #a5b4fc;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        /* Interactive Desktop Preview Widgets */
+        .interactive-preview-box {
+            margin-top: 1.5rem;
+            background: var(--bg-card, #1c1924);
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+            border-radius: var(--radius-sm, 8px);
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        .desktop-preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.825rem;
+        }
+        .desktop-preview-table th {
+            text-align: left;
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+            color: var(--text-muted, #94a3b8);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .desktop-preview-table td {
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-primary, #f8fafc);
+        }
+        .desktop-preview-table tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .score-box-preview {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Workbench Control Toolbar -->
+    <header class="workbench-toolbar">
+        <div class="workbench-brand">
+            <img src="img/afm2-logo.png" alt="AFM#2" class="workbench-logo" onerror="this.style.display='none'">
+            <div class="workbench-title-group">
+                <h1>Adaptive Responsive Architecture Workbench</h1>
+            </div>
+            <span class="workbench-badge">Desktop &amp; Mobile</span>
+            <span class="synthetic-data-pill" title="All songs, ratings, and scores in this prototype are synthetic demonstration records">
+                ⚠️ SYNTHETIC DEMONSTRATION DATA &bull; NOT PRODUCTION DATABASE
+            </span>
+        </div>
+
+        <div class="workbench-controls">
+            <!-- Breakpoint Continuum Switcher -->
+            <div class="control-pill-group">
+                <button type="button" class="control-btn breakpoint-btn" data-bp="320">320 SE</button>
+                <button type="button" class="control-btn breakpoint-btn" data-bp="390">390 Mobile</button>
+                <button type="button" class="control-btn breakpoint-btn" data-bp="768">768 Tablet</button>
+                <button type="button" class="control-btn breakpoint-btn" data-bp="1024">1024 Laptop</button>
+                <button type="button" class="control-btn breakpoint-btn active" data-bp="1280">1280 Desktop</button>
+                <button type="button" class="control-btn breakpoint-btn" data-bp="1440">1440 Wide</button>
+                <button type="button" class="control-btn breakpoint-btn" data-bp="1920">1920 Ultra</button>
+            </div>
+
+            <!-- Visual Direction Switcher -->
+            <select id="compDirectionSelect" class="control-select" title="Switch Visual Direction">
+                <option value="midnight_muse" selected>Direction A: Midnight Muse (Dark Amber)</option>
+                <option value="soft_frequency">Direction B: Soft Frequency (Warm Editorial)</option>
+                <option value="chromatic_sound">Direction C: Chromatic Sound (Electric Cyan)</option>
+            </select>
+
+            <!-- Atmospheric Theme Switcher (All 8 Themes) -->
+            <select id="compThemeSelect" class="control-select" title="Select Production Theme">
+                <option value="midnight_ember" selected>Theme 1: Midnight Ember (Default)</option>
+                <option value="velvet_amethyst">Theme 2: Velvet Amethyst (Dark Cosmic)</option>
+                <option value="emerald_forest">Theme 3: Emerald Forest (Dark Botanical)</option>
+                <option value="vintage_paper">Theme 4: Vintage Parchment (Warm Light)</option>
+                <option value="nordic_frost">Theme 5: Nordic Frost (High Contrast Light)</option>
+                <option value="solar_terracotta">Theme 6: Solar Terracotta (Tuscan Sunset)</option>
+                <option value="oceanic">Theme 7: Oceanic Dusk (Dark Marine)</option>
+                <option value="quiet_minimal">Theme 8: Quiet Minimal (Alabaster Studio)</option>
+            </select>
+
+            <!-- Mobile Emulator Jump -->
+            <a href="index.html" class="control-btn" style="background: var(--primary, #f59e0b); color: #0c0b0f; font-weight: 700; text-decoration: none;">
+                <span>📱</span> Open Phone Emulator &rarr;
+            </a>
+        </div>
+    </header>
+
+    <main class="comparison-page">
+        <div class="comp-header">
+            <h1 class="font-brand">Whole-Product Adaptive Product Architecture</h1>
+            <p>
+                AFM#2 rejects collapsing responsiveness. Desktop preserves its 8–10 column tabular ledgers, continuous multi-card scorecards, and high-density sorting power. Mobile receives a thumb-driven sanctuary with 2-column Pinterest discovery, 52px SoundCloud compact rows, and 3-step qualification wizards. Both share identical business rules, 8 atmospheric themes, and 5 scoring criteria.
+            </p>
+        </div>
+
+        <!-- 1. HOME / DASHBOARD COMPARISON -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>1. Home / Dashboard Architecture</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Journal &amp; Progress Hub</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">3-Column High-Density Workstation</h3>
+                    <ul class="arch-list">
+                        <li>Full-width hero header constrained to 860px max-width with 4 simultaneous inline action buttons.</li>
+                        <li>Side-by-side 2-column Turntable Card (Left: 180px vinyl frame; Right: metadata, YouTube link & lyrics).</li>
+                        <li>Horizontal 7-round milestone progression timeline spanning 1200px.</li>
+                        <li>4-column metric ledger cards with individual percentage meter fills.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-------------------------------------------------------+
+|  [Logo] Journal  Library  Auditions  Tournament  [User]|
++-------------------------------------------------------+
+| HERO WELCOME & 4 INLINE ACTIONS                       |
+| [ Left: 180px Art ] [ Right: Song Metadata & Player ] |
+| [ 7-Stage Milestone Progression Strip - 1200px Wide ] |
+| [ Card 1 ]   [ Card 2 ]   [ Card 3 ]   [ Card 4 ]     |
++-------------------------------------------------------+</div>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Thumb-Driven Vertical Feed + Pinterest Shelf</h3>
+                    <ul class="arch-list">
+                        <li>Compact 52px header with animated 4-bar equalizer and search trigger.</li>
+                        <li>Horizontal scrolling quick-action pills for one-thumb flicking.</li>
+                        <li>Tactile 90px turntable card with lyrics & scorecard links.</li>
+                        <li>Horizontal scrolling milestone stepper nodes.</li>
+                        <li>Pinterest-inspired 2-column artwork grid for shortlisted contenders.</li>
+                        <li>Persistent 5-tab bottom navigation bar.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-----------------------------------+
+| [AFM#2]  Top 200 ● Active   🔍 🎨 |
+| (Resume) (Discover) (Bracket)     |
+| [ 90px Art ] Title / 50 Score     |
+| [✓ Aud] -> [● T200] -> [T100]...  |
+| [ 2-Column Pinterest Shortlist ]  |
+| [2x2 Compact Metric Grid]         |
+| [Home] [Lib] [Aud] [Tourn] [More] |
++-----------------------------------+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. LIBRARY ARCHITECTURE COMPARISON -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>2. Song Library &amp; Catalogue Architecture</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Catalogue Management</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">8-Column Tabular Ledger with Sticky Header</h3>
+                    <ul class="arch-list">
+                        <li>Sticky column headers with backdrop blur (`#`, `Title`, `Artist`, `Status`, `Audition`, `Actions`, `Manage`).</li>
+                        <li>Inline multi-field sorting headers (`Title A→Z`, `Artist A→Z`, `Catalogue ID`).</li>
+                        <li>Hover micro-actions reveal secondary actions without cluttering table density.</li>
+                        <li>Persistent floating bulk selection dock with count badges and batch actions.</li>
+                    </ul>
+                    <!-- Interactive Desktop Table Snippet -->
+                    <div class="interactive-preview-box">
+                        <table class="desktop-preview-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 32px;"><input type="checkbox"></th>
+                                    <th>#</th>
+                                    <th>Title</th>
+                                    <th>Artist</th>
+                                    <th>Status</th>
+                                    <th>Audition</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><input type="checkbox" checked></td>
+                                    <td>#101</td>
+                                    <td><strong>Bohemian Rhapsody</strong></td>
+                                    <td>Queen</td>
+                                    <td><span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Shortlisted</span></td>
+                                    <td><span class="score-box-preview">50 / 50</span></td>
+                                    <td><button class="btn btn-xs btn-secondary">✏️ Edit</button></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox"></td>
+                                    <td>#102</td>
+                                    <td><strong>Comfortably Numb</strong></td>
+                                    <td>Pink Floyd</td>
+                                    <td><span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Shortlisted</span></td>
+                                    <td><span class="score-box-preview">49 / 50</span></td>
+                                    <td><button class="btn btn-xs btn-secondary">✏️ Edit</button></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox"></td>
+                                    <td>#103</td>
+                                    <td><strong>Stairway to Heaven</strong></td>
+                                    <td>Led Zeppelin</td>
+                                    <td><span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">Shortlisted</span></td>
+                                    <td><span class="score-box-preview">49 / 50</span></td>
+                                    <td><button class="btn btn-xs btn-secondary">✏️ Edit</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Dual-Mode: Discover (Grid) vs. Manage (List)</h3>
+                    <ul class="arch-list">
+                        <li>Segmented Pill Switcher toggles between visual discovery and catalogue administration.</li>
+                        <li><strong>Discover Mode:</strong> 2-Column Pinterest artwork cards with star toggle (`★`).</li>
+                        <li><strong>Manage Mode:</strong> SoundCloud-style 52px compact rows with checkboxes and 3-dot menus.</li>
+                        <li>Zero horizontal table scrolling required on smartphone screens.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-----------------------------------+
+| [ 🔍 Search title or artist... ✕ ]|
+| [ ★ Discover View | ☰ Manage View ]|
+| ( All 1,400 ) ( Rock ) ( Synth )  |
+|                                   |
+| MODE A (Discover): 2-Col Art Cards|
+| MODE B (Manage): Compact Rows     |
+| [ ] #101 [Thumb] Title / Artist   |
+| [Home] [Lib] [Aud] [Tourn] [More] |
++-----------------------------------+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. FORMAL AUDITIONS COMPARISON -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>3. Formal Auditions Evaluation Architecture</h2>
+                </div>
+                <span class="header-stage-pill font-mono">5-Criterion Scoring Engine</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Continuous 25-Card Sheet + Quick-Jump Sidebar</h3>
+                    <ul class="arch-list">
+                        <li>Continuous multi-card evaluation allowing rapid scoring of up to 25 songs sequentially.</li>
+                        <li>Quick-Jumper Sidebar on $\ge 1440\text{px}$ monitors showing completion status dots for instant navigation.</li>
+                        <li>Side-by-side split drawer: 50% responsive YouTube player / 50% LRCLIB synced lyrics panel.</li>
+                        <li>Keyboard shortcuts: numbers `0–9` to adjust criteria, `Ctrl+S` / `Cmd+S` to save scorecard.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-------------------------------------------------------------+
+| Stage Stepper: [Auditions] -> [Top 200] -> [Top 100]        |
+| [Cover Art] [Title & Artist]                 Total: 47 / 50 |
+| [ Embedded YouTube Iframe ] [ LRCLIB Synced Lyrics Panel ]  |
+| [Melody: 9] [Lyrics: 8] [Vocals: 10] [Emotion: 10] [Rep: 10]|
+| [Remove Shortlist]   [Reset Score]          [Save Scorecard]|
++-------------------------------------------------------------+</div>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Focused Single-Song Card + Tactile Sliders</h3>
+                    <ul class="arch-list">
+                        <li>Evaluates **1 song at a time** to eliminate mobile cognitive overload and vertical exhaustion.</li>
+                        <li>Quick pagination strip: `Entry 14 of 200` with 44px `< Prev` and `Next >` buttons.</li>
+                        <li>Docked audio player and collapsible lyrics save vertical viewport space.</li>
+                        <li>Large 44px tactile range sliders with instant real-time `/50` arithmetic updates.</li>
+                        <li>Sticky bottom action bar: Reset, Remove, and Save Scorecard.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-----------------------------------+
+| Entry 14 of 200   < Prev | Next > |
+| [ 140px Centered Artwork ]        |
+| Bohemian Rhapsody — Queen         |
+| 47 / 50 TOTAL (● Complete)        |
+| [▶ YouTube Audio]  [📜 Lyrics ▾]  |
+| 🎵 Melody: 9   [------------●---] |
+| ✍️ Lyrics: 8   [---------●------] |
+| 🎤 Vocals: 10  [---------------●] |
+| ❤️ Emotion: 10 [---------------●] |
+| 🔁 Replay: 10  [---------------●] |
+| [↺ Reset]   [💾 Save Scorecard]   |
++-----------------------------------+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. MANUAL QUALIFICATION WIZARD COMPARISON -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>4. Manual Qualification Wizard Architecture</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Stage Advancement</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Multi-Column Drag-and-Drop Modal Dialog</h3>
+                    <ul class="arch-list">
+                        <li>Wide 1000px modal dialog with HTML5 table row drag handles for reordering qualifiers.</li>
+                        <li>Side-by-side rule validation summary and candidate search filter.</li>
+                        <li>Dual-pane comparison showing outgoing round qualifiers vs next round targets.</li>
+                        <li>Single-dialog scrollable review with irreversible stage lock authorization warning.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-------------------------------------------------------------+
+| MANUAL QUALIFICATION MODAL — Top 200 -> Top 100             |
+| [Selected: 100/100 ✓] [Eligible: 200 ✓] [Incomplete: 0 ✓]   |
+| [Drag Handle] #1  Bohemian Rhapsody   50/50  [Move Up/Down] |
+| [Drag Handle] #2  Comfortably Numb    49/50  [Move Up/Down] |
+| [Cancel]                          [Authorize & Lock Stage]  |
++-------------------------------------------------------------+</div>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Sequential 3-Step Touch Bottom Sheet</h3>
+                    <ul class="arch-list">
+                        <li><strong>Step 1 (Select):</strong> Quota check indicators, search, candidate checkboxes.</li>
+                        <li><strong>Step 2 (Arrange):</strong> Seeded ranking with discrete touch `Move Up` (`▲`) and `Move Down` (`▼`) buttons + swap contender tool.</li>
+                        <li><strong>Step 3 (Lock):</strong> Audit checklist with permanent lock warning and explicit commit button.</li>
+                        <li>Full cancellation and back navigation at each step.</li>
+                    </ul>
+                    <div class="comp-wireframe-snippet">
++-----------------------------------+
+| STEP 1: Select Candidates         |
+| 100 / 100 Selected ✓ Met          |
+| [✓] #1 Bohemian Rhapsody (50/50)  |
+| [ Proceed to Step 2: Arrange > ]  |
+|                                   |
+| STEP 2: Reorder with Touch ▲ / ▼  |
+| Rank #1: Bohemian Rhapsody [▲] [▼]|
+|                                   |
+| STEP 3: Permanent Lock Checklist  |
+| [ < Back ]   [ 🔒 COMMIT STAGE ]  |
++-----------------------------------+</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. RECORDINGS & YOUTUBE MATCHING -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>5. Recordings &amp; YouTube Link Management</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Media Matching</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Side-by-Side Match Reviewer &amp; Embed Table</h3>
+                    <ul class="arch-list">
+                        <li>Tabular ledger showing matched video ID, version label, channel, and duration.</li>
+                        <li>Two-column modal when editing recordings: Left = Active Matched Candidate; Right = Alternatives from Cover Art Archive & YouTube.</li>
+                        <li>Batch recording health check filter: `All`, `Confirmed Embedded`, `Embed Blocked`, `Missing Video`.</li>
+                    </ul>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">SoundCloud Candidate Ranking Cards</h3>
+                    <ul class="arch-list">
+                        <li>Single-column candidate ranking cards with responsive 16:9 embedded preview.</li>
+                        <li>One-tap primary match confirmation and re-match action triggers.</li>
+                        <li>Collapsible lyrics drawer integrated directly below the active video player.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. TOURNAMENT PROGRESSION & DYNAMIC LEADERBOARD -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>6. Tournament Progression &amp; Leaderboards</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Leaderboard &amp; Cutoff</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">9-Column Leaderboard with Tie-Breaker Columns</h3>
+                    <ul class="arch-list">
+                        <li>Renders all 5 criteria sub-columns simultaneously: Emotion, Replay, Melody, Vocals, Lyrics.</li>
+                        <li>Visual highlight badge on the decisive tie-breaking criterion explaining rank priority.</li>
+                        <li>Advisory target cutoff indicator (`Top 100 Advance`) showing advisory qualifying zone; advancement is manually selected by judges.</li>
+                        <li>Direct button to launch manual qualification workflow with active round pre-selected.</li>
+                    </ul>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Vertical Leaderboard with Cutoff Divider</h3>
+                    <ul class="arch-list">
+                        <li>Streamlined vertical rankings showing Rank, Title, Artist, and Total Score.</li>
+                        <li>Advisory cutoff indicator distinguishing advancing contenders from reserve contenders with manual judge selection.</li>
+                        <li>Tap-to-expand details revealing individual criteria scores on demand.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. HISTORICAL ARCHIVE & COMPLETED STAGES -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>7. Historical Archive &amp; Multi-Stage Results</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Historical Archive</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Multi-Stage Comparison Tabs &amp; CSV Exports</h3>
+                    <ul class="arch-list">
+                        <li>Horizontal stage selector tabs: Finals, Top 10, Top 20, Top 50, Top 100, Top 200, Auditions.</li>
+                        <li>Full-width historical tables with 5 tie-breaker scores, official outcome, reason, and decision date.</li>
+                        <li>Dedicated stage CSV export button generating UTF-8 Excel-compatible spreadsheets.</li>
+                    </ul>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Expandable Stage Accordions</h3>
+                    <ul class="arch-list">
+                        <li>Collapsible accordion cards for each completed tournament round preventing infinite scrolling.</li>
+                        <li>Touch-friendly CSV download triggers and read-only scorecards.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. CHAMPION PRESENTATION & HALL OF FAME -->
+        <div class="comp-card">
+            <div class="comp-card-header">
+                <div class="comp-title-group">
+                    <h2>8. Champion Presentation &amp; Hall of Fame</h2>
+                </div>
+                <span class="header-stage-pill font-mono">Hall of Fame</span>
+            </div>
+            <div class="comp-grid">
+                <div class="arch-col">
+                    <span class="arch-badge badge-desktop">Desktop Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">Full-Width Editorial Prestige Banner</h3>
+                    <ul class="arch-list">
+                        <li>Wide 1200px hero presentation with golden vinyl framing and radial halo glow.</li>
+                        <li>Authoritative finalized Finals round score (never substituting earlier round scores).</li>
+                        <li>Chronological tournament score progression chart spanning Auditions through Finals.</li>
+                    </ul>
+                </div>
+                <div class="arch-col">
+                    <span class="arch-badge badge-mobile">Mobile Architecture</span>
+                    <h3 style="font-size: 1rem; font-weight: 700;">TIDAL Luxury Gold Hall of Fame Card</h3>
+                    <ul class="arch-list">
+                        <li>Immersive vertical tribute card with glowing gold border and 220px album artwork.</li>
+                        <li>Authoritative 50/50 Finals score display in Cormorant Garamond serif typography.</li>
+                        <li>Vertical milestone progression trail tracking score progression across all 6 rounds.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Interactive Theme & Direction Switchers for Workbench
+        const themeSelect = document.getElementById('compThemeSelect');
+        const dirSelect = document.getElementById('compDirectionSelect');
+        const bpButtons = document.querySelectorAll('.breakpoint-btn');
+
+        // Parse URL Parameters
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('theme')) {
+                const t = urlParams.get('theme');
+                document.documentElement.setAttribute('data-theme', t);
+                if (themeSelect) themeSelect.value = t;
+            }
+            if (urlParams.get('direction')) {
+                const d = urlParams.get('direction');
+                document.documentElement.setAttribute('data-visual-direction', d);
+                if (dirSelect) dirSelect.value = d;
+            }
+        } catch (e) {}
+
+        if (themeSelect) {
+            themeSelect.addEventListener('change', (e) => {
+                document.documentElement.setAttribute('data-theme', e.target.value);
+            });
+        }
+        if (dirSelect) {
+            dirSelect.addEventListener('change', (e) => {
+                document.documentElement.setAttribute('data-visual-direction', e.target.value);
+            });
+        }
+        bpButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                bpButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const bp = btn.getAttribute('data-bp');
+                const mainPage = document.querySelector('.comparison-page');
+                if (bp === '320') mainPage.style.maxWidth = '360px';
+                else if (bp === '390') mainPage.style.maxWidth = '430px';
+                else if (bp === '768') mainPage.style.maxWidth = '800px';
+                else if (bp === '1024') mainPage.style.maxWidth = '1060px';
+                else if (bp === '1280') mainPage.style.maxWidth = '1320px';
+                else if (bp === '1440') mainPage.style.maxWidth = '1480px';
+                else if (bp === '1920') mainPage.style.maxWidth = '1920px';
+            });
+        });
+    </script>
+</body>
+</html>

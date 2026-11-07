@@ -1,0 +1,4139 @@
+/**
+ * AFM#2 — Dedicated Mobile & Responsive Stylesheet
+ * 
+ * Provides fluid, accessible, and high-performance layout adaptations
+ * across all representative viewports:
+ * - Small mobile (320px - 360px)
+ * - Standard mobile (360px - 430px)
+ * - Small tablet (600px - 768px)
+ * - Tablet & compact laptops (768px - 1024px)
+ * - Desktop & wide displays (1024px+)
+ * 
+ * Built strictly on AFM#2 CSS variables to ensure 100% compatibility
+ * across all 8 atmospheric themes (Midnight Ember, Velvet Amethyst,
+ * Emerald Forest, Vintage Paper, Nordic Frost, Solar Terracotta, Oceanic, Quiet Minimal).
+ */
+
+/* ==========================================================================
+   1. GLOBAL MOBILE RESETS & ACCESSIBILITY RESETS
+   ========================================================================== */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    overflow-x: clip;
+    max-width: 100vw;
+}
+
+/* Ensure all interactive controls meet minimum accessible touch targets (44px) */
+button, 
+.btn, 
+input[type="button"], 
+input[type="submit"], 
+input[type="reset"],
+.nav-toggle,
+.modal-close,
+.page-btn,
+.tab-btn {
+    touch-action: manipulation;
+}
+
+/* Background scroll lock while modal dialogs are active */
+body.modal-open {
+    overflow: hidden !important;
+}
+
+/* Prevent auto-zooming on iOS when tapping inputs */
+@media screen and (max-width: 768px) {
+    input[type="text"],
+    input[type="search"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* ==========================================================================
+   2. TABLET & COMPACT DESKTOP ADAPTATIONS (<= 1024px)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+    /* Header inner spacing */
+    .header-inner {
+        padding: 0 1rem;
+    }
+
+    /* Switch navigation to drawer toggle on <= 1024px to prevent link crowding */
+    .nav-toggle {
+        display: flex;
+        min-height: 44px;
+        min-width: 44px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .app-nav,
+    .guest-nav {
+        display: none;
+        position: absolute;
+        top: var(--header-height);
+        left: 0;
+        right: 0;
+        width: 100%;
+        background: var(--nav-drawer-bg, var(--bg-surface, #0c0b0f));
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: 0 20px 40px var(--shadow-color, rgba(0, 0, 0, 0.6));
+        padding: 1rem 1.25rem max(2rem, env(safe-area-inset-bottom, 2rem));
+        flex-direction: column;
+        align-items: stretch;
+        z-index: 1000;
+        max-height: calc(100vh - var(--header-height));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .app-nav.open,
+    .guest-nav.open {
+        display: flex;
+    }
+
+    .mobile-user-card {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        min-height: 52px;
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-subtle, var(--border-color));
+        border-radius: var(--radius-sm, 6px);
+        margin: 0 0 1rem 0;
+    }
+
+    .app-nav .nav-links,
+    .guest-nav .nav-links {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1.25rem 0;
+    }
+
+    .app-nav .nav-links a,
+    .guest-nav .nav-links a {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        padding: 0.85rem 1.15rem;
+        min-height: 48px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        border-radius: var(--radius-sm);
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-subtle, var(--border-color));
+        text-decoration: none;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .app-nav .nav-links a:hover,
+    .app-nav .nav-links a:focus-visible {
+        background: var(--bg-card-hover, var(--primary-light));
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .app-nav .nav-links a.active {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+        font-weight: 700;
+    }
+
+    .app-nav .user-meta,
+    .guest-nav .guest-user-meta {
+        padding-left: 0;
+        border-left: none;
+        border-top: 1px solid var(--border-subtle, var(--border-color));
+        padding-top: 1rem;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .app-nav .user-meta .user-pill,
+    .app-nav .user-meta .desktop-user-pill,
+    .app-nav .user-meta .logout-form,
+    .app-nav .user-meta .desktop-logout-form {
+        display: none !important;
+    }
+
+    .btn-nav-appearance {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+        width: 100%;
+        border-radius: var(--radius-sm);
+        font-size: 1rem;
+        font-weight: 600;
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-subtle, var(--border-color));
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    /* Main container padding */
+    .main-content {
+        padding: 1.25rem 1rem;
+    }
+}
+
+/* ==========================================================================
+   3. TABLET PORTRAIT & SMARTPHONE ADAPTATIONS (<= 768px)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    /* Header & Brand */
+    .brand-logo-img {
+        height: 40px !important;
+    }
+
+    /* Borderless Header Music Stage Responsive (<= 768px) */
+    .header-music-strip,
+    .header-piano-stage,
+    .header-guitar-stage {
+        flex: 0 1 170px !important;
+        max-width: 170px !important;
+        min-width: 40px !important;
+        height: 38px !important;
+        margin: 0 0.35rem !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .header-piano-stage .piano-live-svg,
+    .header-guitar-stage .guitar-live-svg {
+        height: 38px !important;
+    }
+
+    @media (max-width: 360px) {
+        .header-music-strip,
+        .header-piano-stage,
+        .header-guitar-stage {
+            flex: 0 1 115px !important;
+            max-width: 115px !important;
+            min-width: 35px !important;
+            height: 32px !important;
+            margin: 0 0.2rem !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .header-piano-stage .piano-live-svg,
+        .header-guitar-stage .guitar-live-svg {
+            height: 32px !important;
+        }
+
+        /* Auditions Ultra-Compact Adjustments (<= 360px) */
+        .tactile-artwork-col {
+            flex: 0 0 60px !important;
+            width: 60px !important;
+            max-width: 60px !important;
+        }
+        .tactile-artwork-frame {
+            width: 60px !important;
+            height: 60px !important;
+            max-width: 60px !important;
+            max-height: 60px !important;
+            min-width: 60px !important;
+            min-height: 60px !important;
+        }
+        .tactile-meta-col {
+            width: calc(100% - 70px) !important;
+        }
+        .tactile-title {
+            font-size: 0.95rem !important;
+        }
+        .criterion-stepper .btn-step-btn {
+            width: 30px !important;
+            height: 30px !important;
+            min-width: 30px !important;
+            min-height: 30px !important;
+        }
+        .criterion-header .criterion-input {
+            width: 40px !important;
+            height: 30px !important;
+            font-size: 0.9rem !important;
+        }
+        .criterion-header label {
+            font-size: 0.75rem !important;
+        }
+
+        .criterion-field.criterion-aggregate-box.is-finalized {
+            padding: 0.5rem 0.65rem !important;
+            gap: 0.35rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+            font-size: 1.1rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+            font-size: 0.75rem !important;
+        }
+    }
+
+    @media (max-width: 320px) {
+        .brand-logo-img {
+            height: 30px !important;
+        }
+        .header-music-strip,
+        .header-piano-stage,
+        .header-guitar-stage {
+            flex: 0 1 85px !important;
+            max-width: 85px !important;
+            min-width: 30px !important;
+            height: 28px !important;
+            margin: 0 0.15rem !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .header-piano-stage .piano-live-svg,
+        .header-guitar-stage .guitar-live-svg {
+            height: 28px !important;
+        }
+
+        /* Auditions Ultra-Compact Adjustments (<= 320px) */
+        .tactile-artwork-col {
+            flex: 0 0 56px !important;
+            width: 56px !important;
+            max-width: 56px !important;
+        }
+        .tactile-artwork-frame {
+            width: 56px !important;
+            height: 56px !important;
+            max-width: 56px !important;
+            max-height: 56px !important;
+            min-width: 56px !important;
+            min-height: 56px !important;
+        }
+        .tactile-meta-col {
+            width: calc(100% - 64px) !important;
+        }
+        .criterion-stepper .btn-step-btn {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            min-height: 28px !important;
+        }
+        .criterion-header .criterion-input {
+            width: 36px !important;
+            height: 28px !important;
+            font-size: 0.85rem !important;
+        }
+
+        .criterion-field.criterion-aggregate-box.is-finalized {
+            padding: 0.45rem 0.5rem !important;
+            gap: 0.25rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+            font-size: 1.05rem !important;
+        }
+        .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+            font-size: 0.72rem !important;
+        }
+    }
+
+    /* Page Header Stack */
+    .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .page-header .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .page-header .header-actions .btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* Filter Toolbar Reflow */
+    .filter-bar,
+    .toolbar,
+    .actions-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .filter-bar .search-box,
+    .toolbar .search-box {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .tournament-search-bar .filter-bar-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+    .tournament-search-bar .search-input-wrapper {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .filter-pills-scroll,
+    .stage-filters {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.35rem;
+        gap: 0.5rem;
+        scrollbar-width: none;
+    }
+    .filter-pills-scroll::-webkit-scrollbar,
+    .stage-filters::-webkit-scrollbar {
+        display: none;
+    }
+
+    .filter-pill,
+    .stage-filter-btn {
+        flex-shrink: 0;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.4rem 0.85rem;
+    }
+
+    /* Tables: Card view transformation with preserved semantic attributes */
+    .table-container,
+    .recordings-table-wrap {
+        border: none;
+        background: transparent;
+        overflow-x: visible;
+        padding: 0;
+    }
+
+    .recordings-table tbody tr {
+        display: block;
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md, 8px);
+        margin-bottom: 1rem;
+        padding: 0.85rem 1rem;
+        box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.1));
+    }
+
+    /* Library Songs Table: Compact, Coherent Record Card Transformation */
+    .data-table tbody tr {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        background: var(--card-glass-bg, var(--bg-card));
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md, 8px);
+        margin-bottom: 0.45rem !important;
+        padding: 0.35rem 0.55rem !important;
+        box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.1));
+        gap: 0.15rem 0.35rem !important;
+    }
+
+    /* Mobile Batch Selection Bar (synced with selectAllSongs) */
+    .mobile-table-select-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background: var(--card-glass-bg, var(--bg-card, #1c1924)) !important;
+        border: 1px solid var(--border-color, #382f45) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.75rem 1rem !important;
+        margin-bottom: 0.85rem !important;
+        min-height: 48px !important;
+    }
+
+    .mobile-select-all-label {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.75rem !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        color: var(--text-primary) !important;
+        cursor: pointer !important;
+        min-height: 44px !important;
+    }
+
+    .mobile-select-all-cb {
+        width: 22px !important;
+        height: 22px !important;
+        cursor: pointer !important;
+        accent-color: var(--primary, #f59e0b) !important;
+    }
+
+    /* Floating bulk actions position on mobile: safe above bottom dock */
+    .bulk-actions-bar,
+    .bulk-actions-floating-bar {
+        position: fixed !important;
+        bottom: calc(64px + 12px + env(safe-area-inset-bottom, 0px)) !important;
+        width: calc(100% - 1.25rem) !important;
+        max-width: 440px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 1050 !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-color, rgba(255, 255, 255, 0.15)) !important;
+    }
+
+    .bulk-actions-inner {
+        padding: 0.55rem 0.85rem !important;
+        gap: 0.65rem !important;
+        justify-content: space-between !important;
+    }
+
+    .bulk-actions-buttons {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.35rem !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .bulk-actions-buttons .btn {
+        padding: 0.35rem 0.55rem !important;
+        font-size: 0.78rem !important;
+        height: 32px !important;
+        white-space: nowrap !important;
+    }
+
+    @media (max-width: 360px) {
+        .bulk-actions-buttons .bulk-btn-text {
+            display: none !important;
+        }
+        .bulk-actions-inner {
+            padding: 0.45rem 0.65rem !important;
+            gap: 0.4rem !important;
+        }
+        .bulk-actions-info {
+            gap: 0.4rem !important;
+            font-size: 0.825rem !important;
+        }
+        .bulk-count-badge {
+            min-width: 24px !important;
+            height: 24px !important;
+            font-size: 0.75rem !important;
+            padding: 0 0.4rem !important;
+        }
+    }
+
+    .data-table thead,
+    .recordings-table thead {
+        display: none;
+    }
+
+    .recordings-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.55rem 0;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+        text-align: right;
+    }
+
+    .recordings-table td:last-child {
+        border-bottom: none;
+        padding-top: 0.75rem;
+        justify-content: stretch;
+        gap: 0.5rem;
+    }
+
+    /* Suppress redundant empty candidate text row on mobile cards when count is 0 */
+    .recordings-table td.rec-col-candidate.rec-cand-zero {
+        display: none !important;
+    }
+
+    .recordings-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        text-align: left;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+    }
+
+    /* --- Compact Library Card Row 1: Selection & Meta --- */
+    .data-table td.col-select {
+        order: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: auto !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        max-height: 24px !important;
+        flex: 0 0 auto !important;
+    }
+    .data-table td.col-select::before {
+        display: none !important;
+    }
+    .data-table td.col-select .song-select-checkbox {
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        margin: 0 !important;
+        cursor: pointer !important;
+    }
+
+    .data-table td.col-id {
+        order: 2 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: auto !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        max-height: 24px !important;
+        flex: 0 0 auto !important;
+    }
+    .data-table td.col-id::before {
+        display: none !important;
+    }
+    .data-table td.col-id .track-id-badge {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        background: rgba(255, 255, 255, 0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    }
+
+    .data-table td.col-status {
+        order: 3 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 0.65rem 0 auto !important;
+        width: auto !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        max-height: 24px !important;
+        flex: 0 0 auto !important;
+    }
+    .data-table td.col-status::before {
+        display: none !important;
+    }
+
+    .data-table td.col-audition {
+        order: 4 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: auto !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        max-height: 24px !important;
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+    .data-table td.col-audition .audition-score-max {
+        display: inline !important;
+    }
+    .data-table td.col-audition::before {
+        display: none !important;
+    }
+
+    /* --- Compact Library Card Row 2: Identity (Artwork 48px + Title/Artist) --- */
+    .data-table td.col-title {
+        order: 5 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: 100% !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        height: 48px !important;
+        min-height: 48px !important;
+    }
+    .data-table td.col-title::before {
+        display: none !important;
+    }
+
+    .data-table td.col-artist {
+        display: none !important; /* Artist is cleanly displayed in col-title under title */
+    }
+
+    .song-title-wrap {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.65rem !important;
+        width: 100% !important;
+    }
+
+    .song-row-thumb {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        object-fit: cover !important;
+        flex-shrink: 0 !important;
+    }
+
+    .song-title-meta {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.15rem !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+        justify-content: center !important;
+    }
+
+    .song-title-text {
+        display: block !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        line-height: 1.25 !important;
+        color: var(--text-primary, #ffffff) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+
+    .song-artist-sub {
+        display: block !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        line-height: 1.25 !important;
+        color: var(--text-muted, #a1a1aa) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+
+    /* --- Compact Library Card Row 3: One Coherent Action Toolbar --- */
+    .data-table td.col-actions {
+        order: 7 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)) !important;
+        padding: 0.4rem 0 0 0 !important;
+        margin: 0.25rem 0 0 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .data-table td.col-actions::before {
+        display: none !important;
+    }
+
+    .data-table td.col-manage {
+        display: none !important; /* Merged into col-actions */
+    }
+
+    .data-table .action-toolbar-unified {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        gap: 0.25rem !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+    }
+
+    .action-toolbar-unified .btn-xs,
+    .action-toolbar-unified .btn-primary-subtle,
+    .action-toolbar-unified .btn-lyrics-quick-view,
+    .action-toolbar-unified .btn-link-yt,
+    .action-toolbar-unified .btn-link-search,
+    .action-toolbar-unified .btn-action-shortlist,
+    .action-toolbar-unified .btn-action-pass,
+    .action-toolbar-unified .btn-manage-edit,
+    .action-toolbar-unified .btn-manage-delete {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        max-width: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        box-sizing: border-box !important;
+        flex: 0 0 34px !important;
+    }
+
+    @media (min-width: 360px) {
+        .data-table .action-toolbar-unified {
+            gap: 0.35rem !important;
+        }
+        .action-toolbar-unified .btn-xs,
+        .action-toolbar-unified .btn-primary-subtle,
+        .action-toolbar-unified .btn-lyrics-quick-view,
+        .action-toolbar-unified .btn-link-yt,
+        .action-toolbar-unified .btn-link-search,
+        .action-toolbar-unified .btn-action-shortlist,
+        .action-toolbar-unified .btn-action-pass,
+        .action-toolbar-unified .btn-manage-edit,
+        .action-toolbar-unified .btn-manage-delete {
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
+            max-width: 36px !important;
+            min-height: 36px !important;
+            max-height: 36px !important;
+            flex: 0 0 36px !important;
+        }
+    }
+
+    .action-toolbar-unified .btn-manage-delete {
+        border-color: rgba(239, 68, 68, 0.35) !important;
+        color: var(--danger, #ef4444) !important;
+    }
+    .action-toolbar-unified .btn-manage-delete:hover,
+    .action-toolbar-unified .btn-manage-delete:focus-visible {
+        background: var(--danger-light, rgba(239, 68, 68, 0.15)) !important;
+        border-color: var(--danger, #ef4444) !important;
+    }
+
+    /* Adaptive Iconography for Mobile Table Rows: Hide text labels on mobile */
+    .action-toolbar-unified .btn-text,
+    .action-toolbar-unified .sr-only {
+        display: none !important;
+    }
+
+    .action-toolbar-unified a:focus-visible,
+    .action-toolbar-unified button:focus-visible {
+        outline: 2px solid var(--primary, #6366f1) !important;
+        outline-offset: 2px !important;
+    }
+
+    /* Grid View Discover Card Action Toolbar */
+    .song-discover-card .song-card-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.35rem !important;
+        margin-top: 0.65rem !important;
+        padding-top: 0.5rem !important;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)) !important;
+        flex-wrap: wrap !important;
+    }
+
+    .song-discover-card .card-action-group {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.3rem !important;
+    }
+
+    .song-discover-card .btn-manage-edit,
+    .song-discover-card .btn-manage-delete {
+        min-width: 32px;
+        height: 32px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-sm, 4px);
+        background: var(--bg-surface, rgba(255, 255, 255, 0.05));
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        color: var(--text-secondary, #a1a1aa);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .song-discover-card .btn-manage-edit:hover {
+        color: var(--accent, #f59e0b);
+        border-color: var(--accent, #f59e0b);
+    }
+    .song-discover-card .btn-manage-delete {
+        color: var(--danger, #ef4444);
+        border-color: rgba(239, 68, 68, 0.3);
+    }
+    .song-discover-card .btn-manage-delete:hover {
+        background: var(--danger-light, rgba(239, 68, 68, 0.15));
+        border-color: var(--danger, #ef4444);
+    }
+
+    /* ==========================================================================
+       Auditions: Compact Mobile Song Presentation, Toolbar, Lyrics & Scoring
+       ========================================================================== */
+
+    /* 1. Compact Song Presentation (Horizontal Hero Composition) */
+    .scorecard-card.tactile-player-card {
+        padding: 0.5rem 0.55rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        border-radius: var(--radius-md, 10px) !important;
+        overflow: hidden !important;
+    }
+
+    .scorecard-card .tactile-hero-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    .scorecard-card .tactile-artwork-col {
+        flex: 0 0 60px !important;
+        width: 60px !important;
+        max-width: 60px !important;
+        margin: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 0.2rem !important;
+    }
+
+    .scorecard-card .tactile-artwork-frame {
+        width: 60px !important;
+        height: 60px !important;
+        max-width: 60px !important;
+        max-height: 60px !important;
+        min-width: 60px !important;
+        min-height: 60px !important;
+        aspect-ratio: 1 / 1 !important;
+        border-radius: var(--radius-md, 8px) !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        position: relative !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+        cursor: pointer !important;
+    }
+
+    .tactile-artwork-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        display: block !important;
+    }
+
+    .artwork-overlay-script {
+        display: none !important;
+    }
+
+    .btn-trigger-artwork-picker {
+        position: absolute !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(0, 0, 0, 0.65) !important;
+        color: #fff !important;
+        font-size: 0.65rem !important;
+        padding: 2px 0 !important;
+        text-align: center !important;
+        border: none !important;
+        line-height: 1.2 !important;
+        backdrop-filter: blur(2px) !important;
+    }
+
+    .btn-trigger-artwork-picker span {
+        display: inline-block !important;
+    }
+
+    .tactile-artwork-credit {
+        font-size: 0.65rem !important;
+        text-align: center !important;
+        max-width: 68px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        color: var(--text-muted) !important;
+    }
+
+    .tactile-artwork-credit a {
+        color: var(--text-secondary) !important;
+        text-decoration: none !important;
+    }
+
+    .scorecard-card .tactile-meta-col {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: calc(100% - 70px) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.1rem !important;
+    }
+
+    .scorecard-card .tactile-header-bar {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.35rem !important;
+        margin-bottom: 0.05rem !important;
+        height: 20px !important;
+    }
+
+    .scorecard-card .tactile-stream-badge {
+        font-size: 0.65rem !important;
+        padding: 0.05rem 0.35rem !important;
+        border-radius: 4px !important;
+        height: 18px !important;
+        line-height: 18px !important;
+    }
+
+    .scorecard-card .scorecard-total-box {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+        height: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    .scorecard-card .total-score-badge {
+        font-size: 0.85rem !important;
+        font-weight: 800 !important;
+        font-family: var(--font-mono) !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+
+    /* Task 5: Mobile Formal Auditions - Replace FINALIZED Text with Compact Lock Icon */
+    .badge-finalized-pill {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.15rem 0.4rem !important;
+        gap: 0 !important;
+        font-size: 0.8rem !important;
+        margin-left: 0.35rem !important;
+        border-radius: 9999px !important;
+        line-height: 1 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .badge-finalized-pill .badge-finalized-text {
+        display: none !important;
+    }
+
+    /* Mobile Formal Auditions: Compact Finalized Indicator & Single-Line Aggregate Score */
+    .criterion-field.criterion-aggregate-box.is-finalized {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.55rem 0.85rem !important;
+        min-height: 44px !important;
+        gap: 0.45rem !important;
+    }
+
+    /* 1. Remove visible FINALIZED text label on mobile; retain single compact lock icon */
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: auto !important;
+        flex: 0 0 auto !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header label {
+        margin: 0 !important;
+        gap: 0 !important;
+        cursor: default;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header .criterion-name {
+        display: none !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .criterion-header .criterion-icon {
+        font-size: 1.15rem !important;
+        line-height: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-right: 0.2rem !important;
+    }
+
+    /* Hide duplicate lock icon in Score Locked so lock indicator appears strictly once */
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status .status-lock-icon {
+        display: none !important;
+    }
+
+    /* 2. Keep aggregate score on one line with distinct styling and prevent wrapping */
+    .criterion-field.criterion-aggregate-box .aggregate-score-display,
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-display {
+        flex: 1 1 auto !important;
+        margin: 0 !important;
+        padding: 0 0.35rem !important;
+        white-space: nowrap !important;
+        text-align: left !important;
+        font-size: 1.2rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .criterion-field.criterion-aggregate-box .aggregate-score-val,
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-val {
+        white-space: nowrap !important;
+        display: inline-block !important;
+    }
+
+    .criterion-field.criterion-aggregate-box.is-finalized .aggregate-score-status {
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* ==========================================================================
+       Task 3: Mobile Discovery Shortlist - Comfortable Spacing Between Groups
+       Group 1: Song Identity (Artwork 48px, Title wrapping naturally, Artist)
+       Group 2: Song Actions (Play in AFM#2, YouTube/Search, Lyrics)
+       Group 3: Evaluation Info (Status + Score, Shortlisted Date directly below)
+       Group 4: Decision Controls (Scorecard/Score Now, Pass - Full width row)
+       ========================================================================== */
+    #shortlistTable tr {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 1rem 0.95rem !important;
+        margin-bottom: 1rem !important;
+        background: var(--bg-surface, #181524) !important;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+        border-radius: var(--radius-md, 10px) !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        gap: 0 !important;
+    }
+
+    #shortlistTable td {
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+    }
+
+    /* Omit row number on mobile cards to maintain clean focus on the 4 groups */
+    #shortlistTable td.col-id {
+        display: none !important;
+    }
+
+    /* Group 1 & 2: Song Column Container */
+    #shortlistTable td.col-song {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        order: 1 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+    #shortlistTable td.col-song::before {
+        display: none !important;
+    }
+
+    /* Group 1: Song Identity */
+    #shortlistTable .song-meta-wrap {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        gap: 0.85rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    #shortlistTable .song-row-thumb {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        max-width: 48px !important;
+        max-height: 48px !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        object-fit: cover !important;
+        flex-shrink: 0 !important;
+        margin: 0 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    #shortlistTable .song-meta {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+        gap: 0.25rem !important;
+    }
+
+    #shortlistTable .song-title {
+        display: block !important;
+        text-align: left !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        line-height: 1.35 !important;
+        color: var(--text-primary, #f8fafc) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        margin: 0 !important;
+    }
+
+    #shortlistTable .song-artist {
+        display: block !important;
+        text-align: left !important;
+        font-size: 0.825rem !important;
+        font-weight: 500 !important;
+        line-height: 1.25 !important;
+        color: var(--text-secondary, #94a3b8) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        margin: 0 !important;
+    }
+
+    /* Group 2: Song Actions - Separated from Song Identity */
+    #shortlistTable .song-quick-media {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+        margin-top: 0.85rem !important;
+        width: 100% !important;
+    }
+
+    /* Group 3: Evaluation Information - Separated from Quick Media */
+    /* 3a. Status & Aggregate Score Row */
+    #shortlistTable td.col-status {
+        order: 3 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12)) !important;
+        margin: 0.95rem 0 0 0 !important;
+        padding: 0.75rem 0 0.45rem 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        min-height: 36px !important;
+    }
+    #shortlistTable td.col-status::before {
+        content: "Audition Status" !important;
+        display: block !important;
+        font-weight: 700 !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-muted) !important;
+    }
+    #shortlistTable .status-badge-container {
+        display: inline-flex !important;
+        align-items: center !important;
+    }
+    #shortlistTable .status-badge-container .badge {
+        font-size: 0.78rem !important;
+        padding: 0.28rem 0.6rem !important;
+        white-space: nowrap !important;
+    }
+
+    /* 3b. Shortlisted Timestamp directly below with its own clear separation */
+    #shortlistTable td.col-date {
+        order: 4 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.55rem 0 0.55rem 0 !important;
+        margin: 0.5rem 0 0 0 !important;
+        border-top: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        min-height: 34px !important;
+    }
+    #shortlistTable td.col-date::before {
+        content: "Shortlisted On" !important;
+        display: block !important;
+        font-weight: 700 !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-muted) !important;
+    }
+    #shortlistTable .date-text {
+        font-size: 0.825rem !important;
+        color: var(--text-secondary, #cbd5e1) !important;
+        font-family: var(--font-mono, monospace) !important;
+        text-align: right !important;
+    }
+
+    /* Group 4: Decision Controls - Separated Full-Width Bottom Row */
+    #shortlistTable td.col-actions {
+        order: 5 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: stretch !important;
+        padding: 0.85rem 0 0 0 !important;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12)) !important;
+        margin: 0.65rem 0 0 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    #shortlistTable td.col-actions::before {
+        display: none !important;
+    }
+
+    #shortlistTable td.col-actions .action-btn-group,
+    #shortlistTable td.col-actions .action-group {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.65rem !important;
+        width: 100% !important;
+    }
+    #shortlistTable td.col-actions .action-btn-group .btn,
+    #shortlistTable td.col-actions .action-btn-group .btn-action-pass,
+    #shortlistTable td.col-actions .action-group .btn,
+    #shortlistTable td.col-actions .action-group .btn-action-pass {
+        flex: 1 1 50% !important;
+        min-height: 42px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.55rem 0.85rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 700 !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        box-sizing: border-box !important;
+        text-align: center !important;
+    }
+
+    /* Mobile Discovery: Preserve full score presentation in status badge */
+    #shortlistTable .score-max-subtle {
+        display: inline !important;
+    }
+
+    .scorecard-card .total-score-label {
+        display: none !important;
+    }
+
+    .scorecard-card .total-score-meter {
+        display: none !important;
+    }
+
+    .scorecard-card .tactile-song-info {
+        text-align: left !important;
+        margin: 0 !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.05rem !important;
+    }
+
+    .scorecard-card .tactile-title {
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        color: var(--text-primary) !important;
+    }
+
+    .scorecard-card .tactile-artist {
+        font-size: 0.8rem !important;
+        color: var(--text-secondary) !important;
+        margin: 0 !important;
+        line-height: 1.2 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    .scorecard-card .tactile-details {
+        display: none !important;
+    }
+
+    .scorecard-card .tactile-artwork-credit {
+        display: none !important;
+    }
+
+    /* 2. Compact Recording & Media Experience Panel */
+    .scorecard-media-panel {
+        width: 100% !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    .media-toolbar {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.35rem !important;
+        width: 100% !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        max-height: 38px !important;
+        padding: 0.2rem 0.5rem !important;
+        background: var(--bg-card, #1c1924) !important;
+        border: 1px solid var(--border-color, #382f45) !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    .media-toolbar-left {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .playback-status-pill {
+        padding: 0 0.4rem !important;
+        font-size: 0.7rem !important;
+        height: 28px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        border-radius: 4px !important;
+        white-space: nowrap !important;
+    }
+
+    .audio-match-indicator {
+        display: inline-flex !important;
+        flex-wrap: nowrap !important;
+        gap: 0.25rem !important;
+        align-items: center !important;
+    }
+
+    .media-badge {
+        padding: 0 0.45rem !important;
+        height: 28px !important;
+        font-size: 0.72rem !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        box-sizing: border-box !important;
+    }
+
+    .direct-yt-links {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+        white-space: nowrap !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .media-toolbar .btn-xs,
+    .media-toolbar .link-external {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 0.45rem !important;
+        font-size: 0.72rem !important;
+        border-radius: 5px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.2rem !important;
+        text-decoration: none !important;
+        box-sizing: border-box !important;
+        white-space: nowrap !important;
+    }
+
+    .media-toolbar .btn-toggle-player,
+    .media-toolbar .btn-edit-media,
+    .media-toolbar .btn-match-media {
+        min-width: 28px !important;
+        width: 28px !important;
+        height: 28px !important;
+        padding: 0 !important;
+        justify-content: center !important;
+    }
+
+    .media-toolbar .btn-toggle-player .btn-text,
+    .media-toolbar .btn-edit-media .btn-text,
+    .media-toolbar .btn-match-media .btn-text {
+        display: none !important;
+    }
+
+    .media-toolbar-right {
+        display: flex !important;
+        align-items: center !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+
+    .media-toolbar-right .btn-toggle-lyrics {
+        width: auto !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 0.5rem !important;
+        justify-content: center !important;
+        font-size: 0.72rem !important;
+        border-radius: 5px !important;
+        white-space: nowrap !important;
+    }
+
+    /* Audition Drawer: Vertical column layout on mobile */
+    .audition-drawer {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        gap: 0.4rem !important;
+        margin-top: 0.35rem !important;
+    }
+
+    .audition-drawer .drawer-col-audio {
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        margin-bottom: 0.4rem !important;
+    }
+
+    .audition-drawer .player-wrapper {
+        position: relative !important;
+        width: 100% !important;
+        pointer-events: auto !important;
+    }
+
+    .audition-drawer .yt-embed-frame {
+        width: 100% !important;
+        aspect-ratio: 16 / 9 !important;
+        pointer-events: auto !important;
+    }
+
+    .audition-drawer .drawer-col-lyrics {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* 3. Lyrics Box & Controls (Self-Contained Vertical Flex Container) */
+    .lyrics-box {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 400px !important;
+        min-height: 400px !important;
+        max-height: 400px !important;
+        overflow: hidden !important;
+        contain: layout;
+        padding: 0.4rem 0.5rem !important;
+        box-sizing: border-box !important;
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        position: relative !important;
+    }
+
+    .lyrics-box-header {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.25rem !important;
+        padding: 0 0 0.35rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-subtle) !important;
+        width: 100% !important;
+        flex: 0 0 auto !important;
+    }
+
+    .lyrics-attribution {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        font-size: 0.7rem !important;
+        color: var(--text-muted) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex-wrap: wrap !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    .btn-autoscroll-toggle {
+        font-size: 0.68rem !important;
+        padding: 0.15rem 0.4rem !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .lyrics-controls-group {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 0.3rem !important;
+        width: 100% !important;
+    }
+
+    .lyrics-provider-select {
+        flex: 1 1 auto !important;
+        min-width: 120px !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 0.75rem !important;
+        padding: 0 0.35rem !important;
+        border-radius: 4px !important;
+    }
+
+    .lyrics-tab-group {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.2rem !important;
+        flex: 2 1 auto !important;
+    }
+
+    .lyrics-tab-row {
+        display: contents !important;
+    }
+
+    .lyrics-tab {
+        flex: 1 1 auto !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 0.35rem !important;
+        font-size: 0.725rem !important;
+        text-align: center !important;
+        justify-content: center !important;
+        border-radius: 4px !important;
+        white-space: nowrap !important;
+    }
+
+    .btn-lyrics-toggle-override .btn-text {
+        display: none !important;
+    }
+
+    /* 4. Expanded Mobile Lyrics Reading Panel (260-300px Usable Height) */
+    .lyrics-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        font-size: 0.85rem !important;
+        line-height: 1.55 !important;
+        padding: 0.35rem 0.3rem !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 5. Scoring Interface: Separated, Non-Overlapping Instrument */
+    .scorecard-grid.scorecard-matrix {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.12rem !important;
+        clear: both !important;
+        margin-top: 0.75rem !important;
+        padding: 0.3rem 0.45rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        background: var(--bg-card-subtle, rgba(255, 255, 255, 0.02)) !important;
+        border: 1.5px solid var(--border-color, #382f45) !important;
+        border-radius: var(--radius-md, 10px) !important;
+    }
+
+    .criterion-field {
+        width: 100% !important;
+        padding: 0.12rem 0.35rem !important;
+        box-sizing: border-box !important;
+        background: var(--bg-card, #1c1924) !important;
+        border: 1px solid var(--border-subtle, #2d2638) !important;
+        border-radius: 6px !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+    }
+
+    .criterion-field:focus-within {
+        border-color: var(--primary, #f59e0b) !important;
+        box-shadow: 0 0 0 1px var(--primary-light, rgba(245, 158, 11, 0.2)) !important;
+    }
+
+    .criterion-header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        margin-bottom: 0 !important;
+        height: 28px !important;
+        min-height: 28px !important;
+    }
+
+    .criterion-header label {
+        font-size: 0.775rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.03em !important;
+        text-transform: uppercase !important;
+        color: var(--text-primary) !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.3rem !important;
+        margin: 0 !important;
+        line-height: 1 !important;
+    }
+
+    .criterion-stepper {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.15rem !important;
+        height: 28px !important;
+    }
+
+    .criterion-stepper .btn-step-btn {
+        width: 30px !important;
+        height: 28px !important;
+        min-width: 30px !important;
+        min-height: 28px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        border-radius: 4px !important;
+        background: var(--bg-card-hover, rgba(255, 255, 255, 0.06)) !important;
+        border: 1px solid var(--border-color, #382f45) !important;
+        color: var(--text-primary) !important;
+        cursor: pointer !important;
+        touch-action: manipulation !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .criterion-stepper .btn-step-btn:hover,
+    .criterion-stepper .btn-step-btn:active {
+        background: var(--primary-light, rgba(245, 158, 11, 0.2)) !important;
+        border-color: var(--primary, #f59e0b) !important;
+        color: var(--primary, #f59e0b) !important;
+    }
+
+    .criterion-header .criterion-input {
+        width: 40px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        font-size: 0.95rem !important;
+        font-family: var(--font-mono) !important;
+        font-weight: 800 !important;
+        text-align: center !important;
+        border-radius: 4px !important;
+        background: var(--bg-input, #0e0c12) !important;
+        border: 1px solid var(--border-color, #382f45) !important;
+        color: var(--text-primary) !important;
+        padding: 0 2px !important;
+        line-height: 28px !important;
+        box-sizing: border-box !important;
+        -moz-appearance: textfield !important;
+    }
+
+    .criterion-max {
+        font-size: 0.7rem !important;
+        color: var(--text-muted) !important;
+        font-weight: 600 !important;
+        margin: 0 1px !important;
+        line-height: 1 !important;
+    }
+
+    .criterion-range {
+        display: none !important; /* Touch precision steppers and numeric inputs provide full direct control on mobile; hiding redundant slider saves ~75px */
+    }
+
+    /* 6. Scorecard Completion Actions & Hierarchy (~44-48px) */
+    .scorecard-footer {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0 !important;
+        margin-top: 0.25rem !important;
+        padding-top: 0.25rem !important;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+        width: 100% !important;
+    }
+
+    .scorecard-footer .save-feedback {
+        display: none !important; /* On mobile, toast notifications & top score badge convey completion state, keeping action toolbar <= 55px */
+    }
+
+    .scorecard-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
+        width: 100% !important;
+    }
+
+    .scorecard-actions .btn-save-scorecard {
+        order: 1 !important;
+        flex: 1 1 auto !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.35rem !important;
+        font-size: 0.88rem !important;
+        font-weight: 700 !important;
+        border-radius: 6px !important;
+    }
+
+    .scorecard-actions .btn-remove-shortlist {
+        order: 2 !important;
+        flex: 0 0 44px !important;
+        min-width: 44px !important;
+        width: 44px !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px !important;
+        border-color: rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+        background: rgba(239, 68, 68, 0.08) !important;
+    }
+
+    .scorecard-actions .btn-remove-shortlist .btn-text {
+        display: none !important;
+    }
+
+    .scorecard-actions .btn-remove-shortlist:hover {
+        background: rgba(239, 68, 68, 0.18) !important;
+        border-color: rgba(239, 68, 68, 0.6) !important;
+    }
+
+    .scorecard-actions .btn-reset-scorecard {
+        order: 3 !important;
+        flex: 0 0 44px !important;
+        min-width: 44px !important;
+        width: 44px !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px !important;
+    }
+
+    .scorecard-actions .btn-reset-scorecard .btn-text {
+        display: none !important;
+    }
+
+    .scorecard-actions button:focus-visible {
+        outline: 2px solid var(--primary) !important;
+        outline-offset: 2px !important;
+    }
+
+    /* Recordings: Metrics Strip & Runner Header */
+    .batch-metrics-strip {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+        gap: 0.65rem !important;
+    }
+
+    .batch-runner-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+
+    .batch-runner-actions {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .batch-runner-actions .btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    /* Tournament Progression: Stage Stepper & Stage Cards */
+    .stage-nav-card {
+        padding: 0.85rem !important;
+    }
+
+    .stage-nav-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    .stage-nav-badge-group {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .stage-stepper {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.5rem;
+        padding: 0.5rem 0.25rem 0.75rem 0.25rem;
+        scrollbar-width: thin;
+    }
+
+    .step-item {
+        flex: 0 0 auto;
+        min-width: 140px;
+        min-height: 44px;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm, 6px);
+    }
+
+    .stage-banner-inner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem !important;
+    }
+
+    .stage-stats-strip {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
+
+    /* Tournament: Leaderboard Table Card View */
+    .leaderboard-table tbody tr.rank-row {
+        display: grid !important;
+        grid-template-columns: repeat(5, 1fr) !important;
+        gap: 0.35rem !important;
+        background: var(--card-glass-bg, var(--bg-card)) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.85rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1)) !important;
+        box-sizing: border-box !important;
+    }
+
+    .leaderboard-table thead {
+        display: none !important;
+    }
+
+    .leaderboard-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.45rem 0;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+        box-sizing: border-box;
+    }
+
+    .leaderboard-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+    }
+
+    .leaderboard-table td.col-rank {
+        display: none !important;
+    }
+
+    .leaderboard-table td.col-song {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding-bottom: 0.45rem !important;
+    }
+
+    .leaderboard-table td.col-song::before {
+        display: none !important;
+    }
+
+    .mobile-song-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    .mobile-song-label {
+        font-weight: 700 !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-muted) !important;
+    }
+
+    .mobile-rank-badge {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        padding: 0.15rem 0.55rem !important;
+        border-radius: var(--radius-pill, 9999px) !important;
+        background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.08)) !important;
+        color: var(--text-primary, #ffffff) !important;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15)) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+    }
+
+    .mobile-rank-badge.rank-1 {
+        background: rgba(245, 158, 11, 0.18) !important;
+        border-color: rgba(245, 158, 11, 0.5) !important;
+        color: #f59e0b !important;
+    }
+
+    .mobile-rank-badge.rank-2 {
+        background: rgba(226, 232, 240, 0.18) !important;
+        border-color: rgba(226, 232, 240, 0.5) !important;
+        color: #e2e8f0 !important;
+    }
+
+    .mobile-rank-badge.rank-3 {
+        background: rgba(217, 119, 6, 0.18) !important;
+        border-color: rgba(217, 119, 6, 0.5) !important;
+        color: #d97706 !important;
+    }
+
+    .leaderboard-table td.col-total {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.45rem 0 !important;
+    }
+
+    /* 5-Criteria Compact Mobile Strip: 5 equal column cards in 1 row */
+    .leaderboard-table td.col-criteria {
+        grid-column: span 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.2rem !important;
+        padding: 0.4rem 0.15rem !important;
+        background: var(--bg-surface, rgba(255, 255, 255, 0.04)) !important;
+        border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        min-width: 0 !important;
+        text-align: center !important;
+    }
+
+    .leaderboard-table td.col-criteria::before {
+        display: none !important; /* Hide redundant full-text label on mobile strip */
+    }
+
+    .leaderboard-table td.col-criteria .criterion-score-badge {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.2rem !important;
+        width: 100% !important;
+    }
+
+    .leaderboard-table td.col-criteria .criterion-score-badge .criterion-svg {
+        opacity: 0.85 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .leaderboard-table td.col-criteria .criterion-score-badge .criterion-num {
+        font-size: 0.85rem !important;
+        font-weight: 700 !important;
+        font-family: var(--font-mono) !important;
+    }
+
+    .leaderboard-table td.col-status {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding-top: 0.5rem !important;
+        border-bottom: none !important;
+    }
+
+    .leaderboard-table tr.cutoff-divider-row {
+        display: block;
+        margin: 1rem 0;
+    }
+
+    .leaderboard-table tr.cutoff-divider-row td.cutoff-divider-cell {
+        display: block;
+        padding: 0;
+        border: none;
+    }
+
+    .cutoff-indicator {
+        flex-direction: column !important;
+        gap: 0.35rem !important;
+        text-align: center !important;
+    }
+
+    .cutoff-line {
+        display: none !important;
+    }
+
+    .cutoff-badge {
+        white-space: normal !important;
+        font-size: 0.75rem !important;
+        line-height: 1.35 !important;
+        padding: 0.4rem 0.65rem !important;
+    }
+
+    /* Manual Qualification Wizard Modal (Full-Screen on Mobile) */
+    .modal-overlay:has(.modal-advancement).active,
+    .modal-overlay.modal-advancement-overlay.active {
+        padding: 0 !important;
+        align-items: flex-start !important;
+    }
+
+    .modal-content.modal-advancement {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        min-height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        border: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+    }
+
+    .modal-advancement .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg-surface);
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    .modal-advancement .modal-body {
+        flex: 1 1 auto;
+        padding: 1rem 0.85rem 5rem 0.85rem;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-advancement .modal-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: var(--bg-surface);
+        padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom, 1rem));
+        border-top: 1px solid var(--border-color);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+        flex-direction: column-reverse;
+        align-items: stretch;
+        gap: 0.65rem;
+        flex-shrink: 0;
+    }
+
+    .modal-advancement .modal-footer .wizard-footer-nav {
+        display: flex;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .modal-advancement .modal-footer .btn {
+        width: 100%;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Wizard steps bar */
+    .advancement-steps-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.65rem;
+        background: var(--card-glass-bg, var(--bg-card));
+        border-radius: var(--radius-sm, 6px);
+        margin-bottom: 1rem;
+    }
+
+    .advancement-steps-bar .step-indicator-sep {
+        display: none;
+    }
+
+    .advancement-steps-bar .step-indicator-item {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    /* Wizard Target Banner & Stats Strip */
+    .advancement-target-banner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+        text-align: center !important;
+        padding: 0.85rem !important;
+    }
+
+    .target-banner-title {
+        flex-direction: column !important;
+        gap: 0.25rem !important;
+        font-size: 0.95rem !important;
+    }
+
+    .target-banner-counter {
+        justify-content: center !important;
+        width: 100% !important;
+        font-size: 0.95rem !important;
+    }
+
+    .advancement-stats-strip {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
+
+    .adv-stat-box {
+        padding: 0.5rem 0.65rem !important;
+    }
+
+    .adv-stat-val {
+        font-size: 1rem !important;
+    }
+
+    /* Wizard Toolbar */
+    .advancement-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+
+    .adv-filter-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 0.4rem !important;
+        gap: 0.35rem !important;
+        scrollbar-width: thin !important;
+    }
+
+    .adv-filter-tab {
+        flex: 0 0 auto !important;
+        min-height: 38px !important;
+        white-space: nowrap !important;
+        padding: 0.35rem 0.65rem !important;
+    }
+
+    .adv-tools-right {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+
+    .adv-search-input,
+    .adv-sort-select {
+        width: 100% !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        font-size: 0.9rem !important;
+    }
+
+    .adv-tools-right .btn {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+    }
+
+    /* Candidate Cards (Table to Card Transformation) */
+    .candidates-table-wrap {
+        max-height: none !important;
+        min-height: auto !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .candidates-table thead {
+        display: none !important;
+    }
+
+    .candidates-table tbody tr.candidate-row {
+        display: block !important;
+        background: var(--card-glass-bg, var(--bg-card)) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.85rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1)) !important;
+    }
+
+    .candidates-table tbody tr.candidate-row.selected-advancing {
+        border-left: 4px solid var(--accent) !important;
+        background: rgba(245, 158, 11, 0.08) !important;
+    }
+
+    .candidates-table td {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.45rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)) !important;
+    }
+
+    .candidates-table td:last-child {
+        border-bottom: none !important;
+        padding-top: 0.5rem !important;
+    }
+
+    .candidates-table td.checkbox-wrap {
+        justify-content: flex-start !important;
+        gap: 0.75rem !important;
+        padding-bottom: 0.65rem !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
+    }
+
+    .candidates-table td.checkbox-wrap::after {
+        content: "Select Candidate for Advancement";
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: var(--text-primary);
+    }
+
+    .custom-adv-checkbox {
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+    }
+
+    .candidates-table td.col-title-artist {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Wizard Step 2: Reorderable Preview */
+    .reorderable-preview-container {
+        max-height: none !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+
+    .reorderable-item {
+        flex-wrap: wrap !important;
+        padding: 0.85rem !important;
+        gap: 0.65rem !important;
+        border-radius: var(--radius-md, 8px) !important;
+    }
+
+    .order-actions-col {
+        display: flex !important;
+        gap: 0.5rem !important;
+    }
+
+    .btn-move-order {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        font-size: 1.1rem !important;
+        border-radius: var(--radius-sm, 4px) !important;
+    }
+
+    .btn-remove-qualifier {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.4rem !important;
+    }
+
+    /* Wizard Step 3: Review Checklist */
+    .adv-review-tabs {
+        display: flex !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+
+    .adv-review-tab {
+        flex: 1 !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Archive & Results Page (results.php) */
+    .archive-nav-sticky-wrap {
+        position: static !important;
+        padding: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .archive-stage-nav {
+        display: flex !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 0.4rem !important;
+        padding: 0.5rem 0.25rem !important;
+        scrollbar-width: thin !important;
+    }
+
+    .archive-nav-item {
+        flex: 0 0 auto !important;
+        min-height: 44px !important;
+        padding: 0.45rem 0.85rem !important;
+        border-radius: var(--radius-sm, 6px) !important;
+    }
+
+    .archive-controls-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.65rem !important;
+    }
+
+    .archive-search-box,
+    .archive-status-filter {
+        width: 100% !important;
+        min-height: 44px !important;
+    }
+
+    /* Archive Champion Card Mobile Typography */
+    .champion-card .card-body {
+        padding: 1.25rem 0.85rem !important;
+    }
+    .champion-crown {
+        font-size: 2.5rem !important;
+    }
+    .champion-badge {
+        font-size: 0.72rem !important;
+        letter-spacing: 0.08em !important;
+        padding: 0.2rem 0.75rem !important;
+    }
+    .champion-title {
+        font-size: 1.5rem !important;
+        line-height: 1.2 !important;
+    }
+    .champion-artist {
+        font-size: 1.05rem !important;
+    }
+    .champion-total {
+        font-size: 1.85rem !important;
+    }
+    .champion-criteria {
+        gap: 0.35rem !important;
+    }
+    .champion-criteria .criteria-tag {
+        font-size: 0.75rem !important;
+        padding: 0.25rem 0.55rem !important;
+    }
+
+    /* Restore Normal Page Scrolling on Mobile: Remove nested scroll trap */
+    .stage-table-scroll-container {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .archive-table thead {
+        display: none !important;
+    }
+
+    .archive-table tbody tr.archive-row {
+        display: grid !important;
+        grid-template-columns: repeat(5, 1fr) !important;
+        gap: 0.35rem !important;
+        background: var(--card-glass-bg, var(--bg-card)) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.75rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.1)) !important;
+    }
+
+    .archive-table td.col-rank,
+    .archive-table td.col-status {
+        display: none !important;
+    }
+
+    .archive-table td.col-song {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 0 0 0.4rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+    }
+
+    .archive-table td.col-song::before {
+        display: none !important;
+    }
+
+    .archive-mobile-card-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    .archive-mobile-rank {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        padding: 0.15rem 0.55rem !important;
+        border-radius: var(--radius-pill, 9999px) !important;
+        background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.08)) !important;
+        color: var(--text-primary, #ffffff) !important;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15)) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+    }
+
+    .archive-mobile-rank.rank-1 {
+        background: rgba(245, 158, 11, 0.18) !important;
+        border-color: rgba(245, 158, 11, 0.5) !important;
+        color: #f59e0b !important;
+    }
+
+    .archive-mobile-rank.rank-2 {
+        background: rgba(226, 232, 240, 0.18) !important;
+        border-color: rgba(226, 232, 240, 0.5) !important;
+        color: #e2e8f0 !important;
+    }
+
+    .archive-mobile-rank.rank-3 {
+        background: rgba(217, 119, 6, 0.18) !important;
+        border-color: rgba(217, 119, 6, 0.5) !important;
+        color: #d97706 !important;
+    }
+
+    .archive-table td.col-total {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.35rem 0 !important;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+    }
+
+    .archive-table td.col-total::before {
+        content: "Score" !important;
+        font-weight: 700 !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* 5-Criteria Compact Mobile Strip: 5 equal columns in 1 row */
+    .archive-table td.col-criteria {
+        grid-column: span 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.2rem !important;
+        padding: 0.4rem 0.15rem !important;
+        background: var(--bg-surface, rgba(255, 255, 255, 0.04)) !important;
+        border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+        border-radius: var(--radius-sm, 6px) !important;
+    }
+
+    .archive-table td.col-criteria::before {
+        content: attr(data-label) !important;
+        font-size: 0.65rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+        color: var(--text-muted) !important;
+    }
+
+    .archive-criterion-badge {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.2rem !important;
+        font-size: 0.85rem !important;
+        font-weight: 700 !important;
+        font-family: var(--font-mono) !important;
+    }
+
+    .archive-criterion-badge .criterion-svg {
+        display: none !important;
+    }
+
+    .archive-table td.col-reason {
+        grid-column: 1 / -1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        padding-top: 0.35rem !important;
+        border-bottom: none !important;
+        font-size: 0.75rem !important;
+        color: var(--text-muted) !important;
+    }
+
+    .archive-table td.col-reason::before {
+        content: "Audit Note: " !important;
+        font-weight: 700 !important;
+        font-size: 0.72rem !important;
+        margin-right: 0.35rem !important;
+        color: var(--text-muted) !important;
+    }
+
+    .archive-stage-card .card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+    }
+
+    .stage-collapse-btn {
+        min-height: 40px !important;
+        padding: 0.4rem 0.75rem !important;
+    }
+
+    /* General Modals & Dialogs (Add Song, Edit Song, Delete, Bulk Delete, Quick Lyrics, Appearance, Recordings) */
+    .modal-overlay {
+        padding: 0.75rem !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 2500 !important;
+    }
+
+    .modal-content:not(.modal-advancement) {
+        width: min(540px, 95vw) !important;
+        max-width: min(540px, 95vw) !important;
+        max-height: calc(100dvh - 24px) !important;
+        padding: 1.25rem !important;
+        border-radius: var(--radius-md, 12px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        margin: auto !important;
+    }
+
+    .candidate-modal-content,
+    .song-management-modal-content,
+    .video-preview-modal-content {
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        height: auto !important;
+        max-height: calc(100dvh - 24px) !important;
+    }
+
+    .song-management-modal-content .modal-body {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        flex: 1 1 auto !important;
+        max-height: calc(100dvh - 150px) !important;
+    }
+
+    .candidate-modal-content {
+        width: min(640px, 96vw) !important;
+        max-width: min(640px, 96vw) !important;
+    }
+
+    /* 2-Row Candidate Header on Mobile */
+    .cand-modal-header {
+        padding: 0.85rem 1rem 0.75rem !important;
+        gap: 0.45rem !important;
+    }
+
+    .cand-song-title {
+        font-size: 0.98rem !important;
+        line-height: 1.35 !important;
+    }
+
+    .cand-song-meta {
+        font-size: 0.78rem !important;
+        line-height: 1.3 !important;
+    }
+
+    .cand-header-controls .btn-sm {
+        padding: 0.35rem 0.65rem !important;
+        font-size: 0.8rem !important;
+        min-height: 36px !important;
+    }
+
+    /* Compact Empty State on Mobile */
+    .cand-empty-state-box {
+        padding: 0.95rem 0.5rem 0.85rem !important;
+    }
+
+    .cand-empty-state-box .empty-icon-compact {
+        font-size: 1.65rem !important;
+        margin-bottom: 0.25rem !important;
+        line-height: 1 !important;
+    }
+
+    .cand-empty-state-box .cand-empty-title {
+        font-size: 0.925rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    .cand-empty-state-box .cand-empty-desc {
+        font-size: 0.78rem !important;
+        margin-bottom: 0.75rem !important;
+        line-height: 1.35 !important;
+        max-width: 320px !important;
+    }
+
+    .cand-empty-actions {
+        gap: 0.45rem !important;
+    }
+
+    /* Ensure No Nested Scrollbars */
+    .candidate-cards-list {
+        max-height: none !important;
+        overflow-y: visible !important;
+        padding-right: 0 !important;
+    }
+
+    .candidate-modal-content .modal-body,
+    .song-management-modal-content .modal-body,
+    .video-preview-modal-content .modal-body {
+        padding: 1rem !important;
+        overflow-y: auto !important;
+        flex: 1 1 auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .candidate-modal-content .modal-header,
+    .song-management-modal-content .modal-header,
+    .video-preview-modal-content .modal-header {
+        padding: 0.85rem 1rem !important;
+        flex-shrink: 0 !important;
+    }
+
+    .candidate-modal-content .modal-footer,
+    .song-management-modal-content .modal-footer,
+    .video-preview-modal-content .modal-footer {
+        padding: 0.75rem 1rem !important;
+        flex-shrink: 0 !important;
+    }
+
+    .candidate-card-item {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        padding: 0.85rem !important;
+    }
+
+    .candidate-thumb-box {
+        width: 100% !important;
+        height: 140px !important;
+        max-width: 240px !important;
+        margin: 0 auto !important;
+    }
+
+    .candidate-actions-col {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+        border-top: 1px solid var(--border-color) !important;
+        padding-top: 0.5rem !important;
+    }
+
+    .modal-close {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.5rem !important;
+        border-radius: var(--radius-sm, 4px) !important;
+    }
+
+    .modal-footer:not(.modal-advancement .modal-footer) {
+        flex-direction: column-reverse !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+
+    .modal-footer:not(.modal-advancement .modal-footer) .btn {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: center !important;
+    }
+
+    /* Appearance Modal Themes Grid */
+    .appearance-modal-content {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 1.25rem !important;
+    }
+
+    .curated-themes-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+
+    .curated-theme-card {
+        min-height: 52px !important;
+    }
+
+    /* Form Inputs & Accessibility */
+    .form-group {
+        margin-bottom: 1rem !important;
+    }
+
+    .form-label {
+        font-size: 0.9rem !important;
+        margin-bottom: 0.35rem !important;
+        display: block !important;
+        font-weight: 600 !important;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not(.criterion-input):not(.search-input):not(#archiveFilterInput),
+    select,
+    textarea,
+    .form-input,
+    .form-select,
+    .form-textarea {
+        font-size: 16px !important; /* Prevents auto-zoom on iOS */
+        min-height: 44px !important;
+        padding: 0.6rem 0.85rem !important;
+        width: 100% !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Search Inputs: Maintain comfortable left padding for magnifying glass icon across all viewports */
+    input.search-input,
+    .search-input,
+    .search-input-wrapper input,
+    .archive-search-box input,
+    .dup-search .search-input,
+    #archiveFilterInput,
+    #searchInput,
+    #tournamentSearchInput,
+    #recSearchInput,
+    #auditionsSearchInput,
+    #dupSearchInput {
+        font-size: 16px !important;
+        min-height: 44px !important;
+        padding-left: 2.75rem !important;
+        padding-right: 2.5rem !important;
+        padding-top: 0.6rem !important;
+        padding-bottom: 0.6rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .search-input-wrapper .search-icon,
+    .archive-search-box .archive-search-icon,
+    .dup-search .search-icon {
+        position: absolute !important;
+        left: 0.85rem !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        font-size: 0.95rem !important;
+        line-height: 1 !important;
+        color: var(--text-muted) !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+    }
+
+    .criterion-stepper input.criterion-input,
+    input.criterion-input {
+        width: 44px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        padding: 0 2px !important;
+        font-size: 0.95rem !important;
+        line-height: 28px !important;
+        box-sizing: border-box !important;
+    }
+
+    .form-textarea {
+        min-height: 100px !important;
+    }
+
+    /* Floating Bulk Actions Bar handled globally above bottom dock */
+
+    /* Footer Mobile Alignment */
+    .app-footer {
+        padding: 1.25rem 1rem;
+    }
+
+    body.has-mobile-dock .app-footer {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 1rem)) !important;
+    }
+
+    .footer-inner {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1rem;
+    }
+
+    .footer-left {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .footer-text-block {
+        align-items: center;
+    }
+}
+
+/* ==========================================================================
+   4. STANDARD SMARTPHONE OPTIMIZATIONS (<= 480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    .header-inner {
+        padding: 0 0.75rem;
+    }
+
+    .brand-logo-img {
+        height: 38px !important;
+    }
+
+    .badge-year {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .main-content {
+        padding: 1rem 0.65rem;
+    }
+
+    /* Page title scaling */
+    .page-title-group h1,
+    .auth-title {
+        font-size: 1.45rem;
+        line-height: 1.25;
+    }
+
+    .page-subtitle,
+    .auth-subtitle {
+        font-size: 0.85rem;
+    }
+
+    /* Button full-width stacks in forms */
+    .modal-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .modal-footer .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    /* Scorecard criteria stack */
+    .criteria-slider-group {
+        padding: 0.75rem 0.5rem;
+    }
+}
+
+/* ==========================================================================
+   5. ULTRA-COMPACT MOBILE (320px - 360px Viewports)
+   ========================================================================== */
+
+@media (max-width: 360px) {
+    .header-inner {
+        padding: 0 0.5rem;
+    }
+
+    .brand-logo-img {
+        height: 34px !important;
+    }
+
+    /* Hide badge year on <= 340px to ensure hamburger toggle never clips */
+    @media (max-width: 340px) {
+        .badge-year {
+            display: none;
+        }
+    }
+
+    .main-content {
+        padding: 0.75rem 0.4rem;
+    }
+
+    .page-title-group h1 {
+        font-size: 1.3rem;
+    }
+
+    .table-responsive-card tbody tr {
+        padding: 0.65rem 0.75rem;
+    }
+
+    .table-responsive-card td {
+        font-size: 0.85rem;
+    }
+
+    .table-responsive-card td::before {
+        font-size: 0.7rem;
+        margin-right: 0.5rem;
+    }
+
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.45rem 0.75rem;
+    }
+}
+
+/* ==========================================================================
+   6. ACCESSIBILITY: REDUCED MOTION PREFERENCE
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ==========================================================================
+   7. GLOBAL ACCESSIBILITY, FOCUS INDICATORS & TOUCH TARGETS
+   ========================================================================== */
+
+/* High-Contrast Visible Focus for Keyboard Navigation */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2.5px solid var(--accent, #f59e0b) !important;
+    outline-offset: 2px !important;
+}
+
+/* Touch Targets: Minimum 44x44px for primary interactive elements */
+@media (pointer: coarse), (max-width: 1024px) {
+    .btn,
+    .nav-link,
+    .nav-links a,
+    .nav-drawer-header .drawer-close,
+    .modal-close,
+    .adv-filter-tab,
+    .btn-move-order,
+    .btn-remove-qualifier,
+    .archive-nav-item,
+    .pagination a,
+    .pagination span,
+    .appearance-trigger-btn,
+    .stage-collapse-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .table-responsive-card .col-select,
+    .checkbox-wrap {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-width: 22px;
+        min-height: 22px;
+    }
+}
+
+/* ==========================================================================
+   8. MOBILE BOTTOM NAVIGATION DOCK & MORE DRAWER (<= 768px Viewports)
+   ========================================================================== */
+
+/* Hidden on desktop workstations by default */
+.mobile-bottom-dock,
+.mobile-more-modal {
+    display: none;
+}
+
+@media screen and (max-width: 768px) {
+    /* For authenticated mobile views with the persistent bottom dock,
+       hide the redundant top header hamburger toggle so there is zero conflict or confusion */
+    body.has-mobile-dock .nav-toggle#navToggle {
+        display: none !important;
+    }
+
+    /* Main layout container padding so content is never obscured by the bottom dock */
+    body.has-mobile-dock .main-content,
+    .main-content {
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0.75rem)) !important;
+    }
+
+    .mobile-bottom-dock {
+        display: flex !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        height: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+        padding: 0.35rem 0.5rem max(0.35rem, env(safe-area-inset-bottom, 0.35rem)) !important;
+        background: var(--nav-drawer-bg, rgba(14, 12, 18, 0.96)) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.12)) !important;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4) !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+        z-index: 990 !important;
+    }
+
+    .mobile-dock-item {
+        background: transparent !important;
+        border: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 3px !important;
+        color: var(--text-muted, #999083) !important;
+        text-decoration: none !important;
+        padding: 5px 8px !important;
+        border-radius: var(--radius-md, 10px) !important;
+        cursor: pointer !important;
+        flex: 1 !important;
+        min-height: 48px !important;
+        min-width: 48px !important;
+        position: relative !important;
+        opacity: 0.76;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+
+    .mobile-dock-item .dock-icon {
+        font-size: 1.25rem !important;
+        line-height: 1 !important;
+        transition: transform 0.2s ease, filter 0.2s ease !important;
+    }
+
+    .mobile-dock-item .dock-label {
+        font-size: 0.72rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+        line-height: 1 !important;
+        transition: color 0.2s ease, font-weight 0.2s ease !important;
+    }
+
+    .mobile-dock-item:hover,
+    .mobile-dock-item:focus-visible {
+        opacity: 1 !important;
+        color: var(--text-primary, #fcfbf9) !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        outline: none !important;
+    }
+
+    .mobile-dock-item:focus-visible {
+        box-shadow: 0 0 0 2px var(--primary, #f59e0b) !important;
+    }
+
+    .mobile-dock-item:active {
+        transform: scale(0.94) !important;
+    }
+
+    /* Unmistakable, High-Contrast Active State across all 8 Themes */
+    .mobile-dock-item.active {
+        opacity: 1 !important;
+        color: var(--primary, #f59e0b) !important;
+        background: var(--primary-light, rgba(245, 158, 11, 0.16)) !important;
+        box-shadow: inset 0 0 0 1px var(--primary-border, rgba(245, 158, 11, 0.3)) !important;
+    }
+
+    /* Filled Background Active Tab (No Underline) */
+    .mobile-dock-item.active::before {
+        display: none !important;
+        content: none !important;
+    }
+
+    .mobile-dock-item.active .dock-icon {
+        transform: scale(1.18) translateY(-1px);
+        color: var(--primary, #f59e0b) !important;
+        filter: drop-shadow(0 2px 6px var(--primary-light, rgba(245, 158, 11, 0.4)));
+    }
+
+    .mobile-dock-item.active .dock-label {
+        font-weight: 800 !important;
+        color: var(--primary, #f59e0b) !important;
+        letter-spacing: 0.03em !important;
+    }
+
+    /* Mobile More Slide-up Bottom Sheet */
+    .mobile-more-modal {
+        display: flex;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 1050;
+        align-items: flex-end;
+        justify-content: center;
+        transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    .mobile-more-modal.active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .mobile-more-content {
+        width: 100% !important;
+        max-width: 540px !important;
+        background: var(--bg-surface, #141219) !important;
+        border: 1px solid var(--border-color, #382f45) !important;
+        border-bottom: none !important;
+        border-radius: 20px 20px 0 0 !important;
+        box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.5) !important;
+        max-height: 85vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem)) !important;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .mobile-more-modal.active .mobile-more-content {
+        transform: translateY(0);
+    }
+
+    .mobile-more-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .more-nav-tile {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        background: var(--bg-card, #1c1924);
+        border: 1px solid var(--border-color, #382f45);
+        border-radius: var(--radius-md, 12px);
+        color: var(--text-primary, #fcfbf9);
+        text-decoration: none;
+        cursor: pointer;
+        min-height: 56px;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .more-nav-tile:hover,
+    .more-nav-tile:focus-visible {
+        background: var(--bg-card-hover, #262132);
+        border-color: var(--primary, #f59e0b);
+        outline: none;
+    }
+
+    .more-nav-tile.active {
+        border-color: var(--primary, #f59e0b);
+        background: var(--primary-light, rgba(245, 158, 11, 0.15));
+    }
+
+    .more-nav-tile .tile-icon {
+        font-size: 1.35rem;
+        flex-shrink: 0;
+    }
+
+    .more-nav-tile .tile-text {
+        display: flex;
+        flex-direction: column;
+        text-align: left;
+    }
+
+    .more-nav-tile .tile-text strong {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text-primary, #fcfbf9);
+    }
+
+    .more-nav-tile .tile-text span {
+        font-size: 0.7rem;
+        color: var(--text-muted, #999083);
+    }
+
+    .mobile-more-user-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    }
+
+    .more-user-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .more-user-badge .role-pill {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: var(--radius-full, 9999px);
+        background: var(--primary-light, rgba(245, 158, 11, 0.18));
+        color: var(--primary, #f59e0b);
+        font-weight: 700;
+    }
+}
+
+/* ==========================================================================
+   9. LIBRARY VIEW MODE TOOLBAR & DISCOVER ARTWORK GRID
+   ========================================================================== */
+
+.library-view-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.view-mode-toggle {
+    display: inline-flex;
+    background: var(--bg-surface, #141219);
+    border: 1px solid var(--border-color, #382f45);
+    border-radius: var(--radius-sm, 6px);
+    padding: 3px;
+    gap: 3px;
+}
+
+.btn-view-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-muted, #999083);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.6rem 0.95rem;
+    border-radius: calc(var(--radius-sm, 6px) - 2px);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 48px;
+    min-width: 48px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-view-toggle:hover {
+    color: var(--text-primary, #fcfbf9);
+}
+
+.btn-view-toggle.active {
+    background: var(--primary, #f59e0b);
+    color: var(--text-on-primary, #121110);
+}
+
+.library-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 480px) {
+    .library-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1rem;
+    }
+}
+
+.song-discover-card {
+    background: var(--card-glass-bg, var(--bg-card, #1c1924));
+    border: 1px solid var(--border-color, #382f45);
+    border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px var(--shadow-color, rgba(0, 0, 0, 0.15));
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.song-discover-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary, #f59e0b);
+}
+
+.song-card-art-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--bg-surface, #141219);
+    overflow: hidden;
+}
+
+.song-card-artwork {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.card-status-pill {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-full, 9999px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffffff;
+}
+
+.card-track-num {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm, 4px);
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+}
+
+.song-card-body {
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0.4rem;
+}
+
+.song-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary, #fcfbf9);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+}
+
+.song-card-artist {
+    font-size: 0.8rem;
+    color: var(--text-muted, #999083);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.song-card-actions {
+    margin-top: auto;
+    padding-top: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.song-card-actions .btn-primary-subtle {
+    min-height: 36px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm, 6px);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.song-card-actions .btn-lyrics-quick-view {
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm, 6px);
+    font-size: 0.95rem;
+}
+
+.song-card-decisions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.song-card-decisions .btn-action-shortlist,
+.song-card-decisions .btn-action-pass {
+    min-width: 36px !important;
+    max-width: 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--radius-full, 9999px) !important;
+    border: 1.5px solid var(--border-color) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-muted) !important;
+    font-size: 0.95rem !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.song-card-decisions .btn-action-shortlist:hover,
+.song-card-decisions .btn-action-shortlist.active {
+    background: var(--gold-light, rgba(245, 158, 11, 0.2)) !important;
+    border-color: var(--gold, #f59e0b) !important;
+    color: var(--gold, #f59e0b) !important;
+    transform: translateY(-1px);
+}
+
+.song-card-decisions .btn-action-pass:hover,
+.song-card-decisions .btn-action-pass.active {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: var(--danger, #ef4444) !important;
+    color: var(--danger, #ef4444) !important;
+    transform: translateY(-1px);
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+    .song-card-decisions .btn-action-shortlist,
+    .song-card-decisions .btn-action-pass {
+        min-width: 44px !important;
+        max-width: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 1.1rem !important;
+    }
+}
+
+/* ==========================================================================
+   10. HOME / JOURNAL & ACCOUNT / SECURITY MOBILE REFINEMENTS (<= 768px)
+   ========================================================================== */
+
+@media screen and (max-width: 768px) {
+    /* Home / Journal Hero Section */
+    .journal-hero-section {
+        padding: 1.25rem 0.5rem 1.5rem !important;
+        text-align: center !important;
+    }
+
+    .journal-hero-inner {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .journal-hero-title {
+        font-size: 2rem !important;
+        line-height: 1.2 !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .journal-hero-quote {
+        font-size: 1rem !important;
+        line-height: 1.4 !important;
+        margin-bottom: 1.25rem !important;
+        padding: 0 0.5rem !important;
+    }
+
+    .journal-hero-nav {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.65rem !important;
+        width: 100% !important;
+        max-width: 420px !important;
+        margin: 0 auto !important;
+    }
+
+    .journal-hero-nav .btn {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-height: 48px !important;
+        justify-content: center !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Featured Listening Turntable Card on Index (Tasks 2, 3, 4) */
+    .featured-listening-section {
+        width: 100% !important;
+        margin: 0 0 1.25rem 0 !important;
+    }
+
+    .featured-card-wrapper {
+        width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .poetic-banner {
+        margin-bottom: 0.35rem !important;
+        padding: 0 0.25rem !important;
+    }
+
+    .tactile-player-card.featured-hero-card {
+        padding: 0.85rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-hero-row {
+        display: grid !important;
+        grid-template-columns: 80px 1fr !important;
+        grid-template-areas:
+            "artwork info"
+            "actions actions" !important;
+        gap: 0.65rem 0.85rem !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin-bottom: 0 !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-artwork-col {
+        grid-area: artwork !important;
+        flex: 0 0 80px !important;
+        width: 80px !important;
+        max-width: 80px !important;
+        height: 80px !important;
+        margin: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-artwork-frame {
+        width: 80px !important;
+        height: 80px !important;
+        max-width: 80px !important;
+        max-height: 80px !important;
+        min-width: 80px !important;
+        min-height: 80px !important;
+        aspect-ratio: 1 / 1 !important;
+        border-radius: var(--radius-md, 8px) !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        position: relative !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-artwork-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-meta-col {
+        display: contents !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-info-group {
+        grid-area: info !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        text-align: left !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-header-bar {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        gap: 0.35rem !important;
+        margin-bottom: 0.2rem !important;
+        width: 100% !important;
+    }
+
+    .tactile-player-card.featured-hero-card .total-score-badge {
+        font-size: 0.68rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.03em !important;
+        padding: 0.15rem 0.45rem !important;
+        white-space: nowrap !important;
+        flex: 0 0 auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-title {
+        font-size: 0.95rem !important;
+        line-height: 1.25 !important;
+        margin-bottom: 0.15rem !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        overflow: visible !important;
+        font-weight: 700 !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-artist {
+        font-size: 0.8rem !important;
+        line-height: 1.25 !important;
+        margin-bottom: 0.15rem !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        overflow: visible !important;
+        color: var(--text-secondary) !important;
+    }
+
+    .tactile-player-card.featured-hero-card .tactile-details {
+        font-size: 0.68rem !important;
+        opacity: 0.75 !important;
+        margin-bottom: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    /* Actions row spanning full width in 1 compact horizontal row */
+    .tactile-player-card.featured-hero-card .featured-actions-row {
+        grid-area: actions !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 0.35rem !important;
+        width: 100% !important;
+        margin-top: 0.35rem !important;
+        padding-top: 0.35rem !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    }
+
+    .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-scoreboard,
+    .tactile-player-card.featured-hero-card .featured-actions-row .btn-quick-lyrics {
+        flex: 1 1 auto !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 0 0.55rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.3rem !important;
+        box-sizing: border-box !important;
+    }
+
+    .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-yt {
+        flex: 0 0 auto !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 0 0.65rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.25rem !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        border: 1px solid var(--border-color) !important;
+        background: var(--bg-surface) !important;
+        color: var(--text-secondary) !important;
+        text-decoration: none !important;
+        box-sizing: border-box !important;
+        transition: background var(--transition-fast), color var(--transition-fast) !important;
+    }
+
+    .poetic-footer {
+        margin-top: 0.5rem !important;
+        padding-top: 0.5rem !important;
+    }
+
+    /* Mobile Text Toggle */
+    .btn-text-desktop {
+        display: none !important;
+    }
+
+    .btn-text-mobile {
+        display: inline !important;
+    }
+
+    @media (max-width: 360px) {
+        .tactile-player-card.featured-hero-card .tactile-hero-row {
+            grid-template-columns: 68px 1fr !important;
+            gap: 0.5rem 0.65rem !important;
+        }
+        .tactile-player-card.featured-hero-card .tactile-artwork-col,
+        .tactile-player-card.featured-hero-card .tactile-artwork-frame {
+            width: 68px !important;
+            height: 68px !important;
+            max-width: 68px !important;
+            max-height: 68px !important;
+            min-width: 68px !important;
+            min-height: 68px !important;
+        }
+        .tactile-player-card.featured-hero-card .featured-actions-row {
+            gap: 0.25rem !important;
+        }
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-scoreboard,
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-quick-lyrics,
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-yt {
+            font-size: 0.72rem !important;
+            padding: 0 0.4rem !important;
+            min-height: 34px !important;
+            height: 34px !important;
+        }
+
+        /* Auditions recording toolbar ultra-compact */
+        .playback-status-pill .status-text {
+            display: none !important;
+        }
+        .playback-status-pill {
+            padding: 0 0.3rem !important;
+            width: 22px !important;
+            min-width: 22px !important;
+            justify-content: center !important;
+        }
+        .media-badge {
+            padding: 0 0.35rem !important;
+            font-size: 0.68rem !important;
+        }
+        .media-toolbar-right .btn-toggle-lyrics {
+            padding: 0 0.35rem !important;
+            font-size: 0.68rem !important;
+        }
+    }
+
+    @media (max-width: 320px) {
+        .tactile-player-card.featured-hero-card .featured-actions-row {
+            flex-wrap: wrap !important;
+            gap: 0.3rem !important;
+        }
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-scoreboard,
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-quick-lyrics {
+            flex: 1 1 45% !important;
+        }
+        .tactile-player-card.featured-hero-card .featured-actions-row .btn-featured-yt {
+            flex: 1 1 100% !important;
+        }
+    }
+
+    /* Account / Security Mobile Layout */
+    .account-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto 1.5rem !important;
+        padding: 0 !important;
+    }
+
+    .account-page-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+        margin-bottom: 1.25rem !important;
+    }
+
+    .account-header-text {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        min-height: 0 !important;
+    }
+
+    .account-card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .account-card-header-left {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        align-items: flex-start !important;
+    }
+
+    .account-card-header-right {
+        width: 100% !important;
+        justify-content: flex-start !important;
+    }
+
+    .account-card {
+        padding: 1.15rem 1rem !important;
+        margin-bottom: 0.85rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .account-sections-list {
+        gap: 0.85rem !important;
+    }
+
+    .account-sections-list .account-card {
+        margin-bottom: 0 !important;
+    }
+
+    .identity-profile-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.85rem !important;
+        width: 100% !important;
+    }
+
+    .current-password-group,
+    .new-password-row {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    .new-password-row {
+        grid-template-columns: 1fr !important;
+        gap: 0.85rem !important;
+    }
+
+    .account-submit-btn {
+        width: 100% !important;
+        min-height: 48px !important;
+        justify-content: center !important;
+    }
+}
+
+/* ==========================================================================
+   11. PURPOSEFUL & RESTRAINED MOTION SYSTEM (PREFERS-REDUCED-MOTION COMPLIANT)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+    /* 1. Page Entrance Fade */
+    .main-content {
+        animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: none !important;
+    }
+
+    @keyframes pageFadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    /* 2. Card Hover Lift on Pointer Devices */
+    @media (hover: hover) and (pointer: fine) {
+        .song-discover-card {
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                        border-color 0.22s ease !important;
+        }
+
+        .song-discover-card:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 10px 24px var(--shadow-color, rgba(0, 0, 0, 0.3)) !important;
+            border-color: var(--primary, #f59e0b) !important;
+        }
+
+        .song-discover-card:hover .song-card-artwork {
+            transform: scale(1.03);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    }
+
+    /* 3. Button & Interactive Press Feedback */
+    .btn:active,
+    .mobile-dock-item:active,
+    .btn-view-toggle:active,
+    .btn-action-shortlist:active,
+    .btn-action-pass:active {
+        transform: scale(0.96) !important;
+        transition-duration: 0.08s !important;
+    }
+
+    /* 4. Smooth Bottom Sheet Slide Up */
+    .mobile-more-content {
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .mobile-more-modal.active .mobile-more-content {
+        transform: translateY(0) !important;
+    }
+
+    /* 5. View Mode Switching Crossfade */
+    .table-container,
+    .library-cards-grid {
+        animation: viewModeFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes viewModeFade {
+        from {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* 6. Score Slider Interaction Glow */
+    .criterion-range:active::-webkit-slider-thumb {
+        transform: scale(1.15);
+        box-shadow: 0 0 14px var(--primary, #f59e0b) !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .criterion-range:active::-moz-range-thumb {
+        transform: scale(1.15);
+        box-shadow: 0 0 14px var(--primary, #f59e0b) !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    /* 7. Mobile Bulk Action Confirmation Modal */
+    .bulk-action-modal-content {
+        max-width: min(580px, 95vw) !important;
+        width: 95vw !important;
+        margin: 0.75rem auto !important;
+    }
+
+    .bulk-action-modal-content .modal-header {
+        padding: 1rem 1.15rem 0.85rem !important;
+    }
+
+    .bulk-action-modal-content .modal-body {
+        padding: 0.85rem 1.15rem !important;
+    }
+
+    .bulk-stats-grid {
+        gap: 0.45rem !important;
+    }
+
+    .bulk-stat-card {
+        padding: 0.5rem 0.35rem !important;
+    }
+
+    .bulk-stat-val {
+        font-size: 1.25rem !important;
+    }
+
+    .bulk-ineligible-list,
+    .bulk-eligible-list {
+        max-height: 140px !important;
+    }
+
+    /* 8. Mobile Recordings Action Row Single-Line */
+    .rec-actions-flex {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 0.35rem !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .recordings-table td.rec-col-track::before {
+        display: none !important;
+    }
+
+    .rec-linked-top .rec-yt-link {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        padding: 0 !important;
+        border-radius: var(--radius-sm, 6px) !important;
+        background: rgba(239, 68, 68, 0.14) !important;
+        border: 1px solid rgba(239, 68, 68, 0.35) !important;
+        color: #ef4444 !important;
+    }
+}
+

@@ -1,0 +1,164 @@
+{
+    "dashboard_cold": {
+        "count": 30,
+        "min": 2.862,
+        "max": 12.263,
+        "mean": 5.549,
+        "median": 5.417,
+        "p95": 9.35,
+        "rps": 180.2
+    },
+    "dashboard_warm": {
+        "count": 30,
+        "min": 0.003,
+        "max": 0.032,
+        "mean": 0.007,
+        "median": 0.006,
+        "p95": 0.008,
+        "rps": 30000
+    },
+    "search_id_asc": {
+        "count": 30,
+        "min": 3.628,
+        "max": 7.867,
+        "mean": 5.008,
+        "median": 4.642,
+        "p95": 7.337,
+        "rps": 199.7
+    },
+    "search_title_asc": {
+        "count": 30,
+        "min": 5.298,
+        "max": 7.915,
+        "mean": 6.307,
+        "median": 6.234,
+        "p95": 7.453,
+        "rps": 158.6
+    },
+    "search_artist_asc": {
+        "count": 30,
+        "min": 5.159,
+        "max": 9.655,
+        "mean": 6.227,
+        "median": 6.061,
+        "p95": 8.994,
+        "rps": 160.6
+    },
+    "search_query_like": {
+        "count": 30,
+        "min": 3.325,
+        "max": 8.795,
+        "mean": 4.263,
+        "median": 3.828,
+        "p95": 6.38,
+        "rps": 234.6
+    },
+    "get_song_by_id": {
+        "count": 30,
+        "min": 0.118,
+        "max": 0.359,
+        "mean": 0.155,
+        "median": 0.126,
+        "p95": 0.288,
+        "rps": 6457.4
+    },
+    "shortlist_toggle": {
+        "count": 30,
+        "min": 3.153,
+        "max": 34.516,
+        "mean": 5.023,
+        "median": 3.956,
+        "p95": 5.038,
+        "rps": 199.1
+    },
+    "get_audition_entries": {
+        "count": 30,
+        "min": 2.282,
+        "max": 3.855,
+        "mean": 2.859,
+        "median": 2.744,
+        "p95": 3.794,
+        "rps": 349.7
+    },
+    "save_scorecard_rating": {
+        "count": 30,
+        "min": 2.389,
+        "max": 9.612,
+        "mean": 4.981,
+        "median": 4.967,
+        "p95": 8.676,
+        "rps": 200.8
+    },
+    "get_round_rankings": {
+        "count": 30,
+        "min": 0.634,
+        "max": 2.054,
+        "mean": 0.962,
+        "median": 0.863,
+        "p95": 1.492,
+        "rps": 1040
+    },
+    "preview_advancement": {
+        "count": 30,
+        "min": 1.417,
+        "max": 2.951,
+        "mean": 1.901,
+        "median": 1.811,
+        "p95": 2.728,
+        "rps": 526.1
+    },
+    "get_historical_results": {
+        "count": 30,
+        "min": 0.383,
+        "max": 0.912,
+        "mean": 0.541,
+        "median": 0.477,
+        "p95": 0.876,
+        "rps": 1849.4
+    },
+    "execute_csv_import_30": {
+        "count": 5,
+        "min": 6.437,
+        "max": 26.62,
+        "mean": 11.622,
+        "median": 8.627,
+        "p95": 26.62,
+        "rps": 86
+    },
+    "matching_stats_cold": {
+        "count": 30,
+        "min": 6.243,
+        "max": 12.238,
+        "mean": 8.002,
+        "median": 7.53,
+        "p95": 11.688,
+        "rps": 125
+    },
+    "matching_stats_warm": {
+        "count": 30,
+        "min": 0.002,
+        "max": 0.005,
+        "mean": 0.003,
+        "median": 0.003,
+        "p95": 0.005,
+        "rps": 30000
+    },
+    "get_candidates_for_song": {
+        "count": 30,
+        "min": 0.197,
+        "max": 0.698,
+        "mean": 0.294,
+        "median": 0.243,
+        "p95": 0.525,
+        "rps": 3403.5
+    },
+    "attempt_login": {
+        "count": 30,
+        "min": 262.412,
+        "max": 309.289,
+        "mean": 273.859,
+        "median": 264.365,
+        "p95": 297.527,
+        "rps": 3.7
+    }
+}

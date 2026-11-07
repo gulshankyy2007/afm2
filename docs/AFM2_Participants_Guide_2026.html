@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFM#2 Participant's Guide 2026 — Step-by-Step Manual</title>
+    <style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,800;1,400&display=swap');
+
+:root {
+    --bg-page: #0b090f;
+    --bg-surface: #13101b;
+    --bg-card: #181524;
+    --bg-elevated: #221e33;
+    --border-subtle: #29243a;
+    --border-gold: #f59e0b;
+    --border-gold-glow: rgba(245, 158, 11, 0.25);
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --accent-gold: #f59e0b;
+    --accent-amber: #d97706;
+    --accent-teal: #14b8a6;
+    --accent-emerald: #10b981;
+    --accent-crimson: #ef4444;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.65;
+    font-size: 14.5px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.document-wrapper {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 30px;
+}
+
+/* ==================== COVER PAGE ==================== */
+.cover-page {
+    min-height: 980px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    padding: 80px 40px 60px;
+    background: radial-gradient(circle at center 25%, #241a38 0%, #0d0a15 70%);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.8), inset 0 0 80px rgba(245, 158, 11, 0.05);
+    border-radius: 12px;
+    margin-bottom: 60px;
+    position: relative;
+    overflow: hidden;
+}
+
+.cover-page::before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+.cover-badge {
+    display: inline-block;
+    padding: 6px 18px;
+    border: 1px solid var(--accent-gold);
+    border-radius: 20px;
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    background: rgba(245, 158, 11, 0.1);
+    font-weight: 600;
+}
+
+.cover-icon {
+    font-size: 56px;
+    margin: 20px 0;
+    filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.5));
+}
+
+.cover-title {
+    font-family: 'Cinzel', serif;
+    font-size: 44px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fff;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #ffffff 40%, #f59e0b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.cover-subtitle {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-style: italic;
+    color: var(--accent-gold);
+    margin-bottom: 24px;
+}
+
+.cover-tagline {
+    font-size: 15px;
+    max-width: 600px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 30px;
+}
+
+.cover-divider {
+    width: 140px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
+    margin: 20px auto;
+}
+
+.cover-meta {
+    margin-top: auto;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+}
+
+.cover-meta span {
+    color: var(--accent-gold);
+    font-weight: 600;
+}
+
+/* ==================== TYPOGRAPHY & HEADINGS ==================== */
+h1, h2, h3, h4 {
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+h2.chapter-title {
+    font-family: 'Cinzel', serif;
+    font-size: 25px;
+    color: #fff;
+    border-bottom: 2px solid var(--border-gold);
+    padding-bottom: 10px;
+    margin-top: 50px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+h3.section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18.5px;
+    color: var(--accent-gold);
+    margin-top: 28px;
+    margin-bottom: 14px;
+}
+
+h4.subsection-title {
+    font-size: 15px;
+    color: #f1f5f9;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+p {
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+}
+
+ul, ol {
+    margin-bottom: 16px;
+    padding-left: 24px;
+    color: var(--text-secondary);
+}
+
+li {
+    margin-bottom: 6px;
+}
+
+strong {
+    color: #fff;
+}
+
+em {
+    color: #e2e8f0;
+}
+
+/* ==================== CALLOUT BLOCKS ==================== */
+.callout {
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    border-left: 4px solid;
+    background: var(--bg-card);
+}
+
+.callout-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.callout-note {
+    border-left-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+}
+.callout-note .callout-title { color: #60a5fa; }
+
+.callout-tip {
+    border-left-color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+}
+.callout-tip .callout-title { color: #34d399; }
+
+.callout-warning {
+    border-left-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+}
+.callout-warning .callout-title { color: #fbbf24; }
+
+.callout-caution {
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+.callout-caution .callout-title { color: #f87171; }
+
+/* ==================== TABLES ==================== */
+.table-container {
+    overflow-x: auto;
+    margin: 24px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+}
+
+th {
+    background: #1a1526;
+    color: var(--accent-gold);
+    font-weight: 600;
+    padding: 12px 14px;
+    border-bottom: 2px solid var(--border-subtle);
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.5px;
+}
+
+td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+}
+
+tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+tr:hover td {
+    background: rgba(245, 158, 11, 0.04);
+}
+
+/* ==================== SCREENSHOT GALLERIES ==================== */
+.screenshot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin: 24px 0;
+}
+
+@media (max-width: 720px) {
+    .screenshot-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.screenshot-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+}
+
+.screenshot-card.full-width {
+    grid-column: 1 / -1;
+}
+
+.screenshot-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.screenshot-caption {
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: #14111f;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.screenshot-caption strong {
+    color: var(--accent-gold);
+}
+
+/* ==================== DIAGRAMS ==================== */
+.diagram-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 30px 0;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+}
+
+.diagram-title {
+    font-family: 'Cinzel', serif;
+    font-size: 16px;
+    color: var(--accent-gold);
+    text-align: center;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.lifecycle-flow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.flow-step {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px 10px;
+    text-align: center;
+    min-height: 130px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.flow-step.highlight {
+    border-color: var(--border-gold);
+    background: linear-gradient(180deg, #231b12 0%, #171322 100%);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+}
+
+.step-num {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-gold);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.step-icon {
+    font-size: 22px;
+    margin-bottom: 6px;
+}
+
+.step-name {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.step-desc {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+.flow-arrow {
+    color: var(--accent-gold);
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Ladder Grid */
+.ladder-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 650px;
+    margin: 0 auto;
+}
+
+.ladder-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 12px 18px;
+    display: grid;
+    grid-template-columns: 100px 180px 1fr;
+    align-items: center;
+    gap: 16px;
+}
+
+.ladder-card.championship {
+    border-color: var(--border-gold);
+    background: linear-gradient(90deg, #2d2215 0%, #1a1626 100%);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+}
+
+.ladder-badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    background: rgba(245, 158, 11, 0.12);
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.ladder-title {
+    font-weight: 700;
+    color: #fff;
+    font-size: 13.5px;
+}
+
+.ladder-quota {
+    font-size: 11px;
+    color: var(--accent-gold);
+    font-weight: 600;
+    grid-column: 2;
+    margin-top: -8px;
+}
+
+.ladder-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+}
+
+.ladder-arrow {
+    text-align: center;
+    color: var(--accent-gold);
+    font-size: 12px;
+    line-height: 1;
+}
+
+/* ==================== PRINT & PDF MEDIA ==================== */
+@media print {
+    body {
+        background-color: #0b090f !important;
+        color: #f8fafc !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    .document-wrapper {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+    
+    .cover-page {
+        min-height: 270mm !important;
+        page-break-after: always;
+        break-after: always;
+        margin-bottom: 0 !important;
+    }
+    
+    h2.chapter-title {
+        page-break-before: always;
+        break-before: always;
+        padding-top: 20px;
+    }
+    
+    .screenshot-card, .diagram-container, .table-container, .callout {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    
+    @page {
+        size: A4;
+        margin: 15mm 12mm 18mm 12mm;
+    }
+}
+
+
+/* Interactive TOC & Cross-References */
+.toc-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-gold-glow);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin: 35px 0 50px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.toc-title {
+    font-family: 'Cinzel', serif;
+    font-size: 20px;
+    color: var(--accent-gold);
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.toc-list {
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.toc-item-ch {
+    margin-top: 10px;
+    font-weight: 600;
+}
+
+.toc-item-ch a {
+    color: #fff;
+    text-decoration: none;
+    display: inline-block;
+    padding: 2px 0;
+    transition: color 0.15s ease;
+}
+
+.toc-item-ch a:hover {
+    color: var(--accent-gold);
+    text-decoration: underline;
+}
+
+.toc-sublist {
+    list-style: none !important;
+    padding-left: 20px !important;
+    margin-top: 4px;
+    margin-bottom: 6px !important;
+}
+
+.toc-item-sec {
+    font-size: 13px;
+    font-weight: 400;
+    margin-bottom: 3px;
+}
+
+.toc-item-sec a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.toc-item-sec a:hover {
+    color: var(--accent-gold);
+    text-decoration: underline;
+}
+
+/* Quick Start Box */
+.quickstart-box {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(20, 17, 30, 0.95) 100%);
+    border: 1px solid var(--border-gold);
+    border-radius: 10px;
+    padding: 22px 26px;
+    margin: 30px 0 40px;
+}
+
+.quickstart-title {
+    font-family: 'Cinzel', serif;
+    font-size: 17px;
+    color: var(--accent-gold);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Cross reference links */
+a.doc-link {
+    color: var(--accent-gold);
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+a.doc-link:hover {
+    color: #fff;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Print styling adjustments */
+@media print {
+    .toc-container {
+        page-break-after: always;
+    }
+    a {
+        color: inherit !important;
+        text-decoration: none !important;
+    }
+}
+
+    </style>
+</head>
+<body>
+
+<div class="document-wrapper">
+    <!-- COVER PAGE -->
+    <header class="cover-page" role="banner">
+        <div>
+            <div class="cover-badge">Participant's Edition • Season 2026</div>
+            <div class="cover-icon" aria-hidden="true">🏆 ♫ 👑</div>
+            <h1 class="cover-title">AFM#2</h1>
+            <div class="cover-subtitle">Annual Musical Finale 2026</div>
+            <div class="cover-divider"></div>
+            <div class="cover-tagline">
+                The Complete Step-by-Step Participant's Guide & Companion to Listening, Adjudication, and Tournament Mastery.
+            </div>
+        </div>
+
+        <div style="max-width: 640px; margin: 30px auto; padding: 22px 28px; background: rgba(0,0,0,0.5); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px;">
+            <p style="font-size: 13.5px; color: #e2e8f0; margin: 0; line-height: 1.65;">
+                <em>"Music in its highest expression is not casual background sound; it is an enduring artistic testament. AFM#2 invites you into a quiet, distraction-free sanctuary to celebrate songwriting, discover masterpieces, and crown the definitive sounds of our year."</em>
+            </p>
+        </div>
+
+        <div class="cover-meta">
+            Prepared exclusively for <span>Invited Adjudicators & Participants</span><br>
+            Official Release • 2026 Tournament Edition • Midnight Muse Architecture
+        </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <main class="guide-content" role="main">
+<p># AFM#2 — ANNUAL MUSICAL FINALE 2026</p>
+<h2 class="section-title" style="font-size: 22px; color: #fff;">THE PARTICIPANT'S GUIDE & COMPANION</h2>
+<h3 class="section-title">A Step-by-Step Practical Handbook for Listening, Adjudication, and Tournament Mastery</h3>
+<p><em>Official Participant Edition • Season 2026 • Midnight Muse Architecture</em></p>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<h2 class="section-title" style="font-size: 22px; color: #fff;">WELCOME TO THE ANNUAL MUSICAL FINALE</h2>
+<p>Welcome to <strong>AFM#2 (Annual Musical Finale 2026)</strong>. You have been selected and invited to participate as an official adjudicator in a dedicated musical sanctuary designed to celebrate, evaluate, and crown the definitive songs of our year.</p>
+<p>In an era of disposable algorithmic streams and thirty-second viral snippets, AFM#2 returns music to a place of reverence, deep attention, and deliberate critical admiration. Within this sanctuary, your collection is not merely background sound; it is an active tournament field. Every track possesses an artistic identity, every listen is an opportunity for discovery, and every score contributes to an enduring, immutable historical record of songwriting excellence.</p>
+<p>This handbook is your comprehensive, step-by-step instructional companion. Whether you consider yourself an audiophile, a seasoned playlist curator, or simply someone who loves great songwriting and vocal artistry, this guide will allow you to independently set up your account, manage your music library, audition contenders across five timeless criteria, and steer the competition through seven elimination stages to crown the 2026 Champion.</p>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<div class="quickstart-box"><div class="quickstart-title"><span>⚡</span> Quick Start: Participating in Five Minutes</div>
+<p style="margin-bottom: 12px; color: var(--text-secondary);">If you are eager to begin listening immediately, follow this five-minute orientation:</p>
+<p style="margin-bottom: 8px;"><strong>1. </strong> <strong>Accept Your Invitation:</strong> Click the unique invitation link provided by the competition organizer, choose your username and password, and complete your registration.</p>
+<p style="margin-bottom: 8px;"><strong>2. </strong> <strong>Explore Your Journal:</strong> You will land on your <strong>Journal</strong> dashboard. Review the <em>Listening Inspiration</em> banner and inspect the featured track on the animated <em>On the Turntable</em> showcase.</p>
+<p style="margin-bottom: 8px;"><strong>3. </strong> <strong>Listen to a Contender:</strong> Navigate to <strong>Shortlist</strong> in the top navigation bar. Click <strong>Play in AFM#2</strong> on any contender to initiate playback in the embedded player, and click <strong>Lyrics</strong> to follow along with synchronized poetry.</p>
+<p style="margin-bottom: 8px;"><strong>4. </strong> <strong>Score the Five Criteria:</strong> Click <strong>Scorecard</strong> on the contender card. Evaluate the song across <strong>Melody (♫)</strong>, <strong>Lyrics (📝)</strong>, <strong>Vocals (🎤)</strong>, <strong>Emotion (❤️)</strong>, and <strong>Replayability (🔁)</strong> using the tactile steppers or numeric inputs (0–10 each).</p>
+<p style="margin-bottom: 8px;"><strong>5. </strong> <strong>Finalize Your Evaluation:</strong> When all five criteria are filled, review your reflections and click the <strong>Finalize Scorecard (🔒)</strong> button. Your scorecard is locked, and your scores are submitted to the official tournament leaderboard!</p>
+</div>
+<div class="toc-container" id="toc"><div class="toc-title"><span>📋</span> Interactive Table of Contents</div><ul class="toc-list">
+<li class="toc-item-ch"><a href="#ch1">Chapter 1: Welcome to AFM#2</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec1-1">1.1 The Vision & Musical Philosophy</a></li>
+<li class="toc-item-sec"><a href="#sec1-2">1.2 What Makes AFM#2 Unique</a></li>
+<li class="toc-item-sec"><a href="#sec1-3">1.3 The Competition Lifecycle at a Glance</a></li>
+<li class="toc-item-sec"><a href="#sec1-4">1.4 Navigation Architecture & Control Bar</a></li>
+<li class="toc-item-ch"><a href="#ch2">Chapter 2: Accepting an Invitation & Creating Your Account</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec2-1">2.1 Understanding Invitation Links</a></li>
+<li class="toc-item-sec"><a href="#sec2-2">2.2 Step-by-Step Registration Procedure</a></li>
+<li class="toc-item-sec"><a href="#sec2-3">2.3 Signing In & Session Persistence</a></li>
+<li class="toc-item-sec"><a href="#sec2-4">2.4 Desktop vs. Mobile Interface Layouts</a></li>
+<li class="toc-item-sec"><a href="#sec2-5">2.5 The Eight Curated Visual Themes</a></li>
+<li class="toc-item-ch"><a href="#ch3">Chapter 3: Preparing & Importing Your Music Library</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec3-1">3.1 The Importance of a Curated Collection</a></li>
+<li class="toc-item-sec"><a href="#sec3-2">3.2 Part A: Exporting Music using TuneMyMusic</a></li>
+<li class="toc-item-sec"><a href="#sec3-3">3.3 Part B: Importing CSV Files into AFM#2</a></li>
+<li class="toc-item-sec"><a href="#sec3-4">3.4 Part C: Fresh Catalogue Setup: Removing Sample Records</a></li>
+<li class="toc-item-ch"><a href="#ch4">Chapter 4: Managing Songs & Matching Recordings</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec4-1">4.1 Library Navigation, Searching & Quick-Filters</a></li>
+<li class="toc-item-sec"><a href="#sec4-2">4.2 Adding Individual Songs to Your Catalogue</a></li>
+<li class="toc-item-sec"><a href="#sec4-3">4.3 Editing Metadata & Single-Record Management</a></li>
+<li class="toc-item-sec"><a href="#sec4-4">4.4 High-Definition Playback & Synced Lyrics</a></li>
+<li class="toc-item-sec"><a href="#sec4-5">4.5 YouTube Recording Discovery & Matching</a></li>
+<li class="toc-item-ch"><a href="#ch5">Chapter 5: Discovering & Shortlisting Contenders</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec5-1">5.1 The Purpose of Discovery Curation</a></li>
+<li class="toc-item-sec"><a href="#sec5-2">5.2 Navigating the Shortlist Stream</a></li>
+<li class="toc-item-sec"><a href="#sec5-3">5.3 Shortlisting vs. Passing Tracks</a></li>
+<li class="toc-item-sec"><a href="#sec5-4">5.4 Understanding Review Statuses</a></li>
+<li class="toc-item-ch"><a href="#ch6">Chapter 6: Conducting Formal Auditions</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec6-1">6.1 The Audition Arena & Scorecard Structure</a></li>
+<li class="toc-item-sec"><a href="#sec6-2">6.2 The Five Core Evaluation Criteria</a></li>
+<li class="toc-item-sec"><a href="#sec6-3">6.3 Three Tactile Scoring Modalities</a></li>
+<li class="toc-item-sec"><a href="#sec6-4">6.4 Personal Reflections & Listening Notes</a></li>
+<li class="toc-item-sec"><a href="#sec6-5">6.5 Incomplete vs. Complete Scorecards</a></li>
+<li class="toc-item-sec"><a href="#sec6-6">6.6 Scorecard Finalization & The Permanent Lock Safeguard</a></li>
+<li class="toc-item-ch"><a href="#ch7">Chapter 7: Managing Tournament Progression</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec7-1">7.1 The Seven Tournament Stages Ladder</a></li>
+<li class="toc-item-sec"><a href="#sec7-2">7.2 Scoring, Finalizing, and Advancing: Crucial Distinctions</a></li>
+<li class="toc-item-sec"><a href="#sec7-3">7.3 Understanding Qualification Cutoffs & Target Quotas</a></li>
+<li class="toc-item-sec"><a href="#sec7-4">7.4 The Qualification Wizard: Step-by-Step</a></li>
+<li class="toc-item-sec"><a href="#sec7-5">7.5 Precision Tie-Breaking Hierarchy</a></li>
+<li class="toc-item-sec"><a href="#sec7-6">7.6 The Grand Finale & Crowning the Champion</a></li>
+<li class="toc-item-ch"><a href="#ch8">Chapter 8: Exploring Results & The Permanent Archive</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec8-1">8.1 The 2026 Championship Podium</a></li>
+<li class="toc-item-sec"><a href="#sec8-2">8.2 Stage-by-Stage Historical Audit Trails</a></li>
+<li class="toc-item-sec"><a href="#sec8-3">8.3 Reviewing Full Multi-Criteria Score Breakdowns</a></li>
+<li class="toc-item-sec"><a href="#sec8-4">8.4 Exporting the Official Tournament Ledger (CSV)</a></li>
+<li class="toc-item-ch"><a href="#ch9">Chapter 9: Personalizing Your Experience</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec9-1">9.1 Visual Themes & Atmospheric Depth Controls</a></li>
+<li class="toc-item-sec"><a href="#sec9-2">9.2 Account Profile & Credential Management</a></li>
+<li class="toc-item-sec"><a href="#sec9-3">9.3 Passwordless Biometric Passkeys (WebAuthn)</a></li>
+<li class="toc-item-sec"><a href="#sec9-4">9.4 Multi-Device Synchronization</a></li>
+<li class="toc-item-ch"><a href="#ch10">Chapter 10: Troubleshooting & Frequently Asked Questions</a><ul class="toc-sublist">
+<li class="toc-item-sec"><a href="#sec10-1">10.1 Practical Troubleshooting Guide</a></li>
+<li class="toc-item-sec"><a href="#sec10-2">10.2 Frequently Asked Questions (FAQ)</a></li>
+<li class="toc-item-sec"><a href="#sec10-3">10.3 Adjudication Fair Play & Integrity Standards</a></li>
+</ul></li></ul></div>
+<a id="ch1"></a>
+<h2 class="section-title" style="font-size: 22px; color: #fff;">CHAPTER 1: WELCOME TO AFM#2</h2>
+<a id="sec1-1"></a>
+<h3 class="section-title">1.1 The Vision & Musical Philosophy</h3>
+<p>At its heart, the Annual Musical Finale is a celebration of songwriting, melodic invention, vocal performance, and emotional impact. Throughout any given year, we encounter hundreds of songs across streaming services, vinyl records, radio broadcasts, and trusted friend recommendations. Most modern platforms treat music as disposable background noise—ephemeral streams packaged to optimize engagement algorithms.</p>
+<p>AFM#2 operates on a fundamentally different philosophy:</p>
+<ul>
+<li><strong>Active Listening:</strong> Taking dedicated time to sit with a composition, appreciate the bassline, follow the lyrical poetry, absorb vocal nuance, and recognize emotional truth.</li>
+<li><strong>Objective Adjudication:</strong> Evaluating tracks across five distinct, structured musical dimensions rather than relying on an ambiguous five-star scale or a fleeting thumbs-up.</li>
+<li><strong>Enduring Legacy:</strong> Creating an immutable, season-long tournament ledger that captures the greatest musical achievements of the year with historical permanence.</li>
+</ul>
+<a id="sec1-2"></a>
+<h3 class="section-title">1.2 What Makes AFM#2 Unique</h3>
+<ul>
+<li><strong>Zero Commercial Clutter:</strong> No algorithmic recommendations designed to sell subscriptions, no commercial banners, and no sponsored audio clips. The environment is pure, serene, and entirely focused on your collection.</li>
+<li><strong>Atmospheric Elegance:</strong> Built upon the signature <em>Midnight Muse</em> design system, AFM#2 offers eight custom aesthetic themes with real-time blur and depth controls that adapt smoothly to bright daytime curation or midnight listening sessions.</li>
+<li><strong>Tactile Adjudication Instruments:</strong> Custom numeric steppers, dual precision sliders, collapsible lyric sheets, and responsive touch controls ensure that scoring music feels satisfying and intuitive on every device.</li>
+<li><strong>Anti-Bias Integrity Safeguards:</strong> Once you complete and finalize an audition scorecard, it is permanently locked with cryptographic certainty. This safeguard eliminates hindsight bias, ensuring your tournament reflects your genuine, immediate evaluation.</li>
+</ul>
+<a id="sec1-3"></a>
+<h3 class="section-title">1.3 The Competition Lifecycle at a Glance</h3>
+
+<div class="diagram-container" role="figure" aria-label="Competition Lifecycle Flowchart">
+    <div class="diagram-title">Competition Lifecycle Flowchart</div>
+    <div class="lifecycle-flow">
+        <div class="flow-step">
+            <div class="step-num">01</div>
+            <div class="step-icon">📚</div>
+            <div class="step-name">Music Library</div>
+            <div class="step-desc">Catalogue repository of curated music and metadata</div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">➔</div>
+        <div class="flow-step">
+            <div class="step-num">02</div>
+            <div class="step-icon">🔍</div>
+            <div class="step-name">Discovery Shortlist</div>
+            <div class="step-desc">Pre-screening tracks to curate eligible contenders</div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">➔</div>
+        <div class="flow-step">
+            <div class="step-num">03</div>
+            <div class="step-icon">⚖️</div>
+            <div class="step-name">Formal Auditions</div>
+            <div class="step-desc">5 criteria scoring (/50) with permanent lock protection</div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">➔</div>
+        <div class="flow-step">
+            <div class="step-num">04</div>
+            <div class="step-icon">🏆</div>
+            <div class="step-name">Tournament Stages</div>
+            <div class="step-desc">7 rounds of quota cutoffs & tie-breaking wizards</div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">➔</div>
+        <div class="flow-step highlight">
+            <div class="step-num">05</div>
+            <div class="step-icon">👑</div>
+            <div class="step-name">Championship Podium</div>
+            <div class="step-desc">Gold, Silver, Bronze honours in the permanent Archive</div>
+        </div>
+    </div>
+</div>
+
+<p>The Annual Musical Finale tournament progresses along a clear, structured pipeline through five major phases:</p>
+<ol>
+<li><strong>Music Library:</strong> Your central master catalogue of candidate songs, imported from playlists or entered manually.</li>
+<li><strong>Discovery Shortlist:</strong> A preliminary screening stream where you pre-listen to tracks and curate contenders deemed worthy of formal competition.</li>
+<li><strong>Formal Auditions:</strong> Rigorous multi-dimensional evaluation where shortlisted tracks are scored across five criteria (0–10 each), yielding an aggregate total out of 50.</li>
+<li><strong>Tournament Elimination Rounds:</strong> Progressive elimination brackets through seven cutoff rounds (Top 200 down to the Grand Finale).</li>
+<li><strong>Championship Podium:</strong> The crowning of the 2026 Gold 🥇, Silver 🥈, and Bronze 🥉 masterworks in the permanent Hall of Fame.</li>
+</ol>
+<a id="sec1-4"></a>
+<h3 class="section-title">1.4 Navigation Architecture & Control Bar</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/journal_desktop.png" alt="Journal Dashboard Navigation & TurnTable Showcase" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Journal Dashboard Navigation & TurnTable Showcase</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/journal_mobile.png" alt="Mobile Journal Header & Compact Bottom Navigation Bar" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Journal Header & Compact Bottom Navigation Bar</div>
+    </div>
+</div>
+
+<p>The AFM#2 navigation bar provides immediate access to every core room in the sanctuary:</p>
+<ul>
+<li><strong>Journal:</strong> Your central command dashboard featuring the <em>Listening Inspiration</em> banner, real-time season ledger metrics, and the featured <em>On the Turntable</em> showcase.</li>
+<li><strong>Library:</strong> Your master song catalogue with multi-column sorting, text search, quick-filter pills, single-song add/edit tools, and CSV bulk import.</li>
+<li><strong>Recordings:</strong> Dedicated YouTube audio matching console where imported catalogue tracks are scanned, previewed, and matched to high-definition video sources.</li>
+<li><strong>Shortlist:</strong> The discovery curation stream where you listen to candidates and decide which songs advance to formal auditions or get passed.</li>
+<li><strong>Auditions:</strong> The adjudication hall where shortlisted contenders are scored across the five criteria and permanently locked.</li>
+<li><strong>Tournament:</strong> The live competition arena tracking stage cutoffs, active qualifier brackets, and the guided stage advancement wizard.</li>
+<li><strong>Archive:</strong> The permanent Hall of Fame housing historical stage results, full criteria breakdowns, and CSV export capabilities.</li>
+<li><strong>Appearance (🎨):</strong> Rapid theme switcher allowing you to select from eight visual palettes and customize atmospheric blur depth.</li>
+<li><strong>Account (User Pill):</strong> Profile settings, password management, and biometric WebAuthn passkey registration.</li>
+<li><strong>Sign Out:</strong> Securely terminates your current authenticated session.</li>
+</ul>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch2"></a>
+<h2 class="chapter-title">CHAPTER 2: ACCEPTING AN INVITATION & CREATING YOUR ACCOUNT</h2>
+<a id="sec2-1"></a>
+<h3 class="section-title">2.1 Understanding Invitation Links</h3>
+<p>Participation in AFM#2 is by invitation only. Participation in AFM#2 is by invitation only.</p>
+<p>Your invitation link is provided directly by the AFM#2 organizer. Open the unique link you receive to register for the competition. After registration, visit the official AFM#2 website at <a href="https://afm2.infinityfreeapp.com/">https://afm2.infinityfreeapp.com/</a> to sign in.</p>
+
+<div class="callout callout-note" role="alert">
+    <div class="callout-title"><span>ℹ️</span> Single-Use Tokens:</div>
+    <div class="callout-body">Each invitation link can only be used once to create an account. Once your account is registered, the invitation link expires, and you will sign in using your chosen username and password.</div>
+</div>
+
+<a id="sec2-2"></a>
+<h3 class="section-title">2.2 Step-by-Step Registration Procedure</h3>
+<ul>
+<li><strong>Purpose:</strong> Create your official participant account and establish your competition profile.</li>
+<li><strong>Before you begin:</strong> Ensure you have your unique invitation link and an active internet connection.</li>
+</ul>
+<h4 class="subsection-title">Procedure:</h4>
+<ol>
+<li>Open your unique invitation link in Google Chrome, Safari, Firefox, or Microsoft Edge on your computer, tablet, or phone.</li>
+<li>The registration screen welcomes you: <em>"Welcome to AFM#2! You have been invited to participate in the Annual Musical Finale 2026."</em></li>
+<li>Enter your desired <strong>Username</strong> (minimum 3 characters, alphanumeric). This name identifies your scores and reflections across the tournament.</li>
+<li>Enter your <strong>Email Address</strong>. This is used for session recovery and important tournament notifications.</li>
+<li>Enter a <strong>Strong Password</strong> (minimum 8 characters; a combination of letters, numbers, and symbols is strongly recommended).</li>
+<li>Confirm your password in the <strong>Confirm Password</strong> field.</li>
+<li>Click the primary button: <strong>Complete Registration & Enter AFM#2</strong>.</li>
+</ol>
+<ul>
+<li><strong>Expected Result:</strong> Your account is created instantly, you are automatically signed in, and you are welcomed into your personal <strong>Journal</strong> dashboard.</li>
+</ul>
+<a id="sec2-3"></a>
+<h3 class="section-title">2.3 Signing In & Session Persistence</h3>
+<ul>
+<li><strong>Purpose:</strong> Access your AFM#2 sanctuary on return visits across any device.</li>
+<li><strong>Before you begin:</strong> Confirm that your account has been registered.</li>
+</ul>
+<h4 class="subsection-title">Procedure:</h4>
+<ol>
+<li>Navigate to the AFM#2 home page.</li>
+<li>In the top navigation bar, click <strong>Sign In</strong>.</li>
+<li>Enter your registered <strong>Username</strong> or <strong>Email Address</strong>.</li>
+<li>Enter your <strong>Password</strong>.</li>
+<li><em>Optional:</em> If you are on a personal, trusted device, check the box: <strong>Remember this device for 30 days</strong>. This saves an encrypted authentication cookie so you remain signed in between sessions.</li>
+<li>Click <strong>Sign In to AFM#2</strong>.</li>
+</ol>
+<ul>
+<li><strong>Expected Result:</strong> You are authenticated and redirected to your active tournament page.</li>
+</ul>
+<a id="sec2-4"></a>
+<h3 class="section-title">2.4 Desktop vs. Mobile Interface Layouts</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Reference">
+    <div class="screenshot-card full-width">
+        <img src="screenshots/appearance_modal.png" alt="Appearance & Theme Customization Modal with 8 Curated Palettes" loading="lazy">
+        <div class="screenshot-caption"><strong>Interface Reference:</strong> Appearance & Theme Customization Modal with 8 Curated Palettes</div>
+    </div>
+</div>
+
+<p>AFM#2 adapts seamlessly across all viewport dimensions:</p>
+<ul>
+<li><strong>Desktop & Widescreen (1024px+):</strong> Presents comprehensive data tables, expansive multi-criteria scorecards, side-by-side lyrics preview drawers, and persistent header status instruments.</li>
+<li><strong>Tablet & Compact (768px–1023px):</strong> Streamlines tabular columns, stacks secondary metrics, and optimizes tactile touch targets for stylus or finger input.</li>
+<li><strong>Mobile Smartphone (320px–767px):</strong> Completely reimagines the interface into comfortable swipeable cards, single-row compact action toolbars, tactile numeric steppers, and a persistent bottom quick-navigation bar.</li>
+</ul>
+<a id="sec2-5"></a>
+<h3 class="section-title">2.5 The Eight Curated Visual Themes</h3>
+<p>AFM#2 features eight handcrafted color palettes designed for maximum legibility and mood resonance:</p>
+<div class="table-container"><table><thead><tr>
+<th scope="col">Theme Name</th>
+<th scope="col">Primary Mood & Aesthetic</th>
+<th scope="col">Background & Surface</th>
+<th scope="col">Accent Color</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Midnight Muse</strong> (Default)</td>
+<td>Deep atmospheric dark velvet</td>
+<td><code>#0b090f</code> / <code>#161320</code></td>
+<td>Radiant Amber (<code>#f59e0b</code>)</td>
+</tr>
+<tr>
+<td><strong>Velvet Night</strong></td>
+<td>Ultra-dark minimalist indigo</td>
+<td><code>#07060a</code> / <code>#110e17</code></td>
+<td>Soft Lavender (<code>#a78bfa</code>)</td>
+</tr>
+<tr>
+<td><strong>Solar Flare</strong></td>
+<td>Warm golden embers and hearth</td>
+<td><code>#0f0b08</code> / <code>#1c1510</code></td>
+<td>Electric Gold (<code>#fbbf24</code>)</td>
+</tr>
+<tr>
+<td><strong>Emerald Grove</strong></td>
+<td>Calm verdant botanical depths</td>
+<td><code>#060d09</code> / <code>#0e1a13</code></td>
+<td>Vivid Mint (<code>#10b981</code>)</td>
+</tr>
+<tr>
+<td><strong>Royal Violet</strong></td>
+<td>Luxurious majestic purple tone</td>
+<td><code>#0c0614</code> / <code>#170c24</code></td>
+<td>Neon Orchid (<code>#c084fc</code>)</td>
+</tr>
+<tr>
+<td><strong>Cyberpunk Amber</strong></td>
+<td>High-contrast technical neon</td>
+<td><code>#050505</code> / <code>#121212</code></td>
+<td>Laser Amber (<code>#f59e0b</code>)</td>
+</tr>
+<tr>
+<td><strong>Monolith Slate</strong></td>
+<td>Clean architectural graphite</td>
+<td><code>#0d1117</code> / <code>#161b22</code></td>
+<td>Crisp Ice Blue (<code>#38bdf8</code>)</td>
+</tr>
+<tr>
+<td><strong>Pure Moonlight</strong></td>
+<td>High-key clean paper aesthetic</td>
+<td><code>#f8fafc</code> / <code>#ffffff</code></td>
+<td>Deep Sapphire (<code>#1e40af</code>)</td>
+</tr>
+</tbody></table></div>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch3"></a>
+<h2 class="chapter-title">CHAPTER 3: PREPARING & IMPORTING YOUR MUSIC LIBRARY</h2>
+<a id="sec3-1"></a>
+<h3 class="section-title">3.1 The Importance of a Curated Collection</h3>
+<p>A championship tournament is only as compelling as the caliber of its contenders. Rather than forcing you to type every song manually, AFM#2 provides an automated, industrial-strength CSV bulk ingestion pipeline capable of loading your favorite streaming playlists into your personal catalogue in seconds.</p>
+<a id="sec3-2"></a>
+<h3 class="section-title">3.2 Part A: Exporting Music using TuneMyMusic</h3>
+<ul>
+<li><strong>Purpose:</strong> Extract your playlists or Liked Songs from YouTube Music into an open, universal CSV file for import into AFM#2.</li>
+<li><strong>Before you begin:</strong> Ensure you have access to your streaming music account and open a modern web browser.</li>
+</ul>
+<h4 class="subsection-title">Step-by-Step Export Procedure:</h4>
+<ol>
+<li>In your browser, navigate to the official TuneMyMusic service: <code>https://www.tunemymusic.com</code>.</li>
+<li>On the welcome banner, click the prominent button: <strong>Let's Start</strong>.</li>
+<li><strong>Select Source:</strong> From the grid of streaming services, click <strong>YouTube Music</strong>.</li>
+<li><strong>Authorize Account:</strong> A secure Google sign-in window will open. Authorize TuneMyMusic with read-only access to inspect your library and playlists.</li>
+<li><strong>Select Your Content:</strong></li>
+</ol>
+<ul>
+<li>Choose <strong>Load from your YouTube Music account</strong>.</li>
+<li>Check the boxes next to your desired competition playlists (e.g., <em>"Best of 2026"</em>, <em>"Favorites"</em>, or <em>"Liked Songs"</em>).</li>
+<li>Click <strong>Choose Destination</strong>.</li>
+</ul>
+<ol>
+<li><strong>Select Destination Format:</strong></li>
+</ol>
+<ul>
+<li>From the destination options, scroll down and select <strong>Export to File</strong>.</li>
+<li>Choose <strong>CSV</strong> as the target file format.</li>
+</ul>
+<ol>
+<li><strong>Initiate Export:</strong> Click <strong>Start Transfer</strong>. TuneMyMusic will fetch the metadata for all selected tracks.</li>
+<li><strong>Download CSV:</strong> When the transfer indicator reaches 100%, click <strong>Download CSV File</strong>.</li>
+<li><strong>Locate Download:</strong> Open your computer's <code>Downloads</code> folder and confirm that your file (e.g., <code>My YouTube Library.csv</code>) is present.</li>
+</ol>
+
+<div class="callout callout-tip" role="alert">
+    <div class="callout-title"><span>💡</span> Retain Your Master Export:</div>
+    <div class="callout-body">Keep a copy of your downloaded CSV file in a safe folder on your computer. It serves as an independent, permanent backup of your streaming playlists.</div>
+</div>
+
+<a id="sec3-3"></a>
+<h3 class="section-title">3.3 Part B: Importing CSV Files into AFM#2</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/import_desktop.png" alt="CSV Bulk Import Pipeline (Upload, Column Mapping & Duplicate Review)" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> CSV Bulk Import Pipeline (Upload, Column Mapping & Duplicate Review)</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/import_mobile.png" alt="Mobile Import Progress Pipeline & File Selector" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Import Progress Pipeline & File Selector</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Purpose:</strong> Ingest your exported playlist into AFM#2 with automatic header detection, UTF-8 encoding support, and duplicate screening.</li>
+<li><strong>Before you begin:</strong> Confirm you have downloaded your playlist CSV file and are signed in to AFM#2.</li>
+</ul>
+<h4 class="subsection-title">Step-by-Step AFM#2 Import Procedure:</h4>
+<ol>
+<li>In the top navigation bar, click <strong>Library</strong>.</li>
+<li>Near the top-right header, click the button: <strong>📁 Import Songs</strong>.</li>
+<li><strong>Stage 1: Upload CSV:</strong></li>
+</ol>
+<ul>
+<li>Drag and drop your downloaded CSV file into the dotted upload box, or click the box to browse and select your file.</li>
+<li>AFM#2 automatically handles standard formats, UTF-8 BOM characters, non-English scripts (Japanese, Korean, Hindi, Cyrillic, Spanish), and quoted text commas.</li>
+<li>Click <strong>Upload & Analyze CSV →</strong>.</li>
+</ul>
+<ol>
+<li><strong>Stage 2: Preview & Column Mapping:</strong></li>
+</ol>
+<ul>
+<li>The analysis dashboard immediately displays six metric cards: <em>Total Rows</em>, <em>Valid New Songs</em>, <em>Similar / Versions</em>, <em>Already in Catalogue</em>, <em>Duplicate in File</em>, and <em>Invalid Rows</em>.</li>
+<li>Inspect the <strong>Detected Column Mapping</strong> card:</li>
+<li><strong>Song Title Column:</strong> Verify that the auto-detected column matches your song names (e.g., <code>Track name</code>, <code>Title</code>, <code>Song</code>).</li>
+<li><strong>Artist Column:</strong> Verify that the auto-detected column matches your artist names (e.g., <code>Artist name</code>, <code>Artist</code>). If your CSV has no artist column, AFM#2 safely designates tracks as <em>Unknown Artist</em>.</li>
+<li>If you need to change mappings, adjust the dropdowns and click <strong>Re-Analyze Mapping</strong>.</li>
+</ul>
+<ol>
+<li><strong>Review Rows by Filter Tabs:</strong></li>
+</ol>
+<ul>
+<li>Click through the row review tabs: <em>All Rows</em>, <em>New Songs</em>, <em>Similar Versions</em>, and <em>File Duplicates</em>.</li>
+<li>By default, all valid new songs and unique versions are selected with green checkboxes. Uncheck any tracks you do not wish to import.</li>
+</ul>
+<ol>
+<li><strong>Select Initial Status:</strong></li>
+</ol>
+<ul>
+<li>Use the <strong>Initial Status</strong> dropdown to assign an opening state:</li>
+<li><code>Unreviewed</code> (Recommended): Songs enter your Library awaiting your discovery review.</li>
+<li><code>Shortlisted</code>: Songs are immediately fast-tracked into the active Formal Auditions roster.</li>
+</ul>
+<ol>
+<li><strong>Execute Ingestion:</strong> Click <strong>Confirm & Ingest Selected Songs</strong>.</li>
+<li><strong>Stage 3: Import Results:</strong></li>
+</ol>
+<ul>
+<li>Review the final completion report detailing total songs added and duplicates skipped.</li>
+<li>Click <strong>Catalogue Library</strong> to return to your library and view your freshly ingested songs!</li>
+</ul>
+<a id="sec3-4"></a>
+<h3 class="section-title">3.4 Fresh Catalogue Setup: Removing Sample Records</h3>
+<ul>
+<li><strong>Purpose:</strong> Clear out pre-populated sample songs from your account so you can start with a completely pristine, personalized music collection.</li>
+<li><strong>Before you begin:</strong> Check your total library track count.</li>
+</ul>
+
+<div class="callout callout-caution" role="alert">
+    <div class="callout-title"><span>🛡️</span> Bulk Deletion is Permanent:</div>
+    <div class="callout-body">Deleting songs removes their records from your catalogue. However, AFM#2 includes strict tournament integrity safeguards: <strong>any track with a finalized scorecard or official tournament history is strictly protected and cannot be deleted.</strong></div>
+</div>
+
+<h4 class="subsection-title">Safe Bulk Deletion Procedure:</h4>
+<ol>
+<li>In the top navigation bar, click <strong>Library</strong>.</li>
+<li>At the top of the table, locate the <strong>Per Page</strong> dropdown selector and change it to <strong>100 per page (Max)</strong>.</li>
+<li>In the table header row, check the <strong>Master Select All</strong> checkbox. This selects all 100 eligible tracks visible on the current page.</li>
+<li>The floating <strong>Bulk Actions Bar</strong> appears at the bottom of your screen displaying: <code>[100] selected</code>.</li>
+<li>Click the red button: <strong>🗑️ Delete</strong>.</li>
+<li>The <strong>Delete Songs Confirmation Modal</strong> opens:</li>
+</ol>
+<ul>
+<li>Review the summary stats: <em>Selected</em>, <em>Eligible</em>, and <em>Ineligible</em>.</li>
+<li>If any selected tracks are currently protected by finalized scorecards or tournament rounds, AFM#2 isolates them in the <strong>⚠️ Ineligible Tracks</strong> list and prevents their deletion.</li>
+<li>Eligible tracks are listed in the <strong>✓ Eligible Tracks</strong> preview.</li>
+</ul>
+<ol>
+<li>Click <strong>Confirm Deletion</strong>. The 100 eligible songs are purged immediately.</li>
+<li><strong>Repeat for Remaining Batches:</strong></li>
+</ol>
+<ul>
+<li>Repeat steps 3 through 7 for the remaining pages until all desired sample tracks are removed.</li>
+<li><em>Understanding Batch Calculations:</em> The number of batches depends on your starting catalogue count. For example, a sample collection of 2,417 eligible tracks requires <strong>25 batches</strong> (24 batches of 100 tracks, plus 1 final batch of 17 tracks).</li>
+</ul>
+<ol>
+<li>Verify your resulting catalogue count in the Library header.</li>
+<li>Proceed to <a href="#sec3-3" class="doc-link">Section 3.3</a> to import your personal music collection.</li>
+</ol>
+
+<div class="callout callout-note" role="alert">
+    <div class="callout-title"><span>ℹ️</span> Organizer Assistance:</div>
+    <div class="callout-body">If your account contains locked sample records from past demonstration tournaments that cannot be deleted through user controls, notify your tournament organizer to reset your account workspace rather than attempting any manual workarounds.</div>
+</div>
+
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch4"></a>
+<h2 class="chapter-title">CHAPTER 4: MANAGING SONGS & MATCHING RECORDINGS</h2>
+<a id="sec4-1"></a>
+<h3 class="section-title">4.1 Library Navigation, Searching & Quick-Filters</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/library_desktop.png" alt="Library Table with Quick Filters, Search & Single-Row Actions" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Library Table with Quick Filters, Search & Single-Row Actions</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/library_mobile.png" alt="Mobile Song Cards with Album Art & Single-Row Controls" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Song Cards with Album Art & Single-Row Controls</div>
+    </div>
+</div>
+
+<p>The <strong>Library</strong> serves as your comprehensive musical inventory:</p>
+<ul>
+<li><strong>Instant Search Bar:</strong> Type any song title or artist name. Search filters in real time across your entire collection.</li>
+<li><strong>Quick-Filter Pills:</strong> Rapidly isolate songs by review status:</li>
+<li><code>All</code>: Full catalogue view.</li>
+<li><code>Shortlisted</code>: Contenders that have earned an audition ticket.</li>
+<li><code>Passed</code>: Tracks evaluated and passed during discovery.</li>
+<li><code>Unreviewed</code>: New arrivals awaiting screening.</li>
+<li><strong>Column Sorting:</strong> Click any column header (<strong># ID</strong>, <strong>Song Title</strong>, <strong>Artist</strong>, <strong>Audition Score</strong>) to toggle ascending or descending sorting.</li>
+</ul>
+<a id="sec4-2"></a>
+<h3 class="section-title">4.2 Adding Individual Songs to Your Catalogue</h3>
+<ul>
+<li><strong>Purpose:</strong> Manually introduce a single new song into your collection.</li>
+<li><strong>Before you begin:</strong> Have the song title and artist name or a YouTube link ready.</li>
+</ul>
+<h4 class="subsection-title">Procedure:</h4>
+<ol>
+<li>On the Library page, click <strong>＋ Add Song</strong>.</li>
+<li><strong>Method A — YouTube Auto-Fill (Recommended):</strong></li>
+</ol>
+<ul>
+<li>Paste any YouTube or YouTube Music link (or 11-character video ID) into the input field.</li>
+<li>Click <strong>⚡ Fetch Video Info</strong>.</li>
+<li>AFM#2 automatically queries the official video title, artist, and album thumbnail.</li>
+<li>Click <strong>Add Track to Catalogue</strong>.</li>
+</ul>
+<ol>
+<li><strong>Method B — Manual Entry:</strong></li>
+</ol>
+<ul>
+<li>Switch to the <strong>Manual Entry</strong> tab.</li>
+<li>Type the <strong>Song Title</strong> (Required) and <strong>Artist Name</strong> (Optional).</li>
+<li>Click <strong>Add Track to Catalogue</strong>.</li>
+</ul>
+<ul>
+<li><strong>Expected Result:</strong> The song is catalogued immediately and given an audition status of <code>Unreviewed</code>.</li>
+</ul>
+<a id="sec4-3"></a>
+<h3 class="section-title">4.3 Editing Metadata & Single-Record Management</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Reference">
+    <div class="screenshot-card full-width">
+        <img src="screenshots/library_edit_modal.png" alt="Single-Record Edit Modal for Song Title, Artist & Recording URL" loading="lazy">
+        <div class="screenshot-caption"><strong>Interface Reference:</strong> Single-Record Edit Modal for Song Title, Artist & Recording URL</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Editing Metadata:</strong> Click the <strong>Edit (✏️)</strong> button on any song card or table row. Adjust the title, artist, or YouTube recording URL in the modal dialog, and click <strong>Save Changes</strong>.</li>
+<li><strong>Deleting Single Songs:</strong> Click the <strong>Delete (🗑️)</strong> button. A confirmation preview opens displaying the song details. Click <strong>Delete Track</strong> to remove it. (Protected songs with finalized tournament history cannot be deleted).</li>
+</ul>
+<a id="sec4-4"></a>
+<h3 class="section-title">4.4 High-Definition Playback & Synced Lyrics</h3>
+<ul>
+<li><strong>Embedded Audio Player:</strong> Click <strong>▶ Play in AFM#2</strong> on any song card. The custom audio player slides into view, streaming high-definition audio without ads.</li>
+<li><strong>Synchronized Lyrics Drawer:</strong> Click the <strong>Lyrics (📜)</strong> button. A slide-out panel displays the complete lyrical poetry of the track, allowing you to follow verses, choruses, and bridges as you listen.</li>
+<li><strong>External Listening Links:</strong> Every song card provides quick links to <strong>YouTube</strong> and <strong>Search</strong> in case you prefer listening on high-fidelity studio monitors or external hi-fi equipment.</li>
+</ul>
+<a id="sec4-5"></a>
+<h3 class="section-title">4.5 YouTube Recording Discovery & Matching</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/recordings_desktop.png" alt="Automated Resumable Bulk Matcher & Candidate Video Discovery" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Automated Resumable Bulk Matcher & Candidate Video Discovery</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/recordings_mobile.png" alt="Mobile Recording Status Stream & Manual URL Link Controls" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Recording Status Stream & Manual URL Link Controls</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Purpose:</strong> Automatically find, verify, and link high-fidelity YouTube audio recordings for imported catalogue songs that do not yet have playback links.</li>
+<li><strong>Before you begin:</strong> Ensure you have imported songs in your Library and navigate to <strong>Recordings</strong> in the top navigation bar.</li>
+</ul>
+<h4 class="subsection-title">Understanding Matched vs. Unmatched Tracks:</h4>
+<ul>
+<li><strong>Matched (Green):</strong> The song has a verified YouTube video ID attached. Playback and synced lyrics work immediately across AFM#2.</li>
+<li><strong>Unmatched (Amber):</strong> The song metadata exists in your catalogue, but no audio source is linked yet.</li>
+</ul>
+<h4 class="subsection-title">Step-by-Step Auto-Match & Candidate Review Procedure:</h4>
+<ol>
+<li>Navigate to <strong>Recordings</strong>.</li>
+<li>At the top of the page, locate the <strong>⚡ Automated Resumable Bulk Matcher</strong> banner.</li>
+<li>Click <strong>▶ Start Auto-Match</strong>.</li>
+<li>AFM#2 scans YouTube for high-accuracy matches across your unmatched songs:</li>
+</ol>
+<ul>
+<li>The real-time progress bar tracks completed matches.</li>
+<li>You can click <strong>⏸ Pause</strong> at any time, or close the page—the job is fully resumable.</li>
+</ul>
+<ol>
+<li><strong>Reviewing Individual Song Candidates:</strong></li>
+</ol>
+<ul>
+<li>In the recordings table, locate any song and click the <strong>⚡ Candidate Videos</strong> button.</li>
+<li>The <strong>🎯 YouTube Candidates</strong> modal opens, displaying discoverable video matches.</li>
+<li>Compare each candidate card: thumbnail art, exact video title, channel name, duration, and publish date.</li>
+<li>Click the candidate's <strong>▶ Play</strong> button to listen and verify that it is the studio original rather than an amateur cover or noisy live recording.</li>
+<li>Click <strong>Select Recording</strong> to bind that video permanently to your song.</li>
+</ul>
+<ol>
+<li><strong>Correcting an Incorrect Match:</strong></li>
+</ol>
+<ul>
+<li>If a song was matched to the wrong version, click the <strong>🔗 Edit Recording URL</strong> button.</li>
+<li>Paste the exact YouTube URL or video ID of your preferred studio recording.</li>
+<li>Click <strong>🔍 Verify</strong>, review the fetched thumbnail, and click <strong>💾 Save & Verify Link</strong>.</li>
+</ul>
+
+<div class="callout callout-warning" role="alert">
+    <div class="callout-title"><span>⚠️</span> Verify Studio Audio Integrity:</div>
+    <div class="callout-body">Never blindly accept automatic candidate suggestions for songs with common titles. Always preview the audio to confirm it is the authentic, pristine master recording before formal auditioning.</div>
+</div>
+
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch5"></a>
+<h2 class="chapter-title">CHAPTER 5: DISCOVERING & SHORTLISTING CONTENDERS</h2>
+<a id="sec5-1"></a>
+<h3 class="section-title">5.1 The Purpose of Discovery Curation</h3>
+<p>A music catalogue may contain thousands of tracks, ranging from casual ambient sounds to holiday singles. The <strong>Discovery Shortlist</strong> acts as an essential pre-competition curation filter: it allows you to audition candidate tracks quickly and curate a tight, elite roster of contenders that deserve formal tournament adjudication.</p>
+<a id="sec5-2"></a>
+<h3 class="section-title">5.2 Navigating the Shortlist Stream</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/discovery_desktop.png" alt="Discovery Shortlist Stream with Playback & Review Badges" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Discovery Shortlist Stream with Playback & Review Badges</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/discovery_mobile.png" alt="Mobile Discovery Cards with Dedicated Shortlist & Pass Controls" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Discovery Cards with Dedicated Shortlist & Pass Controls</div>
+    </div>
+</div>
+
+<p>In the top navigation bar, click <strong>Shortlist</strong>:</p>
+<ul>
+<li>Songs appear as focused evaluation cards displaying the title, artist, album art, playback controls, and external search links.</li>
+<li>Use the status filter tabs (<strong>All</strong>, <strong>Unscored</strong>, <strong>Incomplete</strong>, <strong>Completed</strong>) to track your curation workload.</li>
+<li>Use the <strong>Per Page</strong> selector (25, 50, 100) to adjust your view.</li>
+</ul>
+<a id="sec5-3"></a>
+<h3 class="section-title">5.3 Shortlisting vs. Passing Tracks</h3>
+<ul>
+<li><strong>Shortlisting a Song (⭐):</strong></li>
+<li>Click <strong>Scorecard</strong> or <strong>Shortlist</strong> on a song card.</li>
+<li>The song is marked as an active tournament contender and promoted into the <strong>Formal Auditions</strong> hall.</li>
+<li><strong>Passing a Song (✕ Pass):</strong></li>
+<li>If a track does not have championship caliber, click <strong>✕ Pass</strong>.</li>
+<li>The song is gracefully moved out of the active competition stream.</li>
+<li><strong>Crucial Distinction: Passed vs. Deleted:</strong></li>
+<li><em>Passing</em> a song does <strong>not</strong> delete it from your Library. The track remains safely stored in your catalogue for everyday listening, but it will not appear in the tournament brackets.</li>
+<li><em>Deleting</em> a song completely purges it from your account database.</li>
+</ul>
+<a id="sec5-4"></a>
+<h3 class="section-title">5.4 Understanding Review Statuses</h3>
+<p>In the Discovery stream, each song displays an explicit status pill:</p>
+<ul>
+<li><code>UNSCORED</code> (Neutral): The track is shortlisted for auditions, but no criteria scores have been entered yet.</li>
+<li><code>INCOMPLETE</code> (Amber): You have begun scoring the track (1 to 4 criteria filled), but the scorecard is not yet complete.</li>
+<li><code>✓ SCORED: XX / 50</code> (Green): All five criteria have been evaluated, yielding a complete aggregate total.</li>
+<li><code>🔒 SCORE LOCKED</code> (Cyan): The scorecard has been reviewed and permanently finalized.</li>
+</ul>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch6"></a>
+<h2 class="chapter-title">CHAPTER 6: CONDUCTING FORMAL AUDITIONS</h2>
+<a id="sec6-1"></a>
+<h3 class="section-title">6.1 The Audition Arena & Scorecard Structure</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/auditions_desktop.png" alt="Formal Auditions Multi-Criteria Scorecards with Vertical Hierarchy" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Formal Auditions Multi-Criteria Scorecards with Vertical Hierarchy</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/auditions_mobile.png" alt="Mobile Scorecards with Touch Steppers & Compact Score Readout" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Scorecards with Touch Steppers & Compact Score Readout</div>
+    </div>
+</div>
+
+<p>In the top navigation bar, click <strong>Auditions</strong>. The Audition Arena is where critical adjudication takes place. Every shortlisted contender is presented with an individual, tactile scorecard matrix:</p>
+<ul>
+<li>Top Row: Album art, track title, artist name, and live playback trigger.</li>
+<li>Middle Matrix: Five vertical criterion cards, each displaying an iconic symbol, criterion label, score readout, and tactile input instruments.</li>
+<li>Right Instrument: Real-time aggregate score counter displaying your total out of 50.</li>
+<li>Bottom Controls: Expandable <em>Notes & Reflections</em> drawer, <em>Reset</em> button, and the <em>Finalize Scorecard (🔒)</em> lock action.</li>
+</ul>
+<a id="sec6-2"></a>
+<h3 class="section-title">6.2 The Five Core Evaluation Criteria</h3>
+<p>Rather than relying on vague star ratings, AFM#2 evaluates every composition across five independent dimensions, each scored on a strict integer scale from <strong>0 to 10</strong>:</p>
+<div class="table-container"><table><thead><tr>
+<th scope="col">Criterion</th>
+<th scope="col">Icon</th>
+<th scope="col">Evaluation Dimension</th>
+<th scope="col">Guiding Adjudication Questions</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Melody</strong></td>
+<td>♫</td>
+<td>Harmonic Architecture & Hooks</td>
+<td>Does the melodic line grip your attention? Are the chord changes inventive? Does the hook linger in your memory hours later?</td>
+</tr>
+<tr>
+<td><strong>Lyrics</strong></td>
+<td>📝</td>
+<td>Poetic Resonance & Storytelling</td>
+<td>Does the writing convey genuine narrative depth? Is the imagery evocative? Do the rhymes feel authentic rather than forced?</td>
+</tr>
+<tr>
+<td><strong>Vocals</strong></td>
+<td>🎤</td>
+<td>Phrasing, Timbre & Delivery</td>
+<td>Does the vocalist convey believable conviction? Is the pitch, control, and emotive phrasing expressive and compelling?</td>
+</tr>
+<tr>
+<td><strong>Emotion</strong></td>
+<td>❤️</td>
+<td>Visceral Impact & Goosebumps</td>
+<td>How intensely does the track move you? Does it produce chills, emotional catharsis, kinetic joy, or deep nostalgia?</td>
+</tr>
+<tr>
+<td><strong>Replayability</strong></td>
+<td>🔁</td>
+<td>Longevity & Staying Power</td>
+<td>Can you listen to this song five times consecutively without ear fatigue? Will you still revere this track five years from now?</td>
+</tr>
+</tbody></table></div>
+<a id="sec6-3"></a>
+<h3 class="section-title">6.3 Three Tactile Scoring Modalities</h3>
+<p>AFM#2 provides three comfortable ways to enter scores on desktop, tablet, and mobile:</p>
+<ol>
+<li><strong>Tactile Increment Steppers (➕ / ➖):</strong> Tap the <code>+</code> or <code>-</code> buttons to adjust scores in precise single-point increments. Ideal for one-handed mobile scoring.</li>
+<li><strong>Precision Horizontal Sliders:</strong> Click and drag the smooth slider bar to sweep from 0 to 10. Perfect for mouse and trackpad control.</li>
+<li><strong>Direct Numeric Typing:</strong> Click directly into the numeric score box, type any integer from <code>0</code> to <code>10</code>, and press <code>Tab</code> to advance to the next criterion.</li>
+</ol>
+<a id="sec6-4"></a>
+<h3 class="section-title">6.4 Personal Reflections & Listening Notes</h3>
+<p>Below the criteria cards, click <strong>Notes & Reflections</strong> to open your private listening diary. Capture what made a guitar solo breathtaking, how a lyric resonated with a personal memory, or why a vocal bridge stood out. Your notes are saved alongside your score and remain accessible throughout the tournament and archive.</p>
+<a id="sec6-5"></a>
+<h3 class="section-title">6.5 Incomplete vs. Complete Scorecards</h3>
+<ul>
+<li><strong>Incomplete (1–4 Criteria Scored):</strong> The aggregate indicator displays <code>— / 50</code> with an amber <code>Incomplete</code> badge. The song cannot be finalized until all five criteria are recorded.</li>
+<li><strong>Complete (All 5 Criteria Scored):</strong> The aggregate score computes instantly (e.g., <code>44 / 50</code>) and the badge switches to green: <code>✓ Complete</code>.</li>
+<li><strong>Resetting an Unfinalized Draft:</strong> If you change your mind during scoring <em>before</em> locking, click <strong>↺ Reset Scorecard</strong>. All five criteria return to blank (<code>— / 50</code>).</li>
+</ul>
+<a id="sec6-6"></a>
+<h3 class="section-title">6.6 Scorecard Finalization & The Permanent Lock Safeguard</h3>
+<p>When all five criteria are evaluated, the lock action unlocks:</p>
+<ul>
+<li><strong>Purpose:</strong> Commit your evaluation permanently to the tournament ledger and submit your scores to the live leaderboard.</li>
+<li><strong>Before you begin:</strong> Review all five criteria scores and verify that your notes are complete.</li>
+</ul>
+<h4 class="subsection-title">Step-by-Step Finalization Procedure:</h4>
+<ol>
+<li>Carefully review your numbers: Melody, Lyrics, Vocals, Emotion, and Replayability.</li>
+<li>Confirm that your aggregate score accurately reflects your musical opinion.</li>
+<li>Click the button: <strong>Finalize Scorecard (🔒)</strong>.</li>
+<li>The safeguard engages immediately:</li>
+</ol>
+<ul>
+<li>Status changes to <strong>🔒 Score Locked</strong>.</li>
+<li>All input steppers, sliders, and text fields transition to an immutable, read-only state.</li>
+<li>The lock indicator displays the tooltip: <em>"Finalized scorecard"</em>.</li>
+<li>The song is officially eligible for tournament advancement!</li>
+</ul>
+
+<div class="callout callout-caution" role="alert">
+    <div class="callout-title"><span>🛡️</span> Scorecard Finalization is Permanent:</div>
+    <div class="callout-body">Locking evaluations is an intentional, one-way integrity safeguard. It prevents hindsight bias—the temptation to retroactively adjust scores after seeing tournament rankings. Take your time before clicking Finalize. Once locked, scores cannot be edited.</div>
+</div>
+
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch7"></a>
+<h2 class="chapter-title">CHAPTER 7: MANAGING TOURNAMENT PROGRESSION</h2>
+<a id="sec7-1"></a>
+<h3 class="section-title">7.1 The Seven Tournament Stages Ladder</h3>
+
+<div class="diagram-container" role="figure" aria-label="The Seven Tournament Stages Ladder">
+    <div class="diagram-title">The Seven Tournament Stages Ladder</div>
+    <div class="ladder-grid">
+        <div class="ladder-card s1">
+            <div class="ladder-badge">Stage 1</div>
+            <div class="ladder-title">Formal Auditions</div>
+            <div class="ladder-quota">All Shortlisted Contenders</div>
+            <div class="ladder-desc">Baseline multi-dimensional adjudication across Melody, Lyrics, Vocals, Emotion, and Replayability (0–50).</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s2">
+            <div class="ladder-badge">Stage 2</div>
+            <div class="ladder-title">Top 200 Cutoff</div>
+            <div class="ladder-quota">Target Field: Exactly 200</div>
+            <div class="ladder-desc">First major tournament cut eliminating all contenders ranked below #200.</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s3">
+            <div class="ladder-badge">Stage 3</div>
+            <div class="ladder-title">Top 100 Field</div>
+            <div class="ladder-quota">Target Field: Exactly 100</div>
+            <div class="ladder-desc">Field halved. Precision tie-breakers resolve equal boundary scores.</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s4">
+            <div class="ladder-badge">Stage 4</div>
+            <div class="ladder-title">Top 50 Semifinals</div>
+            <div class="ladder-quota">Target Field: Exactly 50</div>
+            <div class="ladder-desc">The official Semifinal bracket. Only elite compositions remain in contention.</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s5">
+            <div class="ladder-badge">Stage 5</div>
+            <div class="ladder-title">Top 20 Finalists</div>
+            <div class="ladder-quota">Target Field: Exactly 20</div>
+            <div class="ladder-desc">The championship contenders showcase. High-stakes boundary evaluation.</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s6">
+            <div class="ladder-badge">Stage 6</div>
+            <div class="ladder-title">Top 10 Elite Bracket</div>
+            <div class="ladder-quota">Target Field: Exactly 10</div>
+            <div class="ladder-desc">The masterworks of 2026. Every fraction of a point matters.</div>
+        </div>
+        <div class="ladder-arrow" aria-hidden="true">▼</div>
+        <div class="ladder-card s7 championship">
+            <div class="ladder-badge">Stage 7 • Grand Finale</div>
+            <div class="ladder-title">The Grand Finale & Crown</div>
+            <div class="ladder-quota">Podium: Gold 🥇 • Silver 🥈 • Bronze 🥉</div>
+            <div class="ladder-desc">The crowning ceremony declaring the definitive 2026 Annual Musical Finale Champion.</div>
+        </div>
+    </div>
+</div>
+
+<p>The competition progresses through seven rigorous elimination brackets:</p>
+<p>```</p>
+<p>Stage 1: Formal Auditions   -->   All Shortlisted Contenders Auditioned (/50)</p>
+<p>Stage 2: Top 200            -->   Target Field: Exactly 200 Contenders</p>
+<p>Stage 3: Top 100            -->   Target Field: Exactly 100 Contenders</p>
+<p>Stage 4: Top 50             -->   Target Field: Exactly 50 Semifinalists</p>
+<p>Stage 5: Top 20             -->   Target Field: Exactly 20 Finalists</p>
+<p>Stage 6: Top 10             -->   Target Field: Exactly 10 Elite Showcase Contenders</p>
+<p>Stage 7: Grand Finale       -->   The Definitive Champion of 2026 Crowned</p>
+<p>```</p>
+<a id="sec7-2"></a>
+<h3 class="section-title">7.2 Scoring, Finalizing, and Advancing: Crucial Distinctions</h3>
+<p>To steer the tournament effectively, you must understand three separate concepts:</p>
+<ul>
+<li><strong>Scoring a Song:</strong> Entering numeric values (0–10) across criteria. This is an active work-in-progress draft.</li>
+<li><strong>Finalizing a Scorecard:</strong> Locking the five scores permanently with the 🔒 safeguard. Only songs with finalized scorecards can qualify for tournament advancement.</li>
+<li><strong>Advancing a Stage:</strong> Launching the guided Qualification Wizard on the Tournament page to promote the highest-scoring finalized contenders into the next round.</li>
+</ul>
+<a id="sec7-3"></a>
+<h3 class="section-title">7.3 Understanding Qualification Cutoffs & Target Quotas</h3>
+<p>On the <strong>Tournament</strong> page, contenders are ranked in descending order by aggregate score. The leaderboard displays an unmistakable visual divider:</p>
+<p><code>⚡ TARGET CUTOFF LINE — TOP XX ADVANCE TO [NEXT STAGE]</code></p>
+<ul>
+<li><strong>Zone Qualifiers (Green Glow):</strong> Contenders ranking above the cutoff line are qualified to advance.</li>
+<li><strong>Zone Eliminated (Muted):</strong> Contenders ranking below the cutoff line exit the championship hunt.</li>
+<li><strong>Cutoff Score:</strong> The aggregate score of the contender occupying the final qualifying position.</li>
+</ul>
+<a id="sec7-4"></a>
+<h3 class="section-title">7.4 The Qualification Wizard: Step-by-Step</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/tournament_desktop.png" alt="Tournament Stage Bracket & Target Cutoff Line" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Tournament Stage Bracket & Target Cutoff Line</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/tournament_mobile.png" alt="Mobile Tournament Card Stream with Real-Time Advancement Badges" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Tournament Card Stream with Real-Time Advancement Badges</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Purpose:</strong> Advance the tournament into the next round by validating qualifiers, resolving ties, and locking the completed stage.</li>
+<li><strong>Before you begin:</strong> Ensure all contenders in the current stage have completed, finalized scorecards.</li>
+</ul>
+<h4 class="subsection-title">Step-by-Step Stage Advancement Procedure:</h4>
+<ol>
+<li>In the top navigation bar, click <strong>Tournament</strong>.</li>
+<li>Select the currently active stage from the stage navigation pills.</li>
+<li>Click the primary button: <strong>⚡ Manual Qualification & Advance to [Next Stage]</strong>.</li>
+<li>The <strong>Qualification Wizard</strong> opens in a modal window:</li>
+</ol>
+<ul>
+<li><strong>Step 1: Automatic Qualifiers:</strong> Inspect the list of tracks whose scores clearly exceed the qualification threshold.</li>
+<li><strong>Step 2: Boundary Contenders & Ties:</strong> Review any tracks that land directly on the qualification threshold line. If more tracks share the cutoff score than remaining quota slots, inspect the tie-breaker resolution.</li>
+<li><strong>Step 3: Confirmation Summary:</strong> Review the final roster count and verify that the advancing field matches the target quota (e.g., exactly 50 songs for Top 50).</li>
+</ul>
+<ol>
+<li>Click <strong>Confirm & Advance Tournament</strong>.</li>
+<li><strong>Progression Outcome:</strong> The completed stage is permanently archived, the new round is activated, and your leaderboard updates immediately!</li>
+</ol>
+<a id="sec7-5"></a>
+<h3 class="section-title">7.5 Precision Tie-Breaking Hierarchy</h3>
+<p>When multiple contenders share the exact same aggregate score at the qualification cutoff boundary (for example, four songs tied for the final two slots in the Top 20), AFM#2 invokes the official tie-breaking hierarchy:</p>
+<ol>
+<li><strong>Tie-Breaker 1: Emotion (❤️)</strong> — The song with the higher visceral emotional score prevails.</li>
+<li><strong>Tie-Breaker 2: Replayability (🔁)</strong> — The song with the greater replay longevity prevails.</li>
+<li><strong>Tie-Breaker 3: Melody (♫)</strong> — The song with the stronger harmonic architecture prevails.</li>
+<li><strong>Tie-Breaker 4: Vocals (🎤)</strong> — The song with the superior vocal performance prevails.</li>
+<li><strong>Tie-Breaker 5: Lyrics (📝)</strong> — The song with the higher lyrical resonance prevails.</li>
+<li><strong>Tie-Breaker 6: Adjudicator Choice</strong> — If contenders remain tied across all five criteria, the Wizard displays an amber boundary alert, prompting you to make a deliberate adjudicator selection before advancing.</li>
+</ol>
+<a id="sec7-6"></a>
+<h3 class="section-title">7.6 The Grand Finale & Crowning the Champion</h3>
+<p>When you advance to <strong>Stage 7 (The Grand Finale)</strong>, the elite finalists battle for the crown. The song achieving the highest aggregate score claims the ultimate title: <strong>The 2026 Annual Musical Finale Champion</strong>. The runner-up claims Silver 🥈, and third place claims Bronze 🥉.</p>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch8"></a>
+<h2 class="chapter-title">CHAPTER 8: EXPLORING RESULTS & THE PERMANENT ARCHIVE</h2>
+<a id="sec8-1"></a>
+<h3 class="section-title">8.1 The 2026 Championship Podium</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/archive_desktop.png" alt="Archive Championship Hall of Fame with Golden Podium & Stage Ledger" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Archive Championship Hall of Fame with Golden Podium & Stage Ledger</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/archive_mobile.png" alt="Mobile Archive View with Historical Breakdown Filters" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Archive View with Historical Breakdown Filters</div>
+    </div>
+</div>
+
+<p>In the top navigation bar, click <strong>Archive</strong>. At the summit of the archive rests the <strong>2026 Championship Podium</strong>:</p>
+<ul>
+<li>🥇 <strong>Gold / Champion (Center):</strong> Elevated golden pedestal featuring the Golden Wreath, Champion Banner, artist details, and final aggregate score.</li>
+<li>🥈 <strong>Silver / Runner-Up (Left):</strong> Second-place pedestal with silver laurels and score breakdown.</li>
+<li>🥉 <strong>Bronze / Third Place (Right):</strong> Third-place pedestal with bronze medal honours.</li>
+</ul>
+<a id="sec8-2"></a>
+<h3 class="section-title">8.2 Stage-by-Stage Historical Audit Trails</h3>
+<p>Below the podium, the Archive provides complete historical records for every completed round:</p>
+<ul>
+<li>Click any stage pill (<strong>Top 200</strong>, <strong>Top 100</strong>, <strong>Top 50</strong>, <strong>Top 20</strong>, <strong>Top 10</strong>) to inspect the final standings of that round.</li>
+<li>View the exact cutoff score that determined elimination in each historic bracket.</li>
+</ul>
+<a id="sec8-3"></a>
+<h3 class="section-title">8.3 Reviewing Full Multi-Criteria Score Breakdowns</h3>
+<p>Click any song row in the Archive to expand its comprehensive adjudication dossier:</p>
+<ul>
+<li>View exact scores across all five criteria (Melody, Lyrics, Vocals, Emotion, Replayability).</li>
+<li>Read your personal reflections and listening notes recorded at the moment of evaluation.</li>
+<li>Inspect the timestamp when the scorecard was finalized.</li>
+</ul>
+<a id="sec8-4"></a>
+<h3 class="section-title">8.4 Exporting the Official Tournament Ledger (CSV)</h3>
+<ul>
+<li><strong>Purpose:</strong> Download an offline spreadsheet backup containing your complete tournament results, scores, notes, and rankings.</li>
+<li><strong>Procedure:</strong> On the Archive page, click <strong>📥 Export Ledger to CSV</strong>. Your browser downloads a complete CSV file containing every evaluated track, criteria breakdown, and tournament placement.</li>
+</ul>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch9"></a>
+<h2 class="chapter-title">CHAPTER 9: PERSONALIZING YOUR EXPERIENCE</h2>
+<a id="sec9-1"></a>
+<h3 class="section-title">9.1 Visual Themes & Atmospheric Depth Controls</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/account_desktop.png" alt="Account & Security Preferences with WebAuthn Passkeys" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Account & Security Preferences with WebAuthn Passkeys</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/account_mobile.png" alt="Mobile Profile & Biometric Passkey Registration" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Profile & Biometric Passkey Registration</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Switching Themes:</strong> Click <strong>Appearance (🎨)</strong> in the top navigation bar. Select any of the eight curated visual themes. The entire color palette updates instantly without reloading the page.</li>
+<li><strong>Atmospheric Depth & Blur:</strong> Use the slider in the Appearance modal to adjust background blur intensity and ambient glow, creating the perfect mood for your listening environment.</li>
+</ul>
+<a id="sec9-2"></a>
+<h3 class="section-title">9.2 Account Profile & Credential Management</h3>
+<p>Click your <strong>User Pill</strong> in the top navigation bar to open your Account settings:</p>
+<ul>
+<li>Update your display name and email address.</li>
+<li>Change your account password securely by entering your current password and choosing a new one.</li>
+</ul>
+<a id="sec9-3"></a>
+<h3 class="section-title">9.3 Passwordless Biometric Passkeys (WebAuthn)</h3>
+
+<div class="screenshot-grid" role="group" aria-label="Visual Interface Pair">
+    <div class="screenshot-card">
+        <img src="screenshots/account_desktop.png" alt="Account & Security Preferences with WebAuthn Passkeys" loading="lazy">
+        <div class="screenshot-caption"><strong>Desktop View:</strong> Account & Security Preferences with WebAuthn Passkeys</div>
+    </div>
+    <div class="screenshot-card">
+        <img src="screenshots/account_mobile.png" alt="Mobile Profile & Biometric Passkey Registration" loading="lazy">
+        <div class="screenshot-caption"><strong>Mobile View:</strong> Mobile Profile & Biometric Passkey Registration</div>
+    </div>
+</div>
+
+<ul>
+<li><strong>Purpose:</strong> Enable instant, ultra-secure sign-in using Touch ID, Face ID, Windows Hello, or hardware security keys without typing a password.</li>
+<li><strong>Before you begin:</strong> Ensure you are signed in on a device equipped with biometric authentication.</li>
+</ul>
+<h4 class="subsection-title">Registration Procedure:</h4>
+<ol>
+<li>Navigate to <strong>Account</strong>.</li>
+<li>Scroll to the <strong>Biometric Passkeys (WebAuthn)</strong> section.</li>
+<li>Click <strong>＋ Register New Passkey</strong>.</li>
+<li>When prompted by your browser or operating system, scan your fingerprint (Touch ID), present your face (Face ID), or touch your security key.</li>
+<li>Provide a memorable label (e.g., <em>"MacBook Pro Touch ID"</em> or <em>"iPhone Face ID"</em>).</li>
+<li>Click <strong>Save Passkey</strong>.</li>
+</ol>
+<ul>
+<li><strong>Result:</strong> You can now sign in to AFM#2 with a single biometric touch!</li>
+</ul>
+<a id="sec9-4"></a>
+<h3 class="section-title">9.4 Multi-Device Synchronization</h3>
+<p>All your catalogue records, scorecards, personal reflections, and tournament states are safely synchronized in the cloud. You can curate songs on your desktop at work, audition them on your tablet with headphones in the evening, and check tournament standings on your phone on the go.</p>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<a id="ch10"></a>
+<h2 class="chapter-title">CHAPTER 10: TROUBLESHOOTING & FREQUENTLY ASKED QUESTIONS</h2>
+<a id="sec10-1"></a>
+<h3 class="section-title">10.1 Practical Troubleshooting Guide</h3>
+<h4 class="subsection-title">Issue: CSV Import Fails or Reports Unrecognized Columns</h4>
+<ul>
+<li><strong>Cause:</strong> The CSV column headers do not match standard title or artist keywords.</li>
+<li><strong>Solution:</strong> In Stage 2 of the import wizard, locate the <strong>Detected Column Mapping</strong> card. Manually select your song title column in the <strong>Song Title Column</strong> dropdown and click <strong>Re-Analyze Mapping</strong>.</li>
+</ul>
+<h4 class="subsection-title">Issue: Audio Playback Reports "Video Unavailable" or "Playback Restricted"</h4>
+<ul>
+<li><strong>Cause:</strong> Certain record labels restrict YouTube playback inside third-party embedded players.</li>
+<li><strong>Solution:</strong> Click the <strong>YouTube</strong> or <strong>Search</strong> button on the song card to play the song in external high-definition audio, then return to AFM#2 to record your scores. Alternatively, click the <strong>🔗 Edit Recording URL</strong> button in Recordings to link an alternative official upload.</li>
+</ul>
+<h4 class="subsection-title">Issue: Synchronized Lyrics Are Not Displaying</h4>
+<ul>
+<li><strong>Cause:</strong> Obscure indie releases or brand-new singles may not have publicly indexed lyrics.</li>
+<li><strong>Solution:</strong> Click the <strong>Search</strong> link on the song card to locate the lyrics on Genius or AZLyrics. You can paste important lyric lines into your <strong>Notes & Reflections</strong> box for permanent reference.</li>
+</ul>
+<h4 class="subsection-title">Issue: Biometric Passkey Prompt Does Not Appear</h4>
+<ul>
+<li><strong>Cause:</strong> Your browser or operating system does not support WebAuthn, or browser permissions are blocked.</li>
+<li><strong>Solution:</strong> Ensure you are using an updated version of Chrome, Safari, Edge, or Firefox. If passkeys are unavailable on your current device, you can always sign in using your standard username and password.</li>
+</ul>
+<a id="sec10-2"></a>
+<h3 class="section-title">10.2 Frequently Asked Questions (FAQ)</h3>
+<h4 class="subsection-title">Q1: Can I change my scores after clicking Finalize?</h4>
+<p><strong>Answer:</strong> No. Scorecard finalization is an intentional one-way integrity safeguard designed to eliminate hindsight bias. Take your time during the audition phase. Ensure you are completely satisfied with your ratings before clicking Finalize.</p>
+<h4 class="subsection-title">Q2: What happens if I pass a song in Discovery? Can I retrieve it later?</h4>
+<p><strong>Answer:</strong> Yes. Passing a song does not delete it from your Library. In the Library, click the <strong>Passed</strong> filter pill to review passed songs. You can click <strong>Shortlist</strong> on any passed track at any time to return it to the active audition roster.</p>
+<h4 class="subsection-title">Q3: Does deleting a song from my catalogue erase its tournament history?</h4>
+<p><strong>Answer:</strong> No, because AFM#2 strictly prevents the deletion of any track that has a finalized scorecard or official tournament history. Protected tracks cannot be deleted through bulk or single-record actions.</p>
+<h4 class="subsection-title">Q4: Are other participants able to see my scores or personal reflection notes?</h4>
+<p><strong>Answer:</strong> No. Your scores, criteria evaluations, listening reflections, and tournament progression belong strictly to your private participant profile.</p>
+<h4 class="subsection-title">Q5: How should I pace my audition listening sessions?</h4>
+<p><strong>Answer:</strong> We recommend adjudicating in batches of 5 to 10 songs per listening session. Ear fatigue and sensory adaptation diminish emotional perception. Take short breaks between intense listening rounds, hydrate, and use good quality headphones or studio monitors.</p>
+<h4 class="subsection-title">Q6: Can I listen to songs using my own streaming app?</h4>
+<p><strong>Answer:</strong> Yes. Every contender card includes direct links to YouTube and YouTube Music. You can listen on your preferred hi-fi setup, external stereo system, or streaming device, and return to AFM#2 to log your scores.</p>
+<a id="sec10-3"></a>
+<h3 class="section-title">10.3 Adjudication Fair Play & Integrity Standards</h3>
+<p>As an invited participant, you uphold the artistic integrity of the Annual Musical Finale:</p>
+<ol>
+<li><strong>Listen to Complete Compositions:</strong> Avoid judging tracks based solely on the opening thirty seconds. Great songwriting often unfolds across subtle bridges and dynamic codas.</li>
+<li><strong>Evaluate Independent Dimensions:</strong> A song with poor lyrics may feature breathtaking melodic craft; a song with raw, unpolished vocals may possess profound emotional resonance. Score each of the five criteria honestly on its own merits.</li>
+<li><strong>Respect the Finalization Lock:</strong> Embrace the permanence of your finalized scorecards as an authentic historical document of your musical year.</li>
+</ol>
+<div class="cover-divider" style="margin: 35px auto;"></div>
+<p><em>Welcome to the Annual Musical Finale 2026. Enjoy your listening journey!</em></p>
+    </main>
+</div>
+
+</body>
+</html>

@@ -11,6 +11,9 @@ require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/csrf.php';
 
+// Instruct all search crawlers not to index or cache setup endpoints
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+
 // If users already exist, lock this setup screen completely
 if (has_users()) {
     header('Location: login.php');
@@ -50,6 +53,7 @@ $pageTitle = 'Initial Setup — AFM#2';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <title><?= htmlspecialchars($pageTitle) ?></title>
     <!-- Favicon & Touch Icons (Approved Compact AFM#2 Symbol) -->
     <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -59,10 +63,10 @@ $pageTitle = 'Initial Setup — AFM#2';
     <link rel="icon" type="image/png" sizes="192x192" href="assets/img/afm2-favicon-192x192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
-    <link rel="stylesheet" href="assets/css/style.css?v=3.0">
+    <link rel="stylesheet" href="assets/css/style.css?v=3.6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body style="background: radial-gradient(circle at top, #1a1e36 0%, #0c0e14 100%); min-height: 100vh; position: relative; overflow-x: hidden;">
     <!-- Ambient Lighting Effect -->
@@ -77,7 +81,8 @@ $pageTitle = 'Initial Setup — AFM#2';
                          alt="AFM#2 — Annual Musical Finale" 
                          class="auth-logo-img" 
                          width="180" 
-                         height="98">
+                         height="98"
+                         decoding="async">
                 </a>
             </div>
             <h1 class="auth-title">Initialize Your Journal</h1>

@@ -11,6 +11,7 @@ if (!defined('AFM_APP')) {
 }
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/db_helper.php';
 require_once __DIR__ . '/media_helper.php';
 
 // Portable mbstring polyfills
@@ -548,6 +549,7 @@ class YouTubeMatcher {
                 ':is_selected'         => 0
             ]);
         }
+        self::clear_matching_stats_cache();
     }
 
     /**
@@ -658,6 +660,8 @@ class YouTubeMatcher {
                 ]);
             } catch (\Throwable $e) {}
 
+            self::clear_matching_stats_cache();
+
             return [
                 'selected'  => true,
                 'status'    => 'matched_high',
@@ -698,9 +702,22 @@ class YouTubeMatcher {
         int $songId, 
         string $videoId, 
         string $versionType = 'original', 
-        ?string $versionNotes = null
+        ?string $versionNotes = null,
+        ?int $userId = null
     ): array {
         $pdo = get_db_connection();
+
+        if ($userId !== null) {
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
+            $chk->execute([':id' => $songId]);
+            $sRow = $chk->fetch();
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
+            if (!$owned) {
+                return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
+            }
+        }
+
         $cleanVid = parse_youtube_id($videoId);
         if (!$cleanVid) {
             return ['success' => false, 'error' => 'Invalid video ID.'];
@@ -746,36 +763,40 @@ class YouTubeMatcher {
                 `updated_at` = NOW()
         ");
 
-        $stmt->execute([
-            ':song_id'       => $songId,
-            ':user_url'      => $canonicalUrl,
-            ':video_id'      => $cleanVid,
-            ':title'         => $title ? mb_substr($title, 0, 255) : null,
-            ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
-            ':version_type'  => $versionType,
-            ':version_notes' => $versionNotes,
-            ':match_score'   => $score
-        ]);
-
-        // Mark candidate is_selected
-        $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 0 WHERE `song_id` = :id")->execute([':id' => $songId]);
-        $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 1 WHERE `song_id` = :id AND `video_id` = :vid")
-            ->execute([':id' => $songId, ':vid' => $cleanVid]);
-
-        // Sync artwork
         try {
-            $artStmt = $pdo->prepare("
-                INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
-                VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
-                ON DUPLICATE KEY UPDATE 
-                    `thumbnail_url` = VALUES(`thumbnail_url`), 
-                    `image_url` = VALUES(`image_url`),
-                    `is_confirmed` = 1,
-                    `status` = 'matched'
-            ");
-            $thumbUrl = "https://img.youtube.com/vi/{$cleanVid}/hqdefault.jpg";
-            $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
-        } catch (\Throwable $e) {}
+            $stmt->execute([
+                ':song_id'       => $songId,
+                ':user_url'      => $canonicalUrl,
+                ':video_id'      => $cleanVid,
+                ':title'         => $title ? mb_substr($title, 0, 255) : null,
+                ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
+                ':version_type'  => $versionType,
+                ':version_notes' => $versionNotes,
+                ':match_score'   => $score
+            ]);
+
+            // Mark candidate is_selected
+            $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 0 WHERE `song_id` = :id")->execute([':id' => $songId]);
+            $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 1 WHERE `song_id` = :id AND `video_id` = :vid")
+                ->execute([':id' => $songId, ':vid' => $cleanVid]);
+
+            // Sync artwork
+            try {
+                $artStmt = $pdo->prepare("
+                    INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
+                    VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
+                    ON DUPLICATE KEY UPDATE 
+                        `thumbnail_url` = VALUES(`thumbnail_url`), 
+                        `image_url` = VALUES(`image_url`),
+                        `is_confirmed` = 1,
+                        `status` = 'matched'
+                ");
+                $thumbUrl = "https://img.youtube.com/vi/{$cleanVid}/hqdefault.jpg";
+                $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            } catch (\Throwable $e) {}
+        } finally {
+            self::clear_matching_stats_cache();
+        }
 
         return [
             'success'  => true,
@@ -793,8 +814,22 @@ class YouTubeMatcher {
         int $songId, 
         string $urlOrVideoId, 
         string $versionType = 'original', 
-        ?string $versionNotes = null
+        ?string $versionNotes = null,
+        ?int $userId = null
     ): array {
+        $pdo = get_db_connection();
+
+        if ($userId !== null) {
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
+            $chk->execute([':id' => $songId]);
+            $sRow = $chk->fetch();
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
+            if (!$owned) {
+                return ['success' => false, 'error' => 'Unauthorized: Cannot modify recording for another user\'s song.'];
+            }
+        }
+
         $videoId = parse_youtube_id($urlOrVideoId);
         if (!$videoId) {
             return [
@@ -810,8 +845,6 @@ class YouTubeMatcher {
         $meta = extract_youtube_metadata($videoId);
         $title = $meta['title'] ?? null;
         $channel = $meta['channel_title'] ?? null;
-
-        $pdo = get_db_connection();
         $stmt = $pdo->prepare("
             INSERT INTO `song_media` 
                 (`song_id`, `service`, `user_url`, `video_id`, `title`, `channel_title`, 
@@ -840,30 +873,34 @@ class YouTubeMatcher {
                 `updated_at` = NOW()
         ");
 
-        $stmt->execute([
-            ':song_id'       => $songId,
-            ':user_url'      => $userUrl,
-            ':video_id'      => $videoId,
-            ':title'         => $title ? mb_substr($title, 0, 255) : null,
-            ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
-            ':version_type'  => $versionType,
-            ':version_notes' => $versionNotes
-        ]);
-
-        // Sync artwork
         try {
-            $artStmt = $pdo->prepare("
-                INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
-                VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
-                ON DUPLICATE KEY UPDATE 
-                    `thumbnail_url` = VALUES(`thumbnail_url`), 
-                    `image_url` = VALUES(`image_url`),
-                    `is_confirmed` = 1,
-                    `status` = 'matched'
-            ");
-            $thumbUrl = $meta['thumbnail_url'] ?? "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
-            $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
-        } catch (\Throwable $e) {}
+            $stmt->execute([
+                ':song_id'       => $songId,
+                ':user_url'      => $userUrl,
+                ':video_id'      => $videoId,
+                ':title'         => $title ? mb_substr($title, 0, 255) : null,
+                ':channel_title' => $channel ? mb_substr($channel, 0, 255) : null,
+                ':version_type'  => $versionType,
+                ':version_notes' => $versionNotes
+            ]);
+
+            // Sync artwork
+            try {
+                $artStmt = $pdo->prepare("
+                    INSERT INTO `song_artwork` (`song_id`, `source`, `thumbnail_url`, `image_url`, `is_confirmed`, `status`)
+                    VALUES (:id, 'confirmed', :thumb, :img, 1, 'matched')
+                    ON DUPLICATE KEY UPDATE 
+                        `thumbnail_url` = VALUES(`thumbnail_url`), 
+                        `image_url` = VALUES(`image_url`),
+                        `is_confirmed` = 1,
+                        `status` = 'matched'
+                ");
+                $thumbUrl = $meta['thumbnail_url'] ?? "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
+                $artStmt->execute([':id' => $songId, ':thumb' => $thumbUrl, ':img' => $thumbUrl]);
+            } catch (\Throwable $e) {}
+        } finally {
+            self::clear_matching_stats_cache();
+        }
 
         return [
             'success'  => true,
@@ -878,8 +915,20 @@ class YouTubeMatcher {
     /**
      * Clear recording selection without deleting the song from catalogue.
      */
-    public static function clear_recording(int $songId): array {
+    public static function clear_recording(int $songId, ?int $userId = null): array {
         $pdo = get_db_connection();
+
+        if ($userId !== null) {
+            $delSql = song_deleted_sql('', $pdo);
+            $chk = $pdo->prepare("SELECT `user_id` FROM `songs` WHERE `song_id` = :id AND {$delSql}");
+            $chk->execute([':id' => $songId]);
+            $sRow = $chk->fetch();
+            $owned = $sRow && ((int)($sRow['user_id'] ?? 0) === (int)$userId || (is_legacy_owner($userId, $pdo) && $sRow['user_id'] === null));
+            if (!$owned) {
+                return ['success' => false, 'error' => 'Unauthorized: Cannot clear recording for another user\'s song.'];
+            }
+        }
+
         $pdo->prepare("DELETE FROM `song_media` WHERE `song_id` = :id AND `service` = 'youtube'")->execute([':id' => $songId]);
         $pdo->prepare("UPDATE `song_youtube_candidates` SET `is_selected` = 0 WHERE `song_id` = :id")->execute([':id' => $songId]);
         
@@ -887,6 +936,8 @@ class YouTubeMatcher {
         try {
             $pdo->prepare("DELETE FROM `song_artwork` WHERE `song_id` = :id AND `source` = 'confirmed'")->execute([':id' => $songId]);
         } catch (\Throwable $e) {}
+
+        self::clear_matching_stats_cache();
 
         return ['success' => true, 'message' => 'Recording selection cleared.'];
     }
@@ -948,18 +999,32 @@ class YouTubeMatcher {
     /**
      * Get or initialize the active bulk matching job.
      */
-    public static function get_or_create_active_job(): array {
-        $pdo = get_db_connection();
-        $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+    public static function get_or_create_active_job(?int $userId = null): array {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
 
-        $stmt = $pdo->query("SELECT * FROM `youtube_matching_jobs` ORDER BY `job_id` DESC LIMIT 1");
+        $pdo = get_db_connection();
+        $delSql = song_deleted_sql('', $pdo);
+        if ($userId !== null) {
+            $userSql = song_user_scope_sql($userId, '', $pdo);
+            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+            $tStmt->execute();
+            $totalSongs = (int)$tStmt->fetchColumn();
+
+            $stmt = $pdo->prepare("SELECT * FROM `youtube_matching_jobs` WHERE `user_id` = :uid ORDER BY `job_id` DESC LIMIT 1");
+            $stmt->execute([':uid' => $userId]);
+        } else {
+            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
+            $stmt = $pdo->query("SELECT * FROM `youtube_matching_jobs` WHERE `user_id` IS NULL ORDER BY `job_id` DESC LIMIT 1");
+        }
         $job = $stmt->fetch();
 
         if (!$job) {
             $pdo->prepare("
-                INSERT INTO `youtube_matching_jobs` (`job_name`, `status`, `total_songs`, `started_at`)
-                VALUES ('Bulk YouTube Discovery & Matcher', 'idle', :total, NOW())
-            ")->execute([':total' => $totalSongs]);
+                INSERT INTO `youtube_matching_jobs` (`job_name`, `status`, `total_songs`, `user_id`, `started_at`)
+                VALUES ('Bulk YouTube Discovery & Matcher', 'idle', :total, :uid, NOW())
+            ")->execute([':total' => $totalSongs, ':uid' => $userId]);
             $jobId = (int)$pdo->lastInsertId();
             return $pdo->query("SELECT * FROM `youtube_matching_jobs` WHERE `job_id` = {$jobId}")->fetch();
         }
@@ -977,24 +1042,47 @@ class YouTubeMatcher {
     /**
      * Process next batch of songs in bulk matching queue.
      */
-    public static function process_batch(int $batchSize = 10, array $options = []): array {
-        $pdo = get_db_connection();
-        $job = self::get_or_create_active_job();
-        $jobId = (int)$job['job_id'];
+    public static function process_batch(int $batchSize = 10, array $options = [], ?int $userId = null): array {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
 
-        // Mark running
-        $pdo->prepare("UPDATE `youtube_matching_jobs` SET `status` = 'running', `updated_at` = NOW() WHERE `job_id` = :id")
-            ->execute([':id' => $jobId]);
+        $pdo = get_db_connection();
+
+        // Non-blocking per-user advisory lock to prevent duplicate concurrent batches
+        $lockName = 'afm2_yt_job_user_' . ($userId !== null ? (int)$userId : 'global');
+        $lockStmt = $pdo->prepare("SELECT GET_LOCK(:lock, 0)");
+        $lockStmt->execute([':lock' => $lockName]);
+        if ((int)$lockStmt->fetchColumn() !== 1) {
+            return [
+                'success'     => true,
+                'in_progress' => true,
+                'job'         => self::get_or_create_active_job($userId),
+                'processed'   => 0,
+                'results'     => [],
+                'message'     => 'A YouTube matching batch is currently being processed for this user.'
+            ];
+        }
+
+        try {
+            $job = self::get_or_create_active_job($userId);
+            $jobId = (int)$job['job_id'];
+
+            // Mark running
+            $pdo->prepare("UPDATE `youtube_matching_jobs` SET `status` = 'running', `updated_at` = NOW() WHERE `job_id` = :id")
+                ->execute([':id' => $jobId]);
 
         $lastSongId = (int)$job['last_processed_song_id'];
         $forceReprocess = $options['force'] ?? false;
+        $delSql = song_deleted_sql('', $pdo);
+        $userFilter = ($userId !== null) ? " AND " . song_user_scope_sql($userId, '', $pdo) . " AND {$delSql}" : " AND {$delSql}";
 
         // Fetch next batch of songs
         if ($forceReprocess) {
             $songStmt = $pdo->prepare("
-                SELECT `song_id`, `title`, `artist` 
+                SELECT `song_id`, `title`, `artist`, `user_id` 
                 FROM `songs` 
-                WHERE `is_consolidated` = 0 
+                WHERE `is_consolidated` = 0 {$userFilter}
                 ORDER BY `song_id` ASC 
                 LIMIT :limit OFFSET :offset
             ");
@@ -1002,9 +1090,9 @@ class YouTubeMatcher {
             $songStmt->bindValue(':offset', (int)$job['processed_songs'], PDO::PARAM_INT);
         } else {
             $songStmt = $pdo->prepare("
-                SELECT `song_id`, `title`, `artist` 
+                SELECT `song_id`, `title`, `artist`, `user_id` 
                 FROM `songs` 
-                WHERE `is_consolidated` = 0 AND `song_id` > :last_id 
+                WHERE `is_consolidated` = 0 AND `song_id` > :last_id {$userFilter}
                 ORDER BY `song_id` ASC 
                 LIMIT :limit
             ");
@@ -1026,7 +1114,7 @@ class YouTubeMatcher {
             return [
                 'success'     => true,
                 'completed'   => true,
-                'job'         => self::get_or_create_active_job(),
+                'job'         => self::get_or_create_active_job($userId),
                 'processed'   => 0,
                 'results'     => [],
                 'message'     => 'All catalogue songs have been processed.'
@@ -1143,7 +1231,7 @@ class YouTubeMatcher {
             ':id'        => $jobId
         ]);
 
-        $updatedJob = self::get_or_create_active_job();
+        $updatedJob = self::get_or_create_active_job($userId);
         $isComplete = ((int)$updatedJob['processed_songs'] >= (int)$updatedJob['total_songs']);
         if ($isComplete) {
             $pdo->prepare("UPDATE `youtube_matching_jobs` SET `status` = 'completed', `completed_at` = NOW() WHERE `job_id` = :id")
@@ -1151,65 +1239,213 @@ class YouTubeMatcher {
             $updatedJob['status'] = 'completed';
         }
 
-        return [
-            'success'   => true,
-            'completed' => $isComplete,
-            'job'       => $updatedJob,
-            'processed' => $processedCount,
-            'results'   => $batchResults,
-            'message'   => "Processed {$processedCount} songs."
-        ];
+            return [
+                'success'   => true,
+                'completed' => $isComplete,
+                'job'       => $updatedJob,
+                'processed' => $processedCount,
+                'results'   => $batchResults,
+                'message'   => "Processed {$processedCount} songs."
+            ];
+        } finally {
+            $pdo->prepare("SELECT RELEASE_LOCK(:lock)")->execute([':lock' => $lockName]);
+        }
     }
 
     /**
      * Reset job progress so bulk matching can be started cleanly from the beginning.
      */
-    public static function reset_job(): void {
+    public static function reset_job(?int $userId = null): void {
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
+
         $pdo = get_db_connection();
-        $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
-        $pdo->exec("
-            UPDATE `youtube_matching_jobs` 
-            SET `status` = 'idle',
-                `processed_songs` = 0,
-                `matched_high_count` = 0,
-                `review_medium_count` = 0,
-                `unresolved_low_count` = 0,
-                `failed_count` = 0,
-                `skipped_manual_count` = 0,
-                `last_processed_song_id` = 0,
-                `completed_at` = NULL,
-                `updated_at` = NOW()
-        ");
+        $delSql = song_deleted_sql('', $pdo);
+        if ($userId !== null) {
+            $userSql = song_user_scope_sql($userId, '', $pdo);
+            $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+            $tStmt->execute();
+            $totalSongs = (int)$tStmt->fetchColumn();
+
+            $pdo->prepare("
+                UPDATE `youtube_matching_jobs` 
+                SET `status` = 'idle',
+                    `total_songs` = :tot,
+                    `processed_songs` = 0,
+                    `matched_high_count` = 0,
+                    `review_medium_count` = 0,
+                    `unresolved_low_count` = 0,
+                    `failed_count` = 0,
+                    `skipped_manual_count` = 0,
+                    `last_processed_song_id` = 0,
+                    `completed_at` = NULL,
+                    `updated_at` = NOW()
+                WHERE `user_id` = :uid
+            ")->execute([':tot' => $totalSongs, ':uid' => $userId]);
+        } else {
+            $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
+            $pdo->prepare("
+                UPDATE `youtube_matching_jobs` 
+                SET `status` = 'idle',
+                    `total_songs` = :tot,
+                    `processed_songs` = 0,
+                    `matched_high_count` = 0,
+                    `review_medium_count` = 0,
+                    `unresolved_low_count` = 0,
+                    `failed_count` = 0,
+                    `skipped_manual_count` = 0,
+                    `last_processed_song_id` = 0,
+                    `completed_at` = NULL,
+                    `updated_at` = NOW()
+                WHERE `user_id` IS NULL
+            ")->execute([':tot' => $totalSongs]);
+        }
+        self::clear_matching_stats_cache($userId);
+    }
+
+    /**
+     * Request-scoped cache container for catalogue matching statistics keyed by user ID or 'global'.
+     */
+    private static array $matchingStatsCache = [];
+
+    /**
+     * Cache whether the active database engine supports window functions (e.g. MySQL 8.0+, MariaDB 10.2+, TiDB 3.0+).
+     */
+    private static ?bool $engineSupportsWindowFunctions = null;
+
+    /**
+     * Probe whether the database engine supports SQL window functions (ROW_NUMBER, OVER).
+     */
+    public static function supports_window_functions(): bool {
+        if (self::$engineSupportsWindowFunctions !== null) {
+            return self::$engineSupportsWindowFunctions;
+        }
+
+        try {
+            $pdo = get_db_connection();
+            $pdo->query("SELECT ROW_NUMBER() OVER () LIMIT 0");
+            self::$engineSupportsWindowFunctions = true;
+        } catch (\Throwable $e) {
+            self::$engineSupportsWindowFunctions = false;
+        }
+
+        return self::$engineSupportsWindowFunctions;
+    }
+
+    /**
+     * Fallback candidate hydration for database engines without window function support.
+     * Executes grouped count query followed by top candidate lookup with deterministic tie-breaking.
+     */
+    public static function hydrate_candidates_fallback(PDO $pdo, array $songIds): array {
+        if (empty($songIds)) {
+            return [];
+        }
+        $candMap = [];
+        $placeholders = implode(',', array_fill(0, count($songIds), '?'));
+
+        try {
+            $cntSql = "SELECT song_id, COUNT(*) AS cnt FROM song_youtube_candidates WHERE song_id IN ({$placeholders}) GROUP BY song_id";
+            $cStmt = $pdo->prepare($cntSql);
+            $cStmt->execute($songIds);
+            $counts = $cStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            $topSql = "SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url 
+                       FROM song_youtube_candidates WHERE song_id = ? ORDER BY score_total DESC, video_id ASC LIMIT 1";
+            $topStmt = $pdo->prepare($topSql);
+            foreach ($songIds as $sid) {
+                if (!empty($counts[$sid])) {
+                    $topStmt->execute([$sid]);
+                    $top = $topStmt->fetch();
+                    if ($top) {
+                        $top['cand_count'] = (int)$counts[$sid];
+                        $candMap[$sid] = $top;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("AFM2 Candidate Hydration Fallback Error: " . $e->getMessage());
+        }
+
+        return $candMap;
+    }
+
+    /**
+     * Clear request-scoped matching stats cache.
+     */
+    public static function clear_matching_stats_cache(?int $userId = null): void {
+        if ($userId !== null) {
+            unset(self::$matchingStatsCache[(string)$userId]);
+        } else {
+            self::$matchingStatsCache = [];
+        }
     }
 
     /**
      * Catalogue-wide matching stats across songs, candidates, and media.
+     * Memoized per-request to avoid redundant full-scan aggregations across controllers and templates.
      */
-    public static function get_matching_stats(): array {
+    public static function get_matching_stats(bool $forceRefresh = false, ?int $userId = null): array {
+        $cacheKey = $userId !== null ? (string)$userId : 'global';
+        if ($forceRefresh) {
+            unset(self::$matchingStatsCache[$cacheKey]);
+        }
+
+        if (isset(self::$matchingStatsCache[$cacheKey])) {
+            return self::$matchingStatsCache[$cacheKey];
+        }
+
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+            $cacheKey = 'u_' . $userId;
+        }
+
         $pdo = get_db_connection();
 
-        $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0")->fetchColumn();
-        
-        $mediaCounts = $pdo->query("
+        $totalSongs = null;
+        if (function_exists('get_catalogue_song_count')) {
+            $totalSongs = get_catalogue_song_count($userId, $forceRefresh);
+        }
+        $delSql = song_deleted_sql('', $pdo);
+        $delSqlS = song_deleted_sql('s', $pdo);
+        if ($totalSongs === null) {
+            if ($userId !== null) {
+                $userSql = song_user_scope_sql($userId, '', $pdo);
+                $tStmt = $pdo->prepare("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql} AND {$userSql}");
+                $tStmt->execute();
+                $totalSongs = (int)$tStmt->fetchColumn();
+            } else {
+                $totalSongs = (int)$pdo->query("SELECT COUNT(*) FROM `songs` WHERE `is_consolidated` = 0 AND {$delSql}")->fetchColumn();
+            }
+        }
+
+        $userCond = ($userId !== null) ? " AND " . song_user_scope_sql($userId, 's', $pdo) . " AND {$delSqlS}" : " AND {$delSqlS}";
+        $params = [];
+
+        $mStmt = $pdo->prepare("
             SELECT 
                 COUNT(*) AS total_media,
-                SUM(CASE WHEN `is_manual` = 1 THEN 1 ELSE 0 END) AS manual_count,
-                SUM(CASE WHEN `is_manual` = 0 AND `confidence` = 'high' THEN 1 ELSE 0 END) AS auto_high_count,
-                SUM(CASE WHEN `embed_status` = 'blocked' THEN 1 ELSE 0 END) AS blocked_count
+                SUM(CASE WHEN sm.`is_manual` = 1 THEN 1 ELSE 0 END) AS manual_count,
+                SUM(CASE WHEN sm.`is_manual` = 0 AND sm.`confidence` = 'high' THEN 1 ELSE 0 END) AS auto_high_count,
+                SUM(CASE WHEN sm.`embed_status` = 'blocked' THEN 1 ELSE 0 END) AS blocked_count
             FROM `song_media` sm
-            JOIN `songs` s ON sm.`song_id` = s.`song_id` AND s.`is_consolidated` = 0
+            JOIN `songs` s ON sm.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 {$userCond}
             WHERE sm.`service` = 'youtube'
-        ")->fetch();
+        ");
+        $mStmt->execute($params);
+        $mediaCounts = $mStmt->fetch();
 
-        $candCounts = $pdo->query("
+        $cStmt = $pdo->prepare("
             SELECT 
                 COUNT(DISTINCT c.`song_id`) AS songs_with_candidates,
                 COUNT(DISTINCT CASE WHEN c.`confidence` = 'medium' AND (sm.`media_id` IS NULL OR sm.`is_manual` = 0) THEN c.`song_id` END) AS review_needed_count,
                 COUNT(DISTINCT CASE WHEN c.`confidence` = 'low' AND sm.`media_id` IS NULL THEN c.`song_id` END) AS low_unresolved_count
             FROM `song_youtube_candidates` c
-            JOIN `songs` s ON c.`song_id` = s.`song_id` AND s.`is_consolidated` = 0
+            JOIN `songs` s ON c.`song_id` = s.`song_id` AND s.`is_consolidated` = 0 {$userCond}
             LEFT JOIN `song_media` sm ON c.`song_id` = sm.`song_id`
-        ")->fetch();
+        ");
+        $cStmt->execute($params);
+        $candCounts = $cStmt->fetch();
 
         $matchedTotal = (int)($mediaCounts['total_media'] ?? 0);
         $unmatchedTotal = max(0, $totalSongs - $matchedTotal);
@@ -1219,7 +1455,7 @@ class YouTubeMatcher {
         $reviewNeeded = (int)($candCounts['review_needed_count'] ?? 0);
         $lowUnresolved = (int)($candCounts['low_unresolved_count'] ?? 0);
 
-        return [
+        self::$matchingStatsCache[$cacheKey] = [
             'total_songs'      => $totalSongs,
             'matched_total'    => $matchedTotal,
             'unmatched_total'  => $unmatchedTotal,
@@ -1229,12 +1465,14 @@ class YouTubeMatcher {
             'low_unresolved'   => $lowUnresolved,
             'blocked_count'    => $blockedCount
         ];
+
+        return self::$matchingStatsCache[$cacheKey];
     }
 
     /**
      * Paginated catalogue listing with recording status, candidate counts, and top candidate info.
      */
-    public static function get_recordings_catalogue(array $params = []): array {
+    public static function get_recordings_catalogue(array $params = [], ?int $userId = null): array {
         $pdo = get_db_connection();
 
         $page = max(1, (int)($params['page'] ?? 1));
@@ -1245,9 +1483,16 @@ class YouTubeMatcher {
         $filter = $params['filter'] ?? 'all';
         $search = trim($params['q'] ?? '');
         $sort = $params['sort'] ?? 'id_asc';
+        if ($userId === null && function_exists('is_authenticated') && is_authenticated()) {
+            $userId = get_current_user_id();
+        }
 
-        $whereClauses = ["s.`is_consolidated` = 0"];
+        $delSql = song_deleted_sql('s', $pdo);
+        $whereClauses = ["s.`is_consolidated` = 0", $delSql];
         $bindings = [];
+        if ($userId !== null) {
+            $whereClauses[] = song_user_scope_sql($userId, 's', $pdo);
+        }
 
         if ($search !== '') {
             $whereClauses[] = "(s.`title` LIKE :q1 OR s.`artist` LIKE :q2 OR sm.`video_id` LIKE :q3)";
@@ -1326,6 +1571,7 @@ class YouTubeMatcher {
         if ($page > $totalPages) $page = $totalPages;
         $offset = ($page - 1) * $perPage;
 
+        // Decoupled pagination query: selects only the page items without expensive correlated subqueries
         $dataSql = "
             SELECT 
                 s.`song_id`,
@@ -1343,14 +1589,7 @@ class YouTubeMatcher {
                 sm.`is_manual`,
                 sm.`embed_status`,
                 sa.`thumbnail_url` AS artwork_thumbnail_url,
-                sa.`image_url` AS artwork_image_url,
-                (SELECT COUNT(*) FROM `song_youtube_candidates` c WHERE c.`song_id` = s.`song_id`) AS candidate_count,
-                (SELECT c2.`confidence` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_confidence,
-                (SELECT c2.`score_total` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_score,
-                (SELECT c2.`video_id` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_video_id,
-                (SELECT c2.`title` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_title,
-                (SELECT c2.`channel_title` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_channel,
-                (SELECT c2.`thumbnail_url` FROM `song_youtube_candidates` c2 WHERE c2.`song_id` = s.`song_id` ORDER BY c2.`score_total` DESC LIMIT 1) AS top_cand_thumb
+                sa.`image_url` AS artwork_image_url
             FROM `songs` s
             LEFT JOIN `song_media` sm ON s.`song_id` = sm.`song_id` AND sm.`service` = 'youtube'
             LEFT JOIN `song_artwork` sa ON s.`song_id` = sa.`song_id`
@@ -1362,6 +1601,67 @@ class YouTubeMatcher {
         $dataStmt->execute($bindings);
         $items = $dataStmt->fetchAll();
 
+        // Batch hydrate candidate counts and top candidate info for the current page
+        if (!empty($items)) {
+            $songIds = array_map('intval', array_column($items, 'song_id'));
+            $candMap = [];
+
+            if (self::supports_window_functions()) {
+                $placeholders = implode(',', array_fill(0, count($songIds), '?'));
+                try {
+                    // High-performance window function: single query resolves both counts and top candidates
+                    $winSql = "
+                        SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url, cand_count
+                        FROM (
+                            SELECT song_id, confidence, score_total, video_id, title, channel_title, thumbnail_url,
+                                   ROW_NUMBER() OVER (PARTITION BY song_id ORDER BY score_total DESC, video_id ASC) AS rn,
+                                   COUNT(*) OVER (PARTITION BY song_id) AS cand_count
+                            FROM song_youtube_candidates
+                            WHERE song_id IN ({$placeholders})
+                        ) ranked
+                        WHERE rn = 1
+                    ";
+                    $winStmt = $pdo->prepare($winSql);
+                    $winStmt->execute($songIds);
+                    while ($cRow = $winStmt->fetch()) {
+                        $candMap[(int)$cRow['song_id']] = $cRow;
+                    }
+                } catch (\Throwable $e) {
+                    // Query failure on an engine that supports window functions is a real database error, not unsupported syntax
+                    error_log("AFM2 Window Query Execution Error: " . $e->getMessage());
+                    // Fall back for fault resilience
+                    $candMap = self::hydrate_candidates_fallback($pdo, $songIds);
+                }
+            } else {
+                // Database engine lacks window function support: execute fallback query path
+                $candMap = self::hydrate_candidates_fallback($pdo, $songIds);
+            }
+
+            // Hydrate items array with candidate metrics matching expected schema
+            foreach ($items as &$item) {
+                $sId = (int)$item['song_id'];
+                if (isset($candMap[$sId])) {
+                    $c = $candMap[$sId];
+                    $item['candidate_count']     = (int)$c['cand_count'];
+                    $item['top_cand_confidence'] = $c['confidence'];
+                    $item['top_cand_score']      = $c['score_total'];
+                    $item['top_cand_video_id']   = $c['video_id'];
+                    $item['top_cand_title']      = $c['title'];
+                    $item['top_cand_channel']    = $c['channel_title'];
+                    $item['top_cand_thumb']      = $c['thumbnail_url'];
+                } else {
+                    $item['candidate_count']     = 0;
+                    $item['top_cand_confidence'] = null;
+                    $item['top_cand_score']      = null;
+                    $item['top_cand_video_id']   = null;
+                    $item['top_cand_title']      = null;
+                    $item['top_cand_channel']    = null;
+                    $item['top_cand_thumb']      = null;
+                }
+            }
+            unset($item);
+        }
+
         return [
             'items'       => $items,
             'total'       => $total,
@@ -1371,7 +1671,7 @@ class YouTubeMatcher {
             'filter'      => $filter,
             'sort'        => $sort,
             'query'       => $search,
-            'stats'       => self::get_matching_stats()
+            'stats'       => self::get_matching_stats(false, $userId)
         ];
     }
 }

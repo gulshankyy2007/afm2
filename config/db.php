@@ -11,16 +11,19 @@ if (!defined('AFM_APP')) {
  * Returns a shared PDO connection to the MySQL database.
  * Uses prepared statements and safe error handling.
  */
-function get_db_connection(): PDO {
-    static $pdo = null;
+function get_db_connection(bool $forceNew = false, ?string $overrideDb = null): PDO {
+    static $instances = [];
 
-    if ($pdo !== null) {
-        return $pdo;
+    // Determine target database: explicit override -> environment variable -> defined constant -> config default
+    $envTestDb = getenv('TEST_DB_NAME');
+    $dbname = $overrideDb ?? ($envTestDb !== false && $envTestDb !== '' ? $envTestDb : (defined('AFM_TEST_DB_NAME') ? AFM_TEST_DB_NAME : DB_NAME));
+
+    if (!$forceNew && isset($instances[$dbname])) {
+        return $instances[$dbname];
     }
 
     $host    = DB_HOST;
     $port    = DB_PORT;
-    $dbname  = DB_NAME;
     $user    = DB_USER;
     $pass    = DB_PASS;
     $charset = 'utf8mb4';
@@ -35,7 +38,13 @@ function get_db_connection(): PDO {
 
     try {
         $pdo = new PDO($dsn, $user, $pass, $options);
-        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        try {
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+        } catch (PDOException $e) {
+            $pdo->exec("SET NAMES utf8mb4");
+        }
+        $pdo->exec("SET time_zone = '+00:00'");
+        $instances[$dbname] = $pdo;
     } catch (PDOException $e) {
         // Log detailed error internally
         error_log("AFM2 Database Connection Error: " . $e->getMessage());
@@ -43,5 +52,5 @@ function get_db_connection(): PDO {
         throw new RuntimeException("Database connection error. Please contact the administrator or check configuration.");
     }
 
-    return $pdo;
+    return $instances[$dbname];
 }

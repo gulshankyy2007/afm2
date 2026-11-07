@@ -8,10 +8,12 @@
 define('AFM_APP', true);
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/db.php';
+require_once __DIR__ . '/test_db_guard.php';
 require_once dirname(__DIR__) . '/includes/auth.php';
 require_once dirname(__DIR__) . '/includes/db_helper.php';
 
-$pdo = get_db_connection();
+$pdo = get_test_db_connection();
+assert_test_db_isolated($pdo, 'test_logo_integration');
 $tests = 0;
 $passed = 0;
 

@@ -153,8 +153,24 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
     </div>
 <?php else: ?>
+    <!-- Catalogue Results Summary Bar -->
+    <div class="library-view-toolbar">
+        <div class="library-result-count text-muted text-sm">
+            Showing <strong><?= count($songs) ?></strong> of <strong><?= number_format($total) ?></strong> tracks in catalogue
+        </div>
+    </div>
+
     <!-- Songs Table -->
-    <div class="table-container">
+    <div class="table-container" id="libraryTableView">
+        <!-- Mobile Batch Selection Bar (Visible when thead is hidden on mobile) -->
+        <div class="mobile-table-select-bar" id="mobileTableSelectBar">
+            <label class="mobile-select-all-label" for="mobileSelectAllSongs">
+                <input type="checkbox" id="mobileSelectAllSongs" class="mobile-select-all-cb" aria-label="Select all songs on this page">
+                <span class="mobile-select-all-text">Select All Tracks on Page</span>
+            </label>
+            <span class="mobile-select-summary text-muted text-xs" id="mobileSelectSummary">0 selected</span>
+        </div>
+
         <table class="data-table" id="songsTable">
             <thead>
                 <tr>
@@ -178,146 +194,70 @@ require_once dirname(__DIR__) . '/includes/header.php';
                     </th>
                     <th class="col-status">Status</th>
                     <th class="col-audition">Audition</th>
-                    <th class="col-actions">Discovery Action</th>
-                    <th class="col-manage">Manage</th>
+                    <th class="col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($songs as $s): ?>
-                    <tr 
-                        data-song-id="<?= (int)$s['song_id'] ?>" 
-                        data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>"
-                        data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>"
-                        data-song-video="<?= htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                    >
-                        <td class="col-select" data-label="Select">
-                            <input type="checkbox" class="song-select-checkbox" data-song-id="<?= (int)$s['song_id'] ?>" data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>" aria-label="Select track <?= (int)$s['song_id'] ?>">
-                        </td>
-                        <td class="col-id" data-label="ID">
-                            <?= (int)$s['song_id'] ?>
-                        </td>
-
-                        <td class="song-title-cell col-title" data-label="Title">
-                            <div class="song-title-wrap">
-                                <?php 
-                                    $sThumb = $s['artwork_thumbnail_url'] ?? $s['artwork_image_url'] ?? null;
-                                    if (empty($sThumb)) {
-                                        $sThumb = 'assets/img/artwork-fallback.svg';
-                                    }
-                                ?>
-                                <img src="<?= htmlspecialchars($sThumb, ENT_QUOTES, 'UTF-8') ?>" 
-                                     alt="" 
-                                     class="song-row-thumb" 
-                                     loading="lazy"
-                                     onerror="this.onerror=null; this.src='assets/img/artwork-fallback.svg';">
-                                <span class="song-title-text font-bold" title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>
-                                </span>
+                <?php foreach ($songs as $s): 
+                    $sId = (int)$s['song_id'];
+                    $sTitle = htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8');
+                    $sArtistClean = $s['artist'] === 'Unknown Artist' ? '' : $s['artist'];
+                    $sArtistEsc = htmlspecialchars($sArtistClean, ENT_QUOTES, 'UTF-8');
+                    $sVideo = htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $sThumb = $s['artwork_thumbnail_url'] ?? $s['artwork_image_url'] ?? null;
+                    if (empty($sThumb)) {
+                        $sThumb = 'assets/img/artwork-fallback.svg';
+                    }
+                    $isShortlisted = $s['discovery_status'] === 'shortlisted';
+                    $isPassed = $s['discovery_status'] === 'passed';
+                ?>
+                <tr data-song-id="<?= $sId ?>" data-song-title="<?= $sTitle ?>" data-song-artist="<?= $sArtistEsc ?>" data-song-video="<?= $sVideo ?>">
+                    <td class="col-select" data-label="Select"><input type="checkbox" class="song-select-checkbox" value="<?= $sId ?>" aria-label="Select track <?= $sId ?>"></td>
+                    <td class="col-id" data-label="ID"><span class="track-id-badge">#<?= $sId ?></span></td>
+                    <td class="song-title-cell col-title" data-label="Title">
+                        <div class="song-title-wrap">
+                            <img src="<?= htmlspecialchars($sThumb, ENT_QUOTES, 'UTF-8') ?>" alt="" class="song-row-thumb" loading="lazy">
+                            <div class="song-title-meta">
+                                <span class="song-title-text font-bold"><?= $sTitle ?></span>
+                                <span class="song-artist-sub text-muted text-xs"><?= $sArtistClean ? $sArtistEsc : '— Unknown Artist —' ?></span>
                             </div>
-                            <div class="song-quick-media">
-                                <a href="auditions.php?song_id=<?= (int)$s['song_id'] ?>" class="btn-xs btn-primary-subtle" title="Play recording directly inside AFM#2 integrated audition console">
-                                    ▶ Play in AFM#2
+                        </div>
+                    </td>
+                    <td class="song-artist-cell col-artist" data-label="Artist"><?php if ($s['artist'] === 'Unknown Artist'): ?><span class="artist-empty">&mdash; Unknown Artist &mdash;</span><?php else: ?><span><?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></td>
+                    <td data-label="Status" class="col-status status-badge-container"><span class="badge badge-<?= $isShortlisted ? 'shortlisted' : ($isPassed ? 'passed' : 'unreviewed') ?>"><?= $isShortlisted ? 'Shortlisted' : ($isPassed ? 'Passed' : 'Not Reviewed') ?></span></td>
+                    <td data-label="Audition" class="col-audition"><?php if ($s['audition_total'] !== null): ?><span class="audition-score-val" style="font-family: var(--font-mono); font-weight: 700; color: var(--success);"><?= (int)$s['audition_total'] ?><span class="audition-score-max"> / 50</span></span><?php elseif (!empty($s['audition_incomplete'])): ?><span style="font-family: var(--font-mono); color: var(--gold); font-size: 0.825rem;">Incomplete</span><?php elseif ($isShortlisted): ?><a href="auditions.php?q=<?= urlencode($s['title']) ?>" style="font-size: 0.825rem;">Score &rarr;</a><?php else: ?><span style="color: var(--text-muted); font-size: 0.825rem;">&mdash;</span><?php endif; ?></td>
+                    <td class="col-actions" data-label="Actions">
+                        <div class="action-group action-toolbar-unified">
+                            <a href="auditions.php?song_id=<?= $sId ?>" class="btn-xs btn-primary-subtle" title="Play <?= $sTitle ?> in AFM#2" aria-label="Play <?= $sTitle ?> in Auditions" data-tooltip="Play in Auditions">
+                                <svg class="btn-svg-icon icon-play" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span class="sr-only">Play</span>
+                            </a>
+                            <button type="button" class="btn-xs btn-lyrics-quick-view" title="View lyrics for <?= $sTitle ?>" aria-label="View lyrics for <?= $sTitle ?>" data-tooltip="View Lyrics">
+                                <svg class="btn-svg-icon icon-lyrics" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="sr-only">Lyrics</span>
+                            </button>
+                            <?php if (!empty($s['media_video_id'])): ?>
+                                <a href="https://www.youtube.com/watch?v=<?= $sVideo ?>" target="_blank" rel="noopener noreferrer" class="link-external btn-link-yt" title="Watch <?= $sTitle ?> on YouTube" aria-label="Watch <?= $sTitle ?> on YouTube" data-tooltip="YouTube">
+                                    <svg class="btn-svg-icon icon-yt" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg><span class="sr-only">YouTube</span>
                                 </a>
-                                <?php if (!empty($s['media_video_id'])): ?>
-                                    <a href="https://www.youtube.com/watch?v=<?= htmlspecialchars($s['media_video_id'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="link-external" title="Direct link to confirmed recording on YouTube">
-                                        YouTube ↗
-                                    </a>
-                                <?php else: ?>
-                                    <a href="<?= htmlspecialchars(get_youtube_search_url($s['title'], $s['artist'])) ?>" target="_blank" rel="noopener noreferrer" class="link-external text-muted" title="Search YouTube in new tab">
-                                        Search ↗
-                                    </a>
-                                <?php endif; ?>
-                                <button type="button" class="btn-xs btn-lyrics-quick-view" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    title="View lyrics from LRCLIB">
-                                    📜 Lyrics
-                                </button>
-                            </div>
-                        </td>
-
-                        <td class="song-artist-cell col-artist" data-label="Artist">
-                            <?php if ($s['artist'] === 'Unknown Artist'): ?>
-                                <span class="artist-empty">&mdash; Unknown Artist &mdash;</span>
                             <?php else: ?>
-                                <span title="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>
-                                </span>
+                                <a href="<?= htmlspecialchars(get_youtube_search_url($s['title'], $s['artist'])) ?>" target="_blank" rel="noopener noreferrer" class="link-external text-muted btn-link-search" title="Search YouTube for <?= $sTitle ?>" aria-label="Search YouTube for <?= $sTitle ?>" data-tooltip="Search YouTube">
+                                    <svg class="btn-svg-icon icon-search" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="sr-only">Search</span>
+                                </a>
                             <?php endif; ?>
-                        </td>
-
-                        <td data-label="Status" class="col-status status-badge-container">
-                            <?php if ($s['discovery_status'] === 'shortlisted'): ?>
-                                <span class="badge badge-shortlisted">Shortlisted</span>
-                            <?php elseif ($s['discovery_status'] === 'passed'): ?>
-                                <span class="badge badge-passed">Passed</span>
-                            <?php else: ?>
-                                <span class="badge badge-unreviewed">Not Reviewed</span>
-                            <?php endif; ?>
-                        </td>
-
-                        <td data-label="Audition" class="col-audition">
-                            <?php if ($s['audition_total'] !== null): ?>
-                                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--success);">
-                                    <?= (int)$s['audition_total'] ?> / 50
-                                </span>
-                            <?php elseif (!empty($s['audition_incomplete'])): ?>
-                                <span style="font-family: var(--font-mono); color: var(--gold); font-size: 0.825rem;">
-                                    Incomplete
-                                </span>
-                            <?php elseif ($s['discovery_status'] === 'shortlisted'): ?>
-                                <a href="auditions.php?q=<?= urlencode($s['title']) ?>" style="font-size: 0.825rem;">Score &rarr;</a>
-                            <?php else: ?>
-                                <span style="color: var(--text-muted); font-size: 0.825rem;">&mdash;</span>
-                            <?php endif; ?>
-                        </td>
-
-                        <td class="col-actions" data-label="Discovery Action">
-                            <div class="action-group">
-                                <button 
-                                    type="button" 
-                                    class="btn-action-shortlist <?= $s['discovery_status'] === 'shortlisted' ? 'active' : '' ?>" 
-                                    title="Shortlist for formal auditions"
-                                >
-                                    ★ Shortlist
-                                </button>
-                                <button 
-                                    type="button" 
-                                    class="btn-action-pass <?= $s['discovery_status'] === 'passed' ? 'active' : '' ?>" 
-                                    title="Pass on song"
-                                >
-                                    ✕ Pass
-                                </button>
-                            </div>
-                        </td>
-
-                        <td class="col-manage" data-label="Manage">
-                            <div class="manage-btn-group">
-                                <button 
-                                    type="button" 
-                                    class="btn-manage-edit" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'] === 'Unknown Artist' ? '' : $s['artist'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-video="<?= htmlspecialchars($s['media_video_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                    title="Edit title, artist, or YouTube recording"
-                                >
-                                    ✏️ Edit
-                                </button>
-                                <button 
-                                    type="button" 
-                                    class="btn-manage-delete" 
-                                    data-song-id="<?= (int)$s['song_id'] ?>" 
-                                    data-song-title="<?= htmlspecialchars($s['title'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-song-artist="<?= htmlspecialchars($s['artist'], ENT_QUOTES, 'UTF-8') ?>"
-                                    title="Permanently remove from catalogue (safe duplicate elimination)"
-                                >
-                                    🗑️ Delete
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
+                            <button type="button" class="btn-action-shortlist <?= $isShortlisted ? 'active' : '' ?>" title="Shortlist <?= $sTitle ?> for auditions" aria-label="Shortlist <?= $sTitle ?> for auditions" aria-pressed="<?= $isShortlisted ? 'true' : 'false' ?>" data-tooltip="Shortlist track">
+                                <svg class="btn-svg-icon icon-star" width="15" height="15" viewBox="0 0 24 24" fill="<?= $isShortlisted ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span class="sr-only">Shortlist</span>
+                            </button>
+                            <button type="button" class="btn-action-pass <?= $isPassed ? 'active' : '' ?>" title="Pass <?= $sTitle ?>" aria-label="Pass <?= $sTitle ?>" aria-pressed="<?= $isPassed ? 'true' : 'false' ?>" data-tooltip="Pass track">
+                                <svg class="btn-svg-icon icon-cross" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="sr-only">Pass</span>
+                            </button>
+                            <button type="button" class="btn-manage-edit" title="Edit <?= $sTitle ?>" aria-label="Edit <?= $sTitle ?> metadata" data-tooltip="Edit metadata">
+                                <svg class="btn-svg-icon icon-edit" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span class="sr-only">Edit</span>
+                            </button>
+                            <button type="button" class="btn-manage-delete" title="Delete <?= $sTitle ?>" aria-label="Delete <?= $sTitle ?> from catalogue" data-tooltip="Delete track">
+                                <svg class="btn-svg-icon icon-trash" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span class="sr-only">Delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
@@ -352,7 +292,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand" id="addSongModalTitle"><span>＋</span> Add Song to Catalogue</h3>
                 <p class="modal-subtitle">Auto-extract from YouTube link or enter details manually.</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseAddSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseAddSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <!-- Mode Tabs -->
@@ -461,7 +401,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAddSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelAddSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-primary btn-sm" id="btnSubmitAddSong">Save to Catalogue</button>
         </div>
     </div>
@@ -475,7 +415,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand" id="editSongModalTitle"><span>✏️</span> Edit Song Record</h3>
                 <p class="modal-subtitle" id="editSongSubtitle">Update title, artist, or YouTube recording</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseEditSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseEditSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -501,7 +441,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelEditSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-primary btn-sm" id="btnSubmitEditSong">Save Changes</button>
         </div>
     </div>
@@ -515,7 +455,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand text-danger" id="deleteSongModalTitle"><span>🗑️</span> Delete Song</h3>
                 <p class="modal-subtitle">Permanently remove duplicate or unwanted song from catalogue</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseDeleteSongModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseDeleteSongModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -535,7 +475,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelDeleteSong">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelDeleteSong" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" id="btnConfirmDeleteSong">Permanently Delete</button>
         </div>
     </div>
@@ -546,15 +486,98 @@ require_once dirname(__DIR__) . '/includes/header.php';
     <div class="bulk-actions-inner">
         <div class="bulk-actions-info">
             <span class="bulk-count-badge" id="bulkSelectedCount">0</span>
-            <span class="bulk-count-text">track(s) selected</span>
+            <span class="bulk-count-text">selected</span>
         </div>
         <div class="bulk-actions-buttons">
-            <button type="button" class="btn btn-danger btn-sm" id="btnBulkDelete">
-                <span>🗑️</span> Delete Selected
+            <button type="button" class="btn btn-primary btn-sm" id="btnBulkShortlist" title="Shortlist selected tracks for auditions" aria-label="Shortlist selected tracks">
+                <span>⭐</span> <span class="bulk-btn-text">Shortlist</span>
             </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btnBulkClear">
-                Clear Selection
+            <button type="button" class="btn btn-secondary btn-sm" id="btnBulkPass" title="Mark selected tracks as passed" aria-label="Mark selected tracks as passed">
+                <span>✕</span> <span class="bulk-btn-text">Pass</span>
             </button>
+            <button type="button" class="btn btn-danger-subtle btn-sm" id="btnBulkDelete" title="Permanently delete selected unrated tracks" aria-label="Delete selected tracks">
+                <span>🗑️</span> <span class="bulk-btn-text">Delete</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnBulkClear" title="Clear selection" aria-label="Clear selection">
+                <span class="bulk-btn-text">Clear</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Unified Bulk Action Confirmation & Eligibility Modal -->
+<div class="modal-overlay" id="bulkActionConfirmModal" role="dialog" aria-modal="true" aria-labelledby="bulkActionModalTitle">
+    <div class="modal-content song-management-modal-content bulk-action-modal-content">
+        <div class="modal-header">
+            <div>
+                <h3 class="modal-title font-brand" id="bulkActionModalTitle">
+                    <span id="bulkActionModalIcon">⭐</span> <span id="bulkActionModalHeading">Shortlist Selected Tracks</span>
+                </h3>
+                <p class="modal-subtitle" id="bulkActionModalSubtitle">Pre-action eligibility breakdown and validation</p>
+            </div>
+            <button type="button" class="modal-close" id="btnCloseBulkActionModal" data-modal-close aria-label="Close dialog">&times;</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Loading Spinner State while evaluating rules -->
+            <div id="bulkActionLoading" class="bulk-action-loading" style="display: none;">
+                <div class="spinner"></div>
+                <span>Checking competition rules &amp; eligibility...</span>
+            </div>
+
+            <!-- Main Details View -->
+            <div id="bulkActionDetails" class="bulk-action-details">
+                <!-- Summary Stats Pills Grid -->
+                <div class="bulk-stats-grid">
+                    <div class="bulk-stat-card bulk-stat-total">
+                        <span class="bulk-stat-label">Selected</span>
+                        <span class="bulk-stat-val" id="bulkStatSelected">0</span>
+                    </div>
+                    <div class="bulk-stat-card bulk-stat-eligible">
+                        <span class="bulk-stat-label">Eligible</span>
+                        <span class="bulk-stat-val" id="bulkStatEligible">0</span>
+                    </div>
+                    <div class="bulk-stat-card bulk-stat-ineligible">
+                        <span class="bulk-stat-label">Ineligible</span>
+                        <span class="bulk-stat-val" id="bulkStatIneligible">0</span>
+                    </div>
+                </div>
+
+                <!-- Explanation Banner -->
+                <div class="bulk-explanation-banner" id="bulkExplanationBanner">
+                    <p id="bulkExplanationText">Only the <strong>0</strong> eligible tracks will be affected.</p>
+                </div>
+
+                <!-- Ineligible Tracks Breakdown List -->
+                <div class="bulk-ineligible-section" id="bulkIneligibleSection" style="display: none;">
+                    <div class="bulk-section-header">
+                        <span class="bulk-section-title text-warning">⚠️ Ineligible Tracks (<span id="bulkIneligibleCountText">0</span>)</span>
+                        <span class="bulk-section-note">Protected by competition rules and safeguards</span>
+                    </div>
+                    <div class="bulk-ineligible-list" id="bulkIneligibleList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Eligible Tracks Preview -->
+                <div class="bulk-eligible-section" id="bulkEligibleSection" style="display: none;">
+                    <div class="bulk-section-header">
+                        <span class="bulk-section-title text-success">✓ Eligible Tracks (<span id="bulkEligibleCountText">0</span>)</span>
+                        <span class="bulk-section-note">Ready to be processed</span>
+                    </div>
+                    <div class="bulk-eligible-list" id="bulkEligibleList">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Error Container -->
+                <div id="bulkActionError" class="alert alert-error" style="display: none; margin-top: 1rem;"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelBulkAction" data-modal-close>Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnConfirmBulkAction">Confirm</button>
         </div>
     </div>
 </div>
@@ -567,7 +590,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <h3 class="modal-title font-brand text-danger" id="bulkDeleteModalTitle"><span>🗑️</span> Delete Selected Tracks</h3>
                 <p class="modal-subtitle">Permanently remove selected unrated tracks from catalogue</p>
             </div>
-            <button type="button" class="modal-close" id="btnCloseBulkDeleteModal" aria-label="Close dialog">&times;</button>
+            <button type="button" class="modal-close" id="btnCloseBulkDeleteModal" data-modal-close aria-label="Close dialog">&times;</button>
         </div>
 
         <div class="modal-body">
@@ -582,7 +605,7 @@ require_once dirname(__DIR__) . '/includes/header.php';
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelBulkDelete">Cancel</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelBulkDelete" data-modal-close>Cancel</button>
             <button type="button" class="btn btn-danger btn-sm" id="btnConfirmBulkDelete">Delete Eligible Tracks</button>
         </div>
     </div>
