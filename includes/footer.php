@@ -461,5 +461,14 @@
     $appJsVer = '4.1.' . (file_exists($appJsFile) ? filemtime($appJsFile) : '20261029');
     ?>
     <script src="assets/js/app.js?v=<?= $appJsVer ?>"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function(err) {
+                console.warn('PWA ServiceWorker registration failed:', err);
+            });
+        });
+    }
+    </script>
 </body>
 </html>

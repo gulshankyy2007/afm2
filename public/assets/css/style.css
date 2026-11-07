@@ -6207,6 +6207,8 @@ html[data-theme="quiet_minimal"] .sort-select option {
     flex-direction: column;
     min-height: 220px;
     max-height: 380px;
+    overflow: hidden;
+    position: relative;
 }
 
 .lyrics-box-header {
@@ -6267,13 +6269,17 @@ html[data-theme="quiet_minimal"] .sort-select option {
 }
 
 .lyrics-body {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     font-size: 0.85rem;
     line-height: 1.65;
     color: var(--text-secondary);
     padding-right: 0.5rem;
     position: relative;
+    scroll-behavior: smooth;
 }
 
 .lyrics-body.plain {

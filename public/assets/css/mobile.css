@@ -1656,14 +1656,16 @@ body.modal-open {
     .lyrics-body {
         flex: 1 1 auto !important;
         min-height: 0 !important;
-        height: 100% !important;
-        max-height: none !important;
+        height: auto !important;
+        max-height: 100% !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
+        scroll-behavior: smooth !important;
         font-size: 0.85rem !important;
         line-height: 1.55 !important;
         padding: 0.35rem 0.3rem !important;
         box-sizing: border-box !important;
+        position: relative !important;
     }
 
     /* 5. Scoring Interface: Separated, Non-Overlapping Instrument */

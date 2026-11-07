@@ -2198,9 +2198,22 @@ function stopSyncedLyricsTracker(songId) {
 }
 
 /**
- * Highlight active lyric line and smoothly auto-scroll (Echo Music inspired follower)
+ * Helper: Get element offsetTop relative to a specific ancestor container
  */
-function updateActiveSyncedLyricLine(panel, currentTime) {
+function getElementOffsetTopRelativeTo(element, container) {
+    let top = 0;
+    let curr = element;
+    while (curr && curr !== container) {
+        top += curr.offsetTop;
+        curr = curr.offsetParent;
+    }
+    return top;
+}
+
+/**
+ * Highlight active lyric line and smoothly auto-scroll within lyrics panel (Echo Music inspired follower)
+ */
+function updateActiveSyncedLyricLine(panel, currentTime, forceScroll = false) {
     const box = panel.querySelector('.lyrics-box');
     if (!box) return;
 
@@ -2228,21 +2241,59 @@ function updateActiveSyncedLyricLine(panel, currentTime) {
     if (activeIndex === -1) return;
 
     const activeLine = lines[activeIndex];
-    if (activeLine.classList.contains('active')) return;
+    const isAlreadyActive = activeLine.classList.contains('active');
 
-    lines.forEach(l => l.classList.remove('active'));
-    activeLine.classList.add('active');
+    if (!isAlreadyActive) {
+        lines.forEach(l => l.classList.remove('active'));
+        activeLine.classList.add('active');
+    }
 
-    // Auto-scroll if enabled
-    const autoScrollBtn = box.querySelector('.btn-autoscroll-toggle');
-    const isAutoScroll = !autoScrollBtn || autoScrollBtn.classList.contains('active');
-    if (isAutoScroll) {
+    // Only scroll when active line changes OR when explicitly forced (e.g. seeking, tab switch, resume)
+    if (!isAlreadyActive || forceScroll) {
         const body = box.querySelector('.lyrics-body');
-        if (body) {
-            const bodyRect = body.getBoundingClientRect();
-            const lineRect = activeLine.getBoundingClientRect();
-            const offset = (lineRect.top - bodyRect.top) - (body.clientHeight / 2) + (lineRect.height / 2);
-            body.scrollBy({ top: offset, behavior: 'smooth' });
+        if (!body) return;
+
+        // Non-intrusive listener to detect when user manually scrolls or touches the lyrics box
+        if (!body._hasManualScrollListener) {
+            body._hasManualScrollListener = true;
+            body._lastUserScrollTime = 0;
+            const onUserManualScroll = () => {
+                body._lastUserScrollTime = Date.now();
+            };
+            body.addEventListener('wheel', onUserManualScroll, { passive: true });
+            body.addEventListener('touchmove', onUserManualScroll, { passive: true });
+            body.addEventListener('pointerdown', onUserManualScroll, { passive: true });
+        }
+
+        const autoScrollBtn = box.querySelector('.btn-autoscroll-toggle');
+        const isAutoScroll = !autoScrollBtn || autoScrollBtn.classList.contains('active');
+        if (!isAutoScroll) return;
+
+        // Do not fight manual user scrolling: pause auto-scroll for 4s after user touch/wheel interaction
+        const timeSinceUserScroll = Date.now() - (body._lastUserScrollTime || 0);
+        if (!forceScroll && timeSinceUserScroll < 4000) {
+            return;
+        }
+
+        // Calculate container-relative target scrollTop to center the active line in lyrics-body
+        const containerHeight = body.clientHeight;
+        if (containerHeight <= 0) return;
+
+        const lineTop = getElementOffsetTopRelativeTo(activeLine, body);
+        const lineHeight = activeLine.offsetHeight || 24;
+        const targetScrollTop = Math.max(0, lineTop - (containerHeight / 2) + (lineHeight / 2));
+
+        // Avoid micro-jitter: only scroll if difference exceeds 6px
+        if (Math.abs(body.scrollTop - targetScrollTop) > 6) {
+            if (typeof body.scrollTo === 'function') {
+                try {
+                    body.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                } catch (e) {
+                    body.scrollTop = targetScrollTop;
+                }
+            } else {
+                body.scrollTop = targetScrollTop;
+            }
         }
     }
 }
@@ -2843,6 +2894,16 @@ function initAuditionMediaAndLyrics() {
                     body.style.display = 'block';
                     if (data) {
                         renderLyricsContent(body, data, view);
+                        if (view === 'synced') {
+                            const player = ytPlayerMap.get(songId);
+                            if (player && typeof player.getCurrentTime === 'function') {
+                                setTimeout(() => {
+                                    try {
+                                        updateActiveSyncedLyricLine(panel, player.getCurrentTime(), true);
+                                    } catch (e) {}
+                                }, 60);
+                            }
+                        }
                     }
                 }
             }
@@ -3130,6 +3191,26 @@ function initAuditionMediaAndLyrics() {
                     list.querySelectorAll('.lyrics-synced-line').forEach(l => l.classList.remove('active'));
                     syncedLine.classList.add('active');
                 }
+                const box = panel.querySelector('.lyrics-box');
+                const body = box ? box.querySelector('.lyrics-body') : null;
+                if (body) {
+                    body._lastUserScrollTime = 0; // reset manual scroll pause
+                    const containerHeight = body.clientHeight;
+                    if (containerHeight > 0) {
+                        const lineTop = getElementOffsetTopRelativeTo(syncedLine, body);
+                        const lineHeight = syncedLine.offsetHeight || 24;
+                        const targetScrollTop = Math.max(0, lineTop - (containerHeight / 2) + (lineHeight / 2));
+                        if (typeof body.scrollTo === 'function') {
+                            try {
+                                body.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+                            } catch (err) {
+                                body.scrollTop = targetScrollTop;
+                            }
+                        } else {
+                            body.scrollTop = targetScrollTop;
+                        }
+                    }
+                }
             }
             return;
         }
@@ -3141,6 +3222,19 @@ function initAuditionMediaAndLyrics() {
             autoScrollBtn.classList.toggle('active');
             const isActive = autoScrollBtn.classList.contains('active');
             autoScrollBtn.innerHTML = `<span class="dot">●</span> Auto-scroll: ${isActive ? 'ON' : 'OFF'}`;
+            if (isActive) {
+                const box = panel.querySelector('.lyrics-box');
+                const body = box ? box.querySelector('.lyrics-body') : null;
+                if (body) {
+                    body._lastUserScrollTime = 0; // reset manual scroll pause
+                }
+                const player = ytPlayerMap.get(songId);
+                if (player && typeof player.getCurrentTime === 'function') {
+                    try {
+                        updateActiveSyncedLyricLine(panel, player.getCurrentTime(), true);
+                    } catch (err) {}
+                }
+            }
             return;
         }
     });
