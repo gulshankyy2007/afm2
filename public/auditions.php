@@ -497,15 +497,15 @@ require_once dirname(__DIR__) . '/includes/header.php';
                                         <div class="player-wrapper">
                                             <!-- Embedded official YouTube IFrame with enablejsapi=1 -->
                                             <?php
-                                                $appOrigin = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-                                                $embedSrc = "https://www.youtube.com/embed/" . rawurlencode($mediaVideoId) . "?enablejsapi=1&amp;playsinline=1&amp;rel=0&amp;origin=" . rawurlencode($appOrigin);
+                                                $appOrigin = get_base_url();
+                                                $embedSrc = "https://www.youtube.com/embed/" . rawurlencode($mediaVideoId) . "?enablejsapi=1&playsinline=1&rel=0&origin=" . rawurlencode($appOrigin);
                                             ?>
                                             <iframe 
                                                 class="yt-embed-frame" 
                                                 id="yt-player-<?= (int)$songId ?>" 
                                                 data-video-id="<?= htmlspecialchars($mediaVideoId, ENT_QUOTES, 'UTF-8') ?>"
-                                                data-src="<?= $embedSrc ?>" 
-                                                src="<?= $embedSrc ?>" 
+                                                data-src="<?= htmlspecialchars($embedSrc, ENT_QUOTES, 'UTF-8') ?>" 
+                                                src="<?= htmlspecialchars($embedSrc, ENT_QUOTES, 'UTF-8') ?>" 
                                                 referrerpolicy="strict-origin-when-cross-origin"
                                                 loading="lazy" 
                                                 title="AFM#2 Audio Player: <?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" 

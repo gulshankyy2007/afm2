@@ -55,8 +55,8 @@ define('DB_USER', env('DB_USER', 'gulshan'));
 define('DB_PASS', env('DB_PASS', ''));
 define('GOOGLE_SITE_VERIFICATION', env('GOOGLE_SITE_VERIFICATION', ''));
 
-// Application Timezone Standard: Store & compute in UTC, convert to Asia/Kolkata for display
-date_default_timezone_set('UTC');
+// Application Timezone Standard: Indian Standard Time (IST / Asia/Kolkata, UTC+05:30)
+date_default_timezone_set('Asia/Kolkata');
 define('APP_DISPLAY_TIMEZONE', 'Asia/Kolkata');
 
 // Validate APP_SECRET for production environments (fails closed on missing, empty, or default secrets)

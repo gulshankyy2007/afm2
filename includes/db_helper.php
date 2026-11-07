@@ -5069,15 +5069,22 @@ function render_accessible_pagination(
 }
 
 /**
- * Format a UTC database timestamp in Asia/Kolkata local time.
+ * Format a database timestamp in Asia/Kolkata (Indian Standard Time).
+ * Handles both raw database timestamps from SET time_zone = '+05:30' and explicit UTC timestamps.
  */
 if (!function_exists('format_local_timestamp')) {
     function format_local_timestamp(?string $timestamp, string $format = 'M d, Y H:i'): string {
-        if (empty($timestamp)) {
+        if (empty($timestamp) || $timestamp === 'Never') {
             return 'Never';
         }
         try {
-            $dt = new DateTimeImmutable($timestamp, new DateTimeZone('UTC'));
+            // If explicit timezone suffix exists (e.g. ISO 8601 'Z' or '+00:00'), parse natively
+            if (preg_match('/(Z|[+-]\d{2}:?\d{2})$/', $timestamp)) {
+                $dt = new DateTimeImmutable($timestamp);
+            } else {
+                // Database session timezone is '+05:30' (Asia/Kolkata)
+                $dt = new DateTimeImmutable($timestamp, new DateTimeZone('Asia/Kolkata'));
+            }
             return $dt->setTimezone(new DateTimeZone('Asia/Kolkata'))->format($format);
         } catch (\Throwable $e) {
             return htmlspecialchars((string)$timestamp);

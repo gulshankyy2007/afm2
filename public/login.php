@@ -76,7 +76,7 @@ $pageTitle = 'Sign In — AFM#2';
     <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 
     <!-- PWA & Standalone Mobile Web App Capabilities -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
     <meta name="theme-color" content="#0c0e14">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
